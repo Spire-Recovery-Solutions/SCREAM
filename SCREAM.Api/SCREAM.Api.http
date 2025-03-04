@@ -1,0 +1,6 @@
+@SCREAM.Api_HostAddress = http://localhost:5102
+
+GET {{SCREAM.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
