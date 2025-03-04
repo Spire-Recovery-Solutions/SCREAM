@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SCREAM.Data;
 
@@ -10,9 +11,11 @@ using SCREAM.Data;
 namespace SCREAM.Data.Migrations
 {
     [DbContext(typeof(ScreamDbContext))]
-    partial class ScreamDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250304195611_Refactor-srs-7858")]
+    partial class Refactorsrs7858
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.13");
@@ -21,9 +24,6 @@ namespace SCREAM.Data.Migrations
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long?>("BackupPlanId")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("CreatedAt")
@@ -57,90 +57,11 @@ namespace SCREAM.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BackupPlanId");
-
                     b.ToTable("BackupItem");
 
                     b.HasDiscriminator<string>("Type");
 
                     b.UseTphMappingStrategy();
-                });
-
-            modelBuilder.Entity("SCREAM.Data.Entities.BackupPlan", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("DatabaseConnectionId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("ScheduleId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("StorageTargetId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DatabaseConnectionId");
-
-                    b.HasIndex("ScheduleId");
-
-                    b.HasIndex("StorageTargetId");
-
-                    b.ToTable("BackupPlans", (string)null);
-                });
-
-            modelBuilder.Entity("SCREAM.Data.Entities.BackupSchedule", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("CronExpression")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("LastRun")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("NextRun")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ScheduledType")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("BackupSchedules", (string)null);
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.DatabaseConnection", b =>
@@ -327,45 +248,6 @@ namespace SCREAM.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasDiscriminator().HasValue(1);
-                });
-
-            modelBuilder.Entity("SCREAM.Data.Entities.BackupItems.BackupItem", b =>
-                {
-                    b.HasOne("SCREAM.Data.Entities.BackupPlan", null)
-                        .WithMany("Items")
-                        .HasForeignKey("BackupPlanId");
-                });
-
-            modelBuilder.Entity("SCREAM.Data.Entities.BackupPlan", b =>
-                {
-                    b.HasOne("SCREAM.Data.Entities.DatabaseConnection", "DatabaseConnection")
-                        .WithMany()
-                        .HasForeignKey("DatabaseConnectionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("SCREAM.Data.Entities.BackupSchedule", "Schedule")
-                        .WithMany()
-                        .HasForeignKey("ScheduleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("SCREAM.Data.Entities.StorageTargets.StorageTarget", "StorageTarget")
-                        .WithMany()
-                        .HasForeignKey("StorageTargetId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("DatabaseConnection");
-
-                    b.Navigation("Schedule");
-
-                    b.Navigation("StorageTarget");
-                });
-
-            modelBuilder.Entity("SCREAM.Data.Entities.BackupPlan", b =>
-                {
-                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }

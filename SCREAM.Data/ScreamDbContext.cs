@@ -83,32 +83,6 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .HasValue<GoogleCloudStorageTarget>(StorageTargetType.GoogleCloudStorage);
         });
 
-        mb.Entity<BackupPlan>(entity =>
-           {
-               entity.ToTable("BackupPlans");
-               entity.HasKey(bp => bp.Id);
-               entity.Property(p => p.Id).ValueGeneratedOnAdd();
-               entity.HasOne(p => p.BackupSchedule)
-               .WithOne()
-               .HasForeignKey<BackupPlan>(p => p.BackupScheduleId);
-               entity.Property(e => e.Name).IsRequired();
-               entity.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
-               entity.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
-           });
-
-         mb.Entity<BackupSchedule>(entity =>
-            {
-                entity.ToTable("BackupSchedules");
-                entity.HasKey(bs => bs.Id);
-                entity.Property(p => p.Id).ValueGeneratedOnAdd();
-                entity.Property(p => p.ScheduledType)
-                .HasConversion<string>();
-                entity.Property(bs => bs.CronExpression)
-                      .IsRequired();
-               entity.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
-               entity.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
-            });
-
         // Configure the S3StorageTarget specific properties
         mb.Entity<S3StorageTarget>()
             .Property(e => e.BucketName).IsRequired();
@@ -132,6 +106,31 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
         // Configure the LocalStorageTarget specific properties
         mb.Entity<LocalStorageTarget>()
             .Property(e => e.Path).IsRequired();
+        
+        
+        mb.Entity<BackupPlan>(entity =>
+        {
+            entity.ToTable("BackupPlans");
+            entity.HasKey(bp => bp.Id);
+            entity.Property(p => p.Id).ValueGeneratedOnAdd();
+            entity.HasOne(p => p.Schedule);
+            entity.Property(e => e.Name).IsRequired();
+            entity.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
+            entity.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+        });
+
+        mb.Entity<BackupSchedule>(entity =>
+        {
+            entity.ToTable("BackupSchedules");
+            entity.HasKey(bs => bs.Id);
+            entity.Property(p => p.Id).ValueGeneratedOnAdd();
+            entity.Property(p => p.ScheduledType)
+                .HasConversion<string>();
+            entity.Property(bs => bs.CronExpression)
+                .IsRequired();
+            entity.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
+            entity.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+        });
 
         base.OnModelCreating(mb);
     }

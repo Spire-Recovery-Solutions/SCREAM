@@ -4,8 +4,9 @@
         <TargetFramework>net8.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
-        <UserSecretsId>dotnet-SCREAM.Backup-2275f763-8a32-43cf-b142-5c71fa4422f0</UserSecretsId>
+        <UserSecretsId>dotnet-SCREAM.Service.Backup-2275f763-8a32-43cf-b142-5c71fa4422f0</UserSecretsId>
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+        <RootNamespace>SCREAM.Service.Backup</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>

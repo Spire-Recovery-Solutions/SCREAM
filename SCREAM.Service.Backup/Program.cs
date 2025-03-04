@@ -1,4 +1,4 @@
-namespace SCREAM.Restore;
+namespace SCREAM.Service.Backup;
 
 public class Program
 {
