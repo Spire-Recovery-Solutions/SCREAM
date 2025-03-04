@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SCREAM.Data.Entities;
 using SCREAM.Data.Entties;
 using SCREAM.Models.Database;
 
@@ -8,15 +9,21 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
 {
     public DbSet<DatabaseConnection> DatabaseConnections { get; set; }
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(ModelBuilder mb)
     {
-      modelBuilder.Entity<DatabaseConnection>(entity =>
-            {
-                entity.ToTable("DatabaseConnections");
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Type)
-                      .HasConversion<string>();
-            });   
-        base.OnModelCreating(modelBuilder);
+        mb.Entity<DatabaseConnection>(e =>
+        {
+            e.ToTable("DatabaseConnections");
+            e.HasKey(k => k.Id);
+            e.Property(p => p.Id).ValueGeneratedOnAdd();
+
+
+            e.Property(p => p.Type)
+                .HasConversion<string>();
+
+            e.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
+            e.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+        });
+        base.OnModelCreating(mb);
     }
 }

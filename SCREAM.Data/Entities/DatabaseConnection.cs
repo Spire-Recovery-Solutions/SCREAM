@@ -2,9 +2,9 @@ using SCREAM.Web.Enums;
 
 namespace SCREAM.Data.Entities
 {
-   public class DatabaseConnection
+   public class DatabaseConnection : ScreamDbBaseEntity
     {
-        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public long Id { get; set; }
         public required string HostName { get; set; } = string.Empty;
         public required int Port { get; set; } = 3306;
         public required string UserName { get; set; } = string.Empty;
