@@ -1,4 +1,4 @@
-using SCREAM.Web.Enums;
+using SCREAM.Data.Enums;
 
 namespace SCREAM.Data.Entities
 {
