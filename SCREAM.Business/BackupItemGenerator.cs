@@ -6,6 +6,7 @@ using MySqlConnector;
 using Dapper;
 using SCREAM.Data.Entities;
 using CliWrap;
+using SCREAM.Data.Entities.BackupItems;
 
 namespace SCREAM.Business;
 
