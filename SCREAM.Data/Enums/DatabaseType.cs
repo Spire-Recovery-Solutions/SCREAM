@@ -1,4 +1,4 @@
-﻿namespace SCREAM.Web.Enums
+﻿namespace SCREAM.Data.Enums
 {
    public enum DatabaseType
     {
