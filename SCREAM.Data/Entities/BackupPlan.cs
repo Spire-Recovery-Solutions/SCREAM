@@ -8,6 +8,7 @@ namespace SCREAM.Data.Entities
         public string Name { get; set; } = string.Empty;
         public DatabaseConnection DatabaseConnection { get; set; }
         public List<BackupItem> BackupItems { get; set; } = new();
+        public BackupSchedule BackupSchedule { get; set; }
         public BackupStorageType StorageType { get; set; }
         public string StoragePath { get; set; }
         public bool UseEncryption { get; set; } = false;
