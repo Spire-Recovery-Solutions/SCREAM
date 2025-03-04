@@ -7,7 +7,11 @@ namespace SCREAM.Data.Entities;
 /// </summary>
 public class TableDataItem : BackupItem
 {
-    public override BackupItemType Type => BackupItemType.TableData;
+    public override BackupItemType Type
+    {
+        get => BackupItemType.TableData;
+        set => throw new NotImplementedException();
+    }
 
     /// <summary>
     /// The number of rows in the table.

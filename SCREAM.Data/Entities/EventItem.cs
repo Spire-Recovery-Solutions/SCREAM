@@ -7,7 +7,11 @@ namespace SCREAM.Data.Entities;
 /// </summary>
 public class EventItem : BackupItem
 {
-    public override BackupItemType Type => BackupItemType.Event;
+    public override BackupItemType Type
+    {
+        get => BackupItemType.Event;
+        set => throw new NotImplementedException();
+    }
 
     public override void ConfigureArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize)
     {

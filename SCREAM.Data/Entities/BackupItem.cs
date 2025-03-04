@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using CliWrap.Builders;
 
 namespace SCREAM.Data.Entities;
@@ -27,7 +28,7 @@ public abstract class BackupItem : ScreamDbBaseEntity
     /// <summary>
     /// The type of backup item.
     /// </summary>
-    public abstract BackupItemType Type { get; }
+    public abstract BackupItemType Type { get; set; }
 
 
     /// <summary>

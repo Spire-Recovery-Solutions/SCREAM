@@ -59,10 +59,6 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
         mb.Entity<TableDataItem>()
             .Property(e => e.RowCount);
 
-        // Ignore the non-persistent methods for all entities
-        mb.Entity<BackupItem>()
-            .Ignore(e => e.ConfigureArguments)
-            .Ignore(e => e.GetOutputFileName);
 
         base.OnModelCreating(mb);
     }
