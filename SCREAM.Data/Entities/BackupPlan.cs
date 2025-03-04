@@ -11,4 +11,6 @@ public class BackupPlan : ScreamDbBaseEntity
     public required StorageTarget StorageTarget { get; set; }
     public required BackupSchedule Schedule { get; set; }
     public required List<BackupItem> Items { get; set; }
+    
+    public bool IsActive { get; set; }
 }
