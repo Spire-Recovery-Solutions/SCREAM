@@ -1,0 +1,65 @@
+@page "/migration"
+
+<PageTitle>Migration - SCREAM</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Database Migration</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.h5" Class="mb-3">Source Database</MudText>
+    <MudForm>
+        <MudSelect T="string" Label="Source Connection" AnchorOrigin="Origin.BottomCenter">
+            <MudSelectItem Value="@("default")">Default Connection</MudSelectItem>
+        </MudSelect>
+        
+        <MudSelect T="string" Label="Source Database" AnchorOrigin="Origin.BottomCenter" Class="mt-3">
+            <MudSelectItem Value="@("sample")">sample_db</MudSelectItem>
+        </MudSelect>
+    </MudForm>
+</MudPaper>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.h5" Class="mb-3">Destination Database</MudText>
+    <MudForm>
+        <MudSelect T="string" Label="Destination Connection" AnchorOrigin="Origin.BottomCenter">
+            <MudSelectItem Value="@("default")">Default Connection</MudSelectItem>
+        </MudSelect>
+        
+        <MudTextField @bind-Value="destinationDatabase" Label="Destination Database" Class="mt-3" />
+    </MudForm>
+</MudPaper>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.h5" Class="mb-3">Migration Components</MudText>
+    <MudGrid>
+        <MudItem xs="12" sm="6" md="4">
+            <MudCheckBox T="bool" @bind-Checked="migrateSchema" Label="Schema" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudCheckBox T="bool" @bind-Checked="migrateData" Label="Data" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudCheckBox T="bool" @bind-Checked="migrateFunctionSp" Label="Functions & SPs" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudCheckBox T="bool" @bind-Checked="migrateViews" Label="Views" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudCheckBox T="bool" @bind-Checked="migrateTriggers" Label="Triggers" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudCheckBox T="bool" @bind-Checked="migrateEvents" Label="Events" Color="Color.Primary" />
+        </MudItem>
+    </MudGrid>
+    
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4">Start Migration</MudButton>
+</MudPaper>
+
+@code {
+    private bool migrateSchema = true;
+    private bool migrateData = true;
+    private bool migrateFunctionSp = true;
+    private bool migrateViews = true;
+    private bool migrateTriggers = true;
+    private bool migrateEvents = true;
+    private string destinationDatabase = "";
+}

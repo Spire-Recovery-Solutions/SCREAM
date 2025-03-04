@@ -1,0 +1,40 @@
+<MudNavMenu>
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
+
+    <MudNavLink Href="/backup" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Backup">Backup</MudNavLink>
+
+    <MudNavLink Href="/restore" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Restore">Restore</MudNavLink>
+
+    <MudNavLink Href="/migration" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SwapHoriz">Migration</MudNavLink>
+
+    <MudNavGroup Title="Database Management" Expanded="false" Icon="@Icons.Material.Filled.Storage">
+        <MudNavLink Href="/databasemanagement/connections" Match="NavLinkMatch.Prefix">Connections</MudNavLink>
+        <MudNavLink Href="/databasemanagement/databases" Match="NavLinkMatch.Prefix">Databases</MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="Components" Expanded="false" Icon="@Icons.Material.Filled.Extension">
+        <MudNavLink Href="/components/schema" Match="NavLinkMatch.Prefix">Schema</MudNavLink>
+        <MudNavLink Href="/components/data" Match="NavLinkMatch.Prefix">Data</MudNavLink>
+        <MudNavLink Href="/components/functionsp" Match="NavLinkMatch.Prefix">Functions & SP</MudNavLink>
+        <MudNavLink Href="/components/views" Match="NavLinkMatch.Prefix">Views</MudNavLink>
+        <MudNavLink Href="/components/triggers" Match="NavLinkMatch.Prefix">Triggers</MudNavLink>
+        <MudNavLink Href="/components/events" Match="NavLinkMatch.Prefix">Events</MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="Storage" Expanded="false" Icon="@Icons.Material.Filled.CloudQueue">
+        <MudNavLink Href="/storage/s3" Match="NavLinkMatch.Prefix">S3 Storage</MudNavLink>
+        <MudNavLink Href="/storage/backblazeb2" Match="NavLinkMatch.Prefix">Backblaze B2</MudNavLink>
+        <MudNavLink Href="/storage/local" Match="NavLinkMatch.Prefix">Local Storage</MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="Settings" Expanded="false" Icon="@Icons.Material.Filled.Settings">
+        <MudNavLink Href="/settings/general" Match="NavLinkMatch.Prefix">General</MudNavLink>
+        <MudNavLink Href="/settings/encryption" Match="NavLinkMatch.Prefix">Encryption</MudNavLink>
+        <MudNavLink Href="/settings/compression" Match="NavLinkMatch.Prefix">Compression</MudNavLink>
+        <MudNavLink Href="/settings/performance" Match="NavLinkMatch.Prefix">Performance</MudNavLink>
+    </MudNavGroup>
+
+    <MudNavLink Href="/logs" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Assignment">Logs</MudNavLink>
+
+    <MudNavLink Href="/about" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Info">About</MudNavLink>
+</MudNavMenu>

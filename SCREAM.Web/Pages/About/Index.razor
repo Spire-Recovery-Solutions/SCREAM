@@ -1,0 +1,39 @@
+@page "/about"
+
+<PageTitle>About - SCREAM</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">About SCREAM</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudText Typo="Typo.h4" Class="mb-2 d-flex align-center">
+        <MudIcon Icon="@Icons.Material.Filled.Celebration" Class="mr-2" /> SCREAM
+    </MudText>
+    <MudText Typo="Typo.subtitle1" Class="mb-4">
+        <strong>S</strong>ecure <strong>C</strong>ompress <strong>R</strong>estore <strong>E</strong>ncrypt <strong>A</strong>rchive <strong>M</strong>igrate
+    </MudText>
+    
+    <MudText>Your friendly neighborhood database superhero for MariaDB and MySQL backups!</MudText>
+    
+    <MudText Typo="Typo.h5" Class="mt-4 mb-2">What's SCREAM?</MudText>
+    <MudText>
+        SCREAM is your all-in-one solution for protecting, compressing, and safely storing your precious database data. 
+        Think of it as a Swiss Army knife for database backups that actually cares about your peace of mind!
+    </MudText>
+    
+    <MudText Class="mt-2">
+        Instead of creating monolithic backup files that are a pain to work with, SCREAM intelligently breaks down 
+        your database into modular components.
+    </MudText>
+    
+    <MudText Typo="Typo.h5" Class="mt-4 mb-2">Tech Stack</MudText>
+    <MudList T="string">
+        <MudListItem Icon="@Icons.Material.Filled.Code">Backend: .NET 8+ (fast, modern, and reliable)</MudListItem>
+        <MudListItem Icon="@Icons.Material.Filled.Web">Frontend: Blazor WebAssembly (smooth UI without JavaScript headaches)</MudListItem>
+        <MudListItem Icon="@Icons.Material.Filled.Terminal">CLI Tools: openssl enc, xz, mysql client</MudListItem>
+    </MudList>
+    
+    <MudDivider Class="my-4" />
+    
+    <MudText Align="Align.Center">Made with ❤️ by database enthusiasts who've lost data one too many times.</MudText>
+    <MudText Align="Align.Center" Typo="Typo.caption">Version 1.0.0 | © 2025</MudText>
+</MudPaper>
