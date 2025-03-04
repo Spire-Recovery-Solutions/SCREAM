@@ -113,7 +113,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             entity.ToTable("BackupPlans");
             entity.HasKey(bp => bp.Id);
             entity.Property(p => p.Id).ValueGeneratedOnAdd();
-            entity.HasOne(p => p.Schedule);
+            entity.HasOne(p => p.Schedule).WithOne().IsRequired();
             entity.Property(e => e.Name).IsRequired();
             entity.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
             entity.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
