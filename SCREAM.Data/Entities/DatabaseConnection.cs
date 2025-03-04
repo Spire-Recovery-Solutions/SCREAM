@@ -1,6 +1,6 @@
 using SCREAM.Web.Enums;
 
-namespace SCREAM.Data.Entties
+namespace SCREAM.Data.Entities
 {
    public class DatabaseConnection
     {
