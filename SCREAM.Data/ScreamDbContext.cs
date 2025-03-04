@@ -7,7 +7,9 @@ namespace SCREAM.Data;
 
 public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbContext(options)
 {
+    public DbSet<BackupPlan> BackupPlans { get; set; }
     public DbSet<DatabaseConnection> DatabaseConnections { get; set; }
+    public DbSet<BackupSchedule> BackupSchedules { get; set; }
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -30,7 +32,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
         {
             entity.HasKey(k => k.Id);
             entity.Property(p => p.Id).ValueGeneratedOnAdd();
-            
+
             // Configure the discriminator column using the BackupItemType enum
             entity.HasDiscriminator<BackupItemType>("Type")
                 .HasValue<TableStructureItem>(BackupItemType.TableStructure)
@@ -49,7 +51,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             entity.Property(e => e.Type)
                 .HasConversion<string>()
                 .HasMaxLength(50);
-            
+
             entity.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
             entity.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
         });
@@ -62,7 +64,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             .Property(e => e.RowCount);
 
 
-        
+
         // Configure the TPH inheritance for StorageTarget
         mb.Entity<StorageTarget>(entity =>
         {
@@ -80,6 +82,32 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .HasValue<AzureBlobStorageTarget>(StorageTargetType.AzureBlob)
                 .HasValue<GoogleCloudStorageTarget>(StorageTargetType.GoogleCloudStorage);
         });
+
+        mb.Entity<BackupPlan>(entity =>
+           {
+               entity.ToTable("BackupPlans");
+               entity.HasKey(bp => bp.Id);
+               entity.Property(p => p.Id).ValueGeneratedOnAdd();
+               entity.HasOne(p => p.BackupSchedule)
+               .WithOne()
+               .HasForeignKey<BackupPlan>(p => p.BackupScheduleId);
+               entity.Property(e => e.Name).IsRequired();
+               entity.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
+               entity.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+           });
+
+         mb.Entity<BackupSchedule>(entity =>
+            {
+                entity.ToTable("BackupSchedules");
+                entity.HasKey(bs => bs.Id);
+                entity.Property(p => p.Id).ValueGeneratedOnAdd();
+                entity.Property(p => p.ScheduledType)
+                .HasConversion<string>();
+                entity.Property(bs => bs.CronExpression)
+                      .IsRequired();
+               entity.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
+               entity.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+            });
 
         // Configure the S3StorageTarget specific properties
         mb.Entity<S3StorageTarget>()
@@ -104,7 +132,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
         // Configure the LocalStorageTarget specific properties
         mb.Entity<LocalStorageTarget>()
             .Property(e => e.Path).IsRequired();
-        
+
         base.OnModelCreating(mb);
     }
 }
