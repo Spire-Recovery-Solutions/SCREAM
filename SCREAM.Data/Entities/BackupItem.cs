@@ -8,8 +8,6 @@ namespace SCREAM.Data.Entities;
 /// </summary>
 public abstract class BackupItem : ScreamDbBaseEntity
 {
-    public long Id { get; set; }
-
     /// <summary>
     /// The schema (database) the item belongs to.
     /// </summary>
