@@ -10,6 +10,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SCREAM.Restore", "SCREAM.Re
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SCREAM.Business", "SCREAM.Business\SCREAM.Business.csproj", "{0B430132-647C-4A52-B758-BFCAD458E7D0}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SCREAM.Api", "SCREAM.Api\SCREAM.Api.csproj", "{2750A1AA-DD7D-47F9-9179-08467DD862D5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +38,9 @@ Global
 		{0B430132-647C-4A52-B758-BFCAD458E7D0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0B430132-647C-4A52-B758-BFCAD458E7D0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0B430132-647C-4A52-B758-BFCAD458E7D0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2750A1AA-DD7D-47F9-9179-08467DD862D5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2750A1AA-DD7D-47F9-9179-08467DD862D5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2750A1AA-DD7D-47F9-9179-08467DD862D5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2750A1AA-DD7D-47F9-9179-08467DD862D5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
