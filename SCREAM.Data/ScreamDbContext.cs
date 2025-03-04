@@ -1,7 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using SCREAM.Data.Entities;
-using SCREAM.Data.Entties;
-using SCREAM.Models.Database;
 
 namespace SCREAM.Data;
 
