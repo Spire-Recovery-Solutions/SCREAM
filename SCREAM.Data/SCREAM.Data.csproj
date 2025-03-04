@@ -14,8 +14,13 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Folder Include="Entities\"/>
         <Folder Include="Models\"/>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Reference Include="CliWrap">
+        <HintPath>..\..\..\..\home\smarter\.nuget\packages\cliwrap\3.8.1\lib\net8.0\CliWrap.dll</HintPath>
+      </Reference>
     </ItemGroup>
 
 </Project>
