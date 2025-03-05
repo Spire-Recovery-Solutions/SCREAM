@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SCREAM.Data.Entities;
 using SCREAM.Data.Entities.BackupItems;
 using SCREAM.Data.Entities.StorageTargets;
+using SCREAM.Web.Models;
 
 namespace SCREAM.Data;
 
@@ -10,6 +11,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
     public DbSet<BackupPlan> BackupPlans { get; set; }
     public DbSet<DatabaseConnection> DatabaseConnections { get; set; }
     public DbSet<BackupSchedule> BackupSchedules { get; set; }
+    public DbSet<BackupJob> BackupJobs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -106,8 +108,8 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
         // Configure the LocalStorageTarget specific properties
         mb.Entity<LocalStorageTarget>()
             .Property(e => e.Path).IsRequired();
-        
-        
+
+
         mb.Entity<BackupPlan>(entity =>
         {
             entity.ToTable("BackupPlans");
@@ -128,6 +130,18 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .HasConversion<string>();
             entity.Property(bs => bs.CronExpression)
                 .IsRequired();
+            entity.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
+            entity.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+        });
+
+        mb.Entity<BackupJob>(entity =>
+        {
+            entity.ToTable("BackupJobs");
+            entity.HasKey(bj => bj.Id);
+            entity.Property(p => p.Id).ValueGeneratedOnAdd();
+            entity.Property(p => p.Status).HasConversion<string>();
+            entity.Property(p => p.StartedAt).IsRequired();
+            entity.Property(p => p.CompletedAt);
             entity.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
             entity.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
         });
