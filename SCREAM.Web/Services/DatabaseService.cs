@@ -1,6 +1,6 @@
-using SCREAM.Models.Database;
+using SCREAM.Web.Models.Database;
 
-namespace SCREAM.Services
+namespace SCREAM.Web.Services
 {
     public interface IDatabaseService
     {

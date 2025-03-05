@@ -1,11 +1,6 @@
-﻿using System;
-using System.Data;
-using System.Linq;
-using System.Collections.Generic;
+﻿using Dapper;
 using MySqlConnector;
-using Dapper;
 using SCREAM.Data.Entities;
-using CliWrap;
 using SCREAM.Data.Entities.BackupItems;
 
 namespace SCREAM.Business;
@@ -18,10 +13,12 @@ public class BackupItemGenerator
     /// <summary>
     /// Gets all database objects that can be backed up using mysqldump via CliWrap
     /// </summary>
-    public List<BackupItem> GetBackupItems(MySqlConnection connection)
+    public async Task<List<BackupItem>> GetBackupItems(DatabaseConnection dbConnection)
     {
+        await using var connection = new MySqlConnection(dbConnection.ConnectionString);
+
         var backupItems = new List<BackupItem>();
-        
+
         // Query to get tables and views
         string tablesQuery = @"
         SELECT 
@@ -34,7 +31,7 @@ public class BackupItemGenerator
             information_schema.TABLES
         WHERE 
             TABLE_SCHEMA NOT IN ('mysql', 'performance_schema', 'information_schema', 'sys')";
-        
+
         // Query to get triggers
         string triggersQuery = @"
         SELECT 
@@ -45,7 +42,7 @@ public class BackupItemGenerator
             information_schema.TRIGGERS
         WHERE 
             TRIGGER_SCHEMA NOT IN ('mysql', 'performance_schema', 'information_schema', 'sys')";
-        
+
         // Query to get events
         string eventsQuery = @"
         SELECT 
@@ -56,7 +53,7 @@ public class BackupItemGenerator
             information_schema.EVENTS
         WHERE 
             EVENT_SCHEMA NOT IN ('mysql', 'performance_schema', 'information_schema', 'sys')";
-        
+
         // Query to get routines (functions and procedures)
         string routinesQuery = @"
         SELECT 
@@ -67,67 +64,73 @@ public class BackupItemGenerator
             information_schema.ROUTINES
         WHERE 
             ROUTINE_SCHEMA NOT IN ('mysql', 'performance_schema', 'information_schema', 'sys')";
-        
+
         // Execute all queries to get metadata
         var tables = connection.Query<BackupItemMetadata>(tablesQuery).ToList();
         var triggers = connection.Query<BackupItemMetadata>(triggersQuery).ToList();
         var events = connection.Query<BackupItemMetadata>(eventsQuery).ToList();
         var routines = connection.Query<BackupItemMetadata>(routinesQuery).ToList();
-        
+
         // Process tables
         foreach (var item in tables.Where(t => t.TypeValue == "BASE TABLE"))
         {
             // Add table structure item
-            backupItems.Add(new TableStructureItem { 
-                Schema = item.Schema, 
+            backupItems.Add(new TableStructureItem
+            {
+                Schema = item.Schema,
                 Name = item.Name,
                 Engine = item.Engine
             });
-            
+
             // Add table data item
-            backupItems.Add(new TableDataItem { 
-                Schema = item.Schema, 
+            backupItems.Add(new TableDataItem
+            {
+                Schema = item.Schema,
                 Name = item.Name,
                 RowCount = item.TableRows
             });
         }
-        
+
         // Process views
         foreach (var item in tables.Where(t => t.TypeValue == "VIEW"))
         {
-            backupItems.Add(new ViewItem { 
-                Schema = item.Schema, 
+            backupItems.Add(new ViewItem
+            {
+                Schema = item.Schema,
                 Name = item.Name
             });
         }
-        
+
         // Process triggers - group by schema
         var triggerSchemas = triggers.Select(t => t.Schema).Distinct();
         foreach (var schema in triggerSchemas)
         {
-            backupItems.Add(new TriggerItem { 
+            backupItems.Add(new TriggerItem
+            {
                 Schema = schema
             });
         }
-        
+
         // Process events - group by schema
         var eventSchemas = events.Select(e => e.Schema).Distinct();
         foreach (var schema in eventSchemas)
         {
-            backupItems.Add(new EventItem { 
+            backupItems.Add(new EventItem
+            {
                 Schema = schema
             });
         }
-        
+
         // Process routines (functions and procedures) - group by schema
         var routineSchemas = routines.Select(r => r.Schema).Distinct();
         foreach (var schema in routineSchemas)
         {
-            backupItems.Add(new FunctionProcedureItem { 
+            backupItems.Add(new FunctionProcedureItem
+            {
                 Schema = schema
             });
         }
-        
+
         return backupItems;
     }
 }

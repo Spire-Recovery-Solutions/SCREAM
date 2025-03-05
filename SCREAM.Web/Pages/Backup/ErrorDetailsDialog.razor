@@ -1,0 +1,38 @@
+@using System.Text.RegularExpressions
+
+<MudDialog>
+    <DialogContent>
+        <MudPaper Elevation="0" Class="pa-0">
+            <MudText Typo="Typo.subtitle1" Class="mb-2">@Title</MudText>
+            <MudPaper Class="pa-4 mud-background-gray" Style="max-height: 300px; overflow-y: auto;" Elevation="0">
+                <MudText Style="white-space: pre-wrap; font-family: monospace;">@FormatErrorMessage(Message)</MudText>
+            </MudPaper>
+        </MudPaper>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    
+    [Parameter] public string Title { get; set; } = "Error Details";
+    [Parameter] public string Message { get; set; } = "";
+
+    private void Close() => MudDialog.Close();
+
+    private string FormatErrorMessage(string message)
+    {
+        // Highlight SQL errors
+        message = Regex.Replace(message, @"(ERROR \d+)(\s*\()(.+?)(\))", "<span style='color: red;'>$1</span>$2<span style='color: #F57C00;'>$3</span>$4");
+        
+        // Highlight file paths
+        message = Regex.Replace(message, @"(at|in) ([\/\\][^:\s]+)", "$1 <span style='color: #2196F3;'>$2</span>");
+        
+        // Highlight stack trace lines
+        message = Regex.Replace(message, @"(at .+?\..+?\..+?\(.+?\))", "<span style='color: #9C27B0;'>$1</span>");
+        
+        return message;
+    }
+}

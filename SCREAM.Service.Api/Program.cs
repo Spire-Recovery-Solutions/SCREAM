@@ -1,5 +1,10 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
+using SCREAM.Business;
 using SCREAM.Data;
+using SCREAM.Data.Entities;
+using SCREAM.Data.Enums;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +19,12 @@ builder.Services.AddPooledDbContextFactory<ScreamDbContext>(o =>
     o.UseSqlite($"Data Source={dbPath}");
 });
 
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    options.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -25,37 +36,39 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
+app.MapPost("/connections/{databaseConnectionId:long}/scan", async (HttpContext httpContext,
+    IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var databaseConnection = dbContext.DatabaseConnections.Find(databaseConnectionId);
+    if (databaseConnection == null)
     {
-        var forecast = Enumerable.Range(1, 5).Select(index =>
-                new WeatherForecast
-                (
-                    DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-                    Random.Shared.Next(-20, 55),
-                    summaries[Random.Shared.Next(summaries.Length)]
-                ))
-            .ToArray();
-        return forecast;
-    })
-    .WithName("GetWeatherForecast")
-    .WithOpenApi();
+        return Results.NotFound();
+    }
+
+    var big = new BackupItemGenerator();
+    var backupItems = await big.GetBackupItems(databaseConnection);
+    
+    return Results.Ok(backupItems);
+});
 
 
 // Ensure database is created
 using (var scope = app.Services.CreateScope())
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<ScreamDbContext>();
-    dbContext.Database.EnsureCreated(); // Creates the database file if it doesn't exist
+    var dbContextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ScreamDbContext>>();
+    var dbContext = dbContextFactory.CreateDbContext();
+    dbContext.Database.EnsureDeleted();
+    dbContext.Database.Migrate();
+    dbContext.DatabaseConnections.Add(new DatabaseConnection
+    {
+        HostName = "localhost",
+        Port = 3306,
+        UserName = "root",
+        Password = "Here!Lives@A#Happy4Little%Password^",
+        Type = DatabaseType.MySQL
+    });
+    dbContext.SaveChanges();
 }
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

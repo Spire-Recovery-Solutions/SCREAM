@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SCREAM.Data;
 
@@ -10,9 +11,11 @@ using SCREAM.Data;
 namespace SCREAM.Data.Migrations
 {
     [DbContext(typeof(ScreamDbContext))]
-    partial class ScreamDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250305173459_CleanupRefactor20250305")]
+    partial class CleanupRefactor20250305
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.13");
@@ -68,100 +71,6 @@ namespace SCREAM.Data.Migrations
                     b.UseTphMappingStrategy();
                 });
 
-            modelBuilder.Entity("SCREAM.Data.Entities.BackupItems.BackupItemStatus", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("BackupItemId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("BackupJobId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("ErrorMessage")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("RetryCount")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("StartedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BackupItemId");
-
-                    b.HasIndex("BackupJobId");
-
-                    b.ToTable("BackupItemStatuses", (string)null);
-                });
-
-            modelBuilder.Entity("SCREAM.Data.Entities.BackupItems.BackupSettings", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("BackupHistoryRetentionDays")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(30);
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("DefaultMaxAllowedPacket")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValue("64M");
-
-                    b.Property<int>("MaxAutoRetries")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(3);
-
-                    b.Property<string>("NotificationEmail")
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("SendEmailNotifications")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(false);
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("BackupSettings", (string)null);
-                });
-
             modelBuilder.Entity("SCREAM.Data.Entities.BackupJob", b =>
                 {
                     b.Property<long>("Id")
@@ -197,54 +106,6 @@ namespace SCREAM.Data.Migrations
                     b.HasIndex("BackupPlanId");
 
                     b.ToTable("BackupJobs", (string)null);
-                });
-
-            modelBuilder.Entity("SCREAM.Data.Entities.BackupJobLog", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long?>("BackupItemStatusId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("BackupJobId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("Message")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Severity")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("Timestamp")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BackupItemStatusId");
-
-                    b.HasIndex("BackupJobId");
-
-                    b.ToTable("BackupJobLogs", (string)null);
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.BackupPlan", b =>
@@ -532,25 +393,6 @@ namespace SCREAM.Data.Migrations
                         .HasForeignKey("BackupPlanId");
                 });
 
-            modelBuilder.Entity("SCREAM.Data.Entities.BackupItems.BackupItemStatus", b =>
-                {
-                    b.HasOne("SCREAM.Data.Entities.BackupItems.BackupItem", "BackupItem")
-                        .WithMany()
-                        .HasForeignKey("BackupItemId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("SCREAM.Data.Entities.BackupJob", "BackupJob")
-                        .WithMany()
-                        .HasForeignKey("BackupJobId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("BackupItem");
-
-                    b.Navigation("BackupJob");
-                });
-
             modelBuilder.Entity("SCREAM.Data.Entities.BackupJob", b =>
                 {
                     b.HasOne("SCREAM.Data.Entities.BackupPlan", "BackupPlan")
@@ -560,24 +402,6 @@ namespace SCREAM.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("BackupPlan");
-                });
-
-            modelBuilder.Entity("SCREAM.Data.Entities.BackupJobLog", b =>
-                {
-                    b.HasOne("SCREAM.Data.Entities.BackupItems.BackupItemStatus", "BackupItemStatus")
-                        .WithMany()
-                        .HasForeignKey("BackupItemStatusId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("SCREAM.Data.Entities.BackupJob", "BackupJob")
-                        .WithMany()
-                        .HasForeignKey("BackupJobId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("BackupItemStatus");
-
-                    b.Navigation("BackupJob");
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.BackupPlan", b =>
