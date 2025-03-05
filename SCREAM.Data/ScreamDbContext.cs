@@ -11,6 +11,9 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
     public DbSet<DatabaseConnection> DatabaseConnections { get; set; }
     public DbSet<BackupSchedule> BackupSchedules { get; set; }
     public DbSet<BackupJob> BackupJobs { get; set; }
+    public DbSet<BackupItemStatus> BackupItemStatuses { get; set; }
+    public DbSet<BackupJobLog> BackupJobLogs { get; set; }
+    public DbSet<BackupSettings> BackupSettings { get; set; }
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -124,6 +127,60 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
         {
             e.ToTable("BackupJobs");
             e.Property(p => p.Status).HasConversion<string>();
+            
+            // One-to-many relationship between BackupJob and BackupItemStatuses
+            e.HasMany<BackupItemStatus>()
+                .WithOne(s => s.BackupJob)
+                .HasForeignKey(k => k.BackupJobId)
+                .OnDelete(DeleteBehavior.Cascade);
+                
+            // One-to-many relationship between BackupJob and BackupJobLogs
+            e.HasMany<BackupJobLog>()
+                .WithOne(l => l.BackupJob)
+                .HasForeignKey(k => k.BackupJobId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        
+        // BackupItemStatus configuration
+        mb.Entity<BackupItemStatus>(e =>
+        {
+            e.ToTable("BackupItemStatuses");
+            e.Property(p => p.Status).HasConversion<string>();
+            e.Property(p => p.ErrorMessage).IsRequired(false);
+            
+            // Many-to-one relationship between BackupItemStatus and BackupItem
+            e.HasOne(s => s.BackupItem)
+                .WithMany()
+                .HasForeignKey(k => k.BackupItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+        
+        // BackupJobLog configuration
+        mb.Entity<BackupJobLog>(e =>
+        {
+            e.ToTable("BackupJobLogs");
+            e.Property(p => p.Severity).HasConversion<string>();
+            e.Property(p => p.Title).IsRequired().HasMaxLength(100);
+            e.Property(p => p.Message).IsRequired();
+            
+            // Optional relationship to BackupItemStatus
+            e.HasOne(l => l.BackupItemStatus)
+                .WithMany()
+                .HasForeignKey(k => k.BackupItemStatusId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+        
+        // BackupSettings configuration
+        mb.Entity<BackupSettings>(e =>
+        {
+            e.ToTable("BackupSettings");
+            e.HasKey(k => k.Id);
+            e.Property(p => p.MaxAutoRetries).HasDefaultValue(3);
+            e.Property(p => p.BackupHistoryRetentionDays).HasDefaultValue(30);
+            e.Property(p => p.DefaultMaxAllowedPacket).IsRequired().HasDefaultValue("64M");
+            e.Property(p => p.SendEmailNotifications).HasDefaultValue(false);
+            e.Property(p => p.NotificationEmail).IsRequired(false);
         });
 
         base.OnModelCreating(mb);

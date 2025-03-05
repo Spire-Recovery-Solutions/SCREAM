@@ -1,6 +1,6 @@
-using SCREAM.Models.Backup;
+using SCREAM.Web.Models.Backup;
 
-namespace SCREAM.Services
+namespace SCREAM.Web.Services
 {
     public interface IBackupService
     {
