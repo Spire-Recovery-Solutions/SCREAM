@@ -1,0 +1,76 @@
+﻿@page "/DatabaseManagement/Connection/{id?}"
+@using SCREAM.Data.Entities
+@using SCREAM.Data.Enums
+@inject ISnackbar Snackbar
+
+<MudStack Spacing="3">
+    <MudText Align="Align.Center" Typo="Typo.h6">@_connection.HostName</MudText>
+    <MudTextField Label="Host Name"
+                  Value="@_connection.HostName"
+                  ReadOnly="true" />
+    <MudTextField Label="Port"
+                  Value="@_connection.Port.ToString()"
+                  ReadOnly="true" />
+    <MudTextField Label="User Name"
+                  Value="@_connection.UserName"
+                  ReadOnly="true" />
+
+    <MudTextField Label="Password"
+                  InputType="InputType.Password"
+                  Value="@_connection.Password"
+                  ReadOnly="true" />
+
+    <MudSelect T="DatabaseType" Label="Database Type" @bind-Value="@_connection.Type" Disabled="true">
+        @foreach (var type in Enum.GetValues<DatabaseType>())
+        {
+            <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
+        }
+    </MudSelect>
+
+    <MudTextField Label="Connection String"
+                  Value="@_connection.ConnectionString"
+                  ReadOnly="true"
+                  Variant="Variant.Outlined"
+                  Lines="3" />
+    <MudDivider />
+
+    <MudStack Row="true" Justify="Justify.Center">
+        <MudButton OnClick="TestConnection"
+                   Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Size="Size.Small"
+                   FullWidth="false"
+                   Class="mx-auto">
+            Test Connection
+        </MudButton>
+    </MudStack>
+</MudStack>
+
+@code {
+    [Parameter]
+    public long? id { get; set; }
+
+    private DatabaseConnection _connection { get; set; } = new()
+        {
+            HostName = "localhost",
+            Port = 3306,
+            UserName = "root",
+            Password = "password",
+            Type = DatabaseType.MySQL
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (id.HasValue)
+        {
+            // Fetch the connection details using an injected service
+            // _connection = await DatabaseConnectionService.GetConnectionByIdAsync(id.Value);
+        }
+    }
+
+    private async Task TestConnection()
+    {
+        await Task.Delay(500);
+        Snackbar.Add("Connection test succeeded!", Severity.Success);
+    }
+}
