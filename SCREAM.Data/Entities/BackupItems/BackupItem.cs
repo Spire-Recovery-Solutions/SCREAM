@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using CliWrap.Builders;
 
 namespace SCREAM.Data.Entities.BackupItems;
@@ -5,6 +6,13 @@ namespace SCREAM.Data.Entities.BackupItems;
 /// <summary>
 /// Base class for all database objects that can be backed up
 /// </summary>
+[JsonDerivedType(typeof(TableStructureItem), typeDiscriminator: (int)BackupItemType.TableStructure)]
+[JsonDerivedType(typeof(TableDataItem), typeDiscriminator: (int)BackupItemType.TableData)]
+[JsonDerivedType(typeof(ViewItem), typeDiscriminator: (int)BackupItemType.View)]
+[JsonDerivedType(typeof(TriggerItem), typeDiscriminator: (int)BackupItemType.Trigger)]
+[JsonDerivedType(typeof(EventItem), typeDiscriminator: (int)BackupItemType.Event)]
+[JsonDerivedType(typeof(FunctionProcedureItem), typeDiscriminator: (int)BackupItemType.FunctionProcedure)]
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 public abstract class BackupItem : ScreamDbBaseEntity
 {
     /// <summary>

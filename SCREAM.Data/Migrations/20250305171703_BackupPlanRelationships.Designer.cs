@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SCREAM.Data;
 
@@ -10,9 +11,11 @@ using SCREAM.Data;
 namespace SCREAM.Data.Migrations
 {
     [DbContext(typeof(ScreamDbContext))]
-    partial class ScreamDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250305171703_BackupPlanRelationships")]
+    partial class BackupPlanRelationships
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.13");
@@ -28,8 +31,7 @@ namespace SCREAM.Data.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("IsSelected")
                         .ValueGeneratedOnAdd()
@@ -54,8 +56,7 @@ namespace SCREAM.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -74,16 +75,15 @@ namespace SCREAM.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<long>("BackupPlanId")
-                        .HasColumnType("INTEGER");
-
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("PlanId")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("StartedAt")
                         .HasColumnType("TEXT");
@@ -95,12 +95,11 @@ namespace SCREAM.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BackupPlanId");
+                    b.HasIndex("PlanId");
 
                     b.ToTable("BackupJobs", (string)null);
                 });
@@ -113,8 +112,7 @@ namespace SCREAM.Data.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("DatabaseConnectionId")
                         .HasColumnType("INTEGER");
@@ -136,8 +134,7 @@ namespace SCREAM.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -159,8 +156,7 @@ namespace SCREAM.Data.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("CronExpression")
                         .IsRequired()
@@ -179,8 +175,7 @@ namespace SCREAM.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -198,8 +193,7 @@ namespace SCREAM.Data.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("HostName")
                         .IsRequired()
@@ -219,8 +213,7 @@ namespace SCREAM.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("UserName")
                         .IsRequired()
@@ -238,9 +231,7 @@ namespace SCREAM.Data.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
                         .HasColumnType("TEXT");
@@ -253,10 +244,7 @@ namespace SCREAM.Data.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -392,13 +380,13 @@ namespace SCREAM.Data.Migrations
 
             modelBuilder.Entity("SCREAM.Data.Entities.BackupJob", b =>
                 {
-                    b.HasOne("SCREAM.Data.Entities.BackupPlan", "BackupPlan")
+                    b.HasOne("SCREAM.Data.Entities.BackupPlan", "Plan")
                         .WithMany()
-                        .HasForeignKey("BackupPlanId")
+                        .HasForeignKey("PlanId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("BackupPlan");
+                    b.Navigation("Plan");
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.BackupPlan", b =>

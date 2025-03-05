@@ -14,28 +14,34 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
+        // Configure base entity timestamps
+        foreach (var entityType in mb.Model.GetEntityTypes()
+                     .Where(e => typeof(ScreamDbBaseEntity).IsAssignableFrom(e.ClrType)))
+        {
+            mb.Entity(entityType.ClrType, builder =>
+            {
+                builder.Property("CreatedAt")
+                    .ValueGeneratedOnAdd()
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                builder.Property("UpdatedAt")
+                    .ValueGeneratedOnAddOrUpdate()
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                    .IsConcurrencyToken();
+            });
+        }
+
+        // DatabaseConnection configuration
         mb.Entity<DatabaseConnection>(e =>
         {
             e.ToTable("DatabaseConnections");
-            e.HasKey(k => k.Id);
-            e.Property(p => p.Id).ValueGeneratedOnAdd();
-
-
-            e.Property(p => p.Type)
-                .HasConversion<string>();
-
-            e.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
-            e.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+            e.Property(p => p.Type).HasConversion<string>();
         });
 
-        // Configure the BackupItem hierarchy with TPH (Table Per Hierarchy)
-        mb.Entity<BackupItem>(entity =>
+        // BackupItem configuration
+        mb.Entity<BackupItem>(e =>
         {
-            entity.HasKey(k => k.Id);
-            entity.Property(p => p.Id).ValueGeneratedOnAdd();
-
-            // Configure the discriminator column using the BackupItemType enum
-            entity.HasDiscriminator<BackupItemType>("Type")
+            e.HasDiscriminator<BackupItemType>("Type")
                 .HasValue<TableStructureItem>(BackupItemType.TableStructure)
                 .HasValue<TableDataItem>(BackupItemType.TableData)
                 .HasValue<ViewItem>(BackupItemType.View)
@@ -43,107 +49,81 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .HasValue<EventItem>(BackupItemType.Event)
                 .HasValue<FunctionProcedureItem>(BackupItemType.FunctionProcedure);
 
-            // Configure the base properties
-            entity.Property(e => e.Schema).IsRequired().HasMaxLength(100);
-            entity.Property(e => e.Name).HasMaxLength(100);
-            entity.Property(e => e.IsSelected).HasDefaultValue(true);
-
-            // Store enum as string for better readability in database
-            entity.Property(e => e.Type)
-                .HasConversion<string>()
-                .HasMaxLength(50);
-
-            entity.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
-            entity.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+            e.Property(p => p.Schema).IsRequired().HasMaxLength(100);
+            e.Property(p => p.Name).HasMaxLength(100);
+            e.Property(p => p.IsSelected).HasDefaultValue(true);
+            e.Property(p => p.Type).HasConversion<string>().HasMaxLength(50);
         });
 
-        // Configure the derived entity specific properties
-        mb.Entity<TableStructureItem>()
-            .Property(e => e.Engine).HasMaxLength(50);
+        mb.Entity<TableStructureItem>().Property(e => e.Engine).HasMaxLength(50);
+        mb.Entity<TableDataItem>().Property(e => e.RowCount);
 
-        mb.Entity<TableDataItem>()
-            .Property(e => e.RowCount);
-
-
-
-        // Configure the TPH inheritance for StorageTarget
-        mb.Entity<StorageTarget>(entity =>
+        // StorageTarget configuration
+        mb.Entity<StorageTarget>(e =>
         {
-            // Configure the base entity
-            entity.ToTable("StorageTargets");
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Name).IsRequired();
-            entity.Property(e => e.Type).IsRequired();
-            entity.Property(e => e.Description).IsRequired(false);
-
-            // Configure the inheritance mapping
-            entity.HasDiscriminator(e => e.Type)
+            e.ToTable("StorageTargets");
+            e.Property(p => p.Name).IsRequired();
+            e.Property(p => p.Type).IsRequired();
+            e.Property(p => p.Description).IsRequired(false);
+            e.HasDiscriminator(p => p.Type)
                 .HasValue<LocalStorageTarget>(StorageTargetType.Local)
                 .HasValue<S3StorageTarget>(StorageTargetType.S3)
                 .HasValue<AzureBlobStorageTarget>(StorageTargetType.AzureBlob)
                 .HasValue<GoogleCloudStorageTarget>(StorageTargetType.GoogleCloudStorage);
         });
 
-        // Configure the S3StorageTarget specific properties
-        mb.Entity<S3StorageTarget>()
-            .Property(e => e.BucketName).IsRequired();
-        mb.Entity<S3StorageTarget>()
-            .Property(e => e.AccessKey).IsRequired();
-        mb.Entity<S3StorageTarget>()
-            .Property(e => e.SecretKey).IsRequired();
-
-        // Configure the AzureBlobStorageTarget specific properties
-        mb.Entity<AzureBlobStorageTarget>()
-            .Property(e => e.ConnectionString).IsRequired();
-        mb.Entity<AzureBlobStorageTarget>()
-            .Property(e => e.ContainerName).IsRequired();
-
-        // Configure the GoogleCloudStorageTarget specific properties
-        mb.Entity<GoogleCloudStorageTarget>()
-            .Property(e => e.BucketName).IsRequired();
-        mb.Entity<GoogleCloudStorageTarget>()
-            .Property(e => e.ServiceAccountKey).IsRequired();
-
-        // Configure the LocalStorageTarget specific properties
-        mb.Entity<LocalStorageTarget>()
-            .Property(e => e.Path).IsRequired();
-
-
-        mb.Entity<BackupPlan>(entity =>
+        // StorageTarget derived types
+        mb.Entity<S3StorageTarget>(e =>
         {
-            entity.ToTable("BackupPlans");
-            entity.HasKey(bp => bp.Id);
-            entity.Property(p => p.Id).ValueGeneratedOnAdd();
-            entity.HasOne(p => p.Schedule).WithOne().IsRequired();
-            entity.Property(e => e.Name).IsRequired();
-            entity.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
-            entity.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+            e.Property(p => p.BucketName).IsRequired();
+            e.Property(p => p.AccessKey).IsRequired();
+            e.Property(p => p.SecretKey).IsRequired();
         });
 
-        mb.Entity<BackupSchedule>(entity =>
+        mb.Entity<AzureBlobStorageTarget>(e =>
         {
-            entity.ToTable("BackupSchedules");
-            entity.HasKey(bs => bs.Id);
-            entity.Property(p => p.Id).ValueGeneratedOnAdd();
-            entity.Property(p => p.ScheduledType)
-                .HasConversion<string>();
-            entity.Property(bs => bs.CronExpression)
-                .IsRequired();
-            entity.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
-            entity.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+            e.Property(p => p.ConnectionString).IsRequired();
+            e.Property(p => p.ContainerName).IsRequired();
         });
 
-        mb.Entity<BackupJob>(entity =>
+        mb.Entity<GoogleCloudStorageTarget>(e =>
         {
-            entity.ToTable("BackupJobs");
-            entity.HasKey(bj => bj.Id);
-            entity.Property(p => p.Id).ValueGeneratedOnAdd();
-            entity.HasOne(p => p.Plan).WithOne().IsRequired();
-            entity.Property(p => p.Status).HasConversion<string>();
-            entity.Property(p => p.StartedAt).IsRequired();
-            entity.Property(p => p.CompletedAt);
-            entity.Property(p => p.CreatedAt).ValueGeneratedOnAdd();
-            entity.Property(p => p.UpdatedAt).ValueGeneratedOnAddOrUpdate().IsConcurrencyToken();
+            e.Property(p => p.BucketName).IsRequired();
+            e.Property(p => p.ServiceAccountKey).IsRequired();
+        });
+
+        mb.Entity<LocalStorageTarget>().Property(e => e.Path).IsRequired();
+
+        // BackupPlan configuration
+        mb.Entity<BackupPlan>(e =>
+        {
+            e.ToTable("BackupPlans");
+
+            // One-to-one relationship between BackupPlan and BackupSchedule
+            e.HasOne(p => p.Schedule)
+                .WithOne(w => w.BackupPlan)
+                .HasForeignKey<BackupSchedule>(k => k.BackupPlanId);
+            
+            // One-to-many relationship between BackupPlan and BackupJobs
+            e.HasMany<BackupJob>()
+                .WithOne(j => j.BackupPlan)
+                .HasForeignKey(k => k.BackupPlanId);
+
+            e.Property(p => p.Name).IsRequired();
+        });
+
+        // BackupSchedule configuration
+        mb.Entity<BackupSchedule>(e =>
+        {
+            e.ToTable("BackupSchedules");
+            e.Property(p => p.ScheduledType).HasConversion<string>();
+        });
+
+        // BackupJob configuration
+        mb.Entity<BackupJob>(e =>
+        {
+            e.ToTable("BackupJobs");
+            e.Property(p => p.Status).HasConversion<string>();
         });
 
         base.OnModelCreating(mb);
