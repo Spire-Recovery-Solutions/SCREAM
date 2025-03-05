@@ -17,7 +17,7 @@ namespace SCREAM.Data.Entities.BackupItems
         /// </summary>
         public long BackupItemId { get; set; }
 
-        public BackupItems.BackupItem BackupItem { get; set; } = null!;
+        public BackupItem BackupItem { get; set; } = null!;
 
         /// <summary>
         /// Current execution status
