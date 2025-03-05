@@ -1,4 +1,4 @@
-using SCREAM.Web.Models.Database;
+using SCREAM.Data.Entities;
 
 namespace SCREAM.Web.Services
 {
