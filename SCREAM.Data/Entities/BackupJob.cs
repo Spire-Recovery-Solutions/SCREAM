@@ -13,12 +13,12 @@
         /// <summary>
         /// The status of the backup job (e.g., Pending, Running, Completed, Failed).
         /// </summary>
-        public TaskStatus Status { get; set; }
+        public required TaskStatus Status { get; set; }
 
         /// <summary>
         /// The timestamp when the backup job started.
         /// </summary>
-        public DateTime StartedAt { get; set; }
+        public required DateTime StartedAt { get; set; }
 
         /// <summary>
         /// The timestamp when the backup job was completed.
