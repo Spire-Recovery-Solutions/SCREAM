@@ -8,7 +8,7 @@
         /// <summary>
         /// The backup plan associated with this job.
         /// </summary>
-        public BackupPlan Plan { get; set; }
+        public required BackupPlan Plan { get; set; }
 
         /// <summary>
         /// The status of the backup job (e.g., Pending, Running, Completed, Failed).
