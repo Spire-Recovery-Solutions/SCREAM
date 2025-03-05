@@ -1,0 +1,63 @@
+﻿@using SCREAM.Data.Entities
+@using SCREAM.Data.Enums
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudStack Spacing="3">
+                <MudTextField Label="Host Name" @bind-Value="Connection.HostName" Required="true" />
+                <MudNumericField T="int" Label="Port" @bind-Value="Connection.Port" Required="true" Min="1" Max="65535" />
+                <MudTextField Label="User Name" @bind-Value="Connection.UserName" Required="true" />
+                <MudTextField Label="Password" @bind-Value="Connection.Password" InputType="InputType.Password" Required="true" />
+                <MudSelect T="DatabaseType" Label="Database Type" @bind-Value="Connection.Type" Required="true">
+                    @foreach (var type in Enum.GetValues<DatabaseType>())
+                    {
+                        <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="Save">Test & Save</MudButton>
+        <MudButton Color="Color.Secondary" OnClick="Cancel">Cancel</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] public IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter]
+    public DatabaseConnection Connection { get; set; }
+
+    private MudForm _form;
+
+    private async Task Save()
+    {
+        await _form.Validate();
+        if (!_form.IsValid)
+        {
+            Snackbar.Add("Please fill out the required fields.", Severity.Warning);
+            return;
+        }
+
+        // Uncomment and replace with your actual service call later.
+        // bool testResult = await ConnectionService.TestConnectionAsync(Connection);
+        bool testResult = true;
+
+        if (testResult)
+        {
+            MudDialog.Close(DialogResult.Ok(Connection));
+        }
+        else
+        {
+            Snackbar.Add("Connection test failed. Please check your connection settings.", Severity.Error);
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+}

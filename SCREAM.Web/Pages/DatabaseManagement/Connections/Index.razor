@@ -1,9 +1,130 @@
 @page "/DatabaseManagement/Connections"
+@using SCREAM.Data.Entities
+@using SCREAM.Data.Enums
+@using SCREAM.Web.Dialogs
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
 
-<PageTitle>Connections - SCREAM</PageTitle>
+<MudTable Items="@_connections"
+                  Dense="true"
+                  Hover="true"
+                  Striped="true">
+            <ToolBarContent>
+                <MudStack Row="true" AlignItems="AlignItems.End">
+                    <MudButton StartIcon="@Icons.Material.Filled.Add"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               OnClick="AddNewConnection">
+                        Add Connection
+                    </MudButton>
+                </MudStack>
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh>Host Name</MudTh>
+                <MudTh>Port</MudTh>
+                <MudTh>User Name</MudTh>
+                <MudTh>Type</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.HostName</MudTd>
+                <MudTd>@context.Port</MudTd>
+                <MudTd>@context.UserName</MudTd>
+                <MudTd>@context.Type</MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Color="Color.Primary"
+                                   OnClick="@(() => EditConnection(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Color="Color.Error"
+                                   OnClick="@(() => DeleteConnection(context))" />
+                </MudTd>
+            </RowTemplate>
+  </MudTable>
 
-<MudText Typo="Typo.h3" Class="mb-4">Connections</MudText>
+@code {
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+    private List<DatabaseConnection> _connections = new()
+    {
+        new DatabaseConnection
+        {
+            HostName = "localhost",
+            Port = 3306,
+            UserName = "admin",
+            Password = "secret",
+            Type = DatabaseType.MySQL
+        },
+        new DatabaseConnection
+        {
+            HostName = "192.168.1.100",
+            Port = 5432,
+            UserName = "test2",
+            Password = "password",
+            Type = DatabaseType.MariaDB
+        }
+    };
+    
+    private async Task AddNewConnection()
+    {
+        var newConnection = new DatabaseConnection
+            {
+                HostName = string.Empty,
+                Port = 3306,
+                UserName = string.Empty,
+                Password = string.Empty,
+                Type = DatabaseType.MySQL
+            };
+        await OpenConnectionDialog(newConnection, "Add Connection");
+    }
 
-<MudPaper Class="pa-4">
-    <MudText>This is the Connections page.</MudText>
-</MudPaper>
+    private async Task EditConnection(DatabaseConnection connection)
+    {
+        var connectionToEdit = new DatabaseConnection
+            {
+                Id = connection.Id,
+                HostName = connection.HostName,
+                Port = connection.Port,
+                UserName = connection.UserName,
+                Password = connection.Password,
+                Type = connection.Type
+            };
+
+        await OpenConnectionDialog(connectionToEdit, "Edit Connection");
+    }
+
+    private async Task OpenConnectionDialog(DatabaseConnection connection, string title)
+    {
+        var parameters = new DialogParameters
+        {
+            { "Connection", connection }
+        };
+        var dialog = await DialogService.ShowAsync<DatabaseConnectionDialog>(title, parameters, _dialogOptions);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            var updatedConnection = (DatabaseConnection)result.Data;
+            if (updatedConnection.Id == 0)
+            {
+                updatedConnection.Id = _connections.Any() ? _connections.Max(c => c.Id) + 1 : 1;
+                _connections.Add(updatedConnection);
+                Snackbar.Add("Connection added successfully", Severity.Success);
+            }
+            else
+            {
+                var index = _connections.FindIndex(c => c.Id == updatedConnection.Id);
+                if (index != -1)
+                {
+                    _connections[index] = updatedConnection;
+                    Snackbar.Add("Connection updated successfully", Severity.Success);
+                }
+            }
+        }
+    }
+
+    private void DeleteConnection(DatabaseConnection connection)
+    {
+        _connections.Remove(connection);
+        Snackbar.Add("Connection deleted successfully", Severity.Success);
+    }
+}
