@@ -139,6 +139,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             entity.ToTable("BackupJobs");
             entity.HasKey(bj => bj.Id);
             entity.Property(p => p.Id).ValueGeneratedOnAdd();
+            entity.HasOne(p => p.Plan).WithOne().IsRequired();
             entity.Property(p => p.Status).HasConversion<string>();
             entity.Property(p => p.StartedAt).IsRequired();
             entity.Property(p => p.CompletedAt);
