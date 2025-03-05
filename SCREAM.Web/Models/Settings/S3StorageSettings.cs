@@ -1,4 +1,4 @@
-namespace SCREAM.Models.Settings
+namespace SCREAM.Web.Models.Settings
 {
     public class S3StorageSettings
     {

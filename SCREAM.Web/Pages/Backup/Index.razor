@@ -1,0 +1,68 @@
+@page "/backup"
+
+<PageTitle>Backup - SCREAM</PageTitle>
+
+<MudText Typo="Typo.h3" Class="mb-4">Database Backup</MudText>
+
+<MudPaper Class="pa-4 mb-4">
+    <MudForm>
+        <MudSelect T="string" Label="Database Connection" AnchorOrigin="Origin.BottomCenter">
+            <MudSelectItem Value="@("default")">Default Connection</MudSelectItem>
+        </MudSelect>
+        
+        <MudSelect T="string" Label="Database Name" AnchorOrigin="Origin.BottomCenter" Class="mt-3">
+            <MudSelectItem Value="@("sample")">sample_db</MudSelectItem>
+        </MudSelect>
+        
+        <MudText Typo="Typo.h6" Class="mt-4 mb-2">Components to Backup</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudCheckBox T="bool" @bind-Checked="backupSchema" Label="Schema" Color="Color.Primary" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudCheckBox T="bool" @bind-Checked="backupData" Label="Data" Color="Color.Primary" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudCheckBox T="bool" @bind-Checked="backupFunctionSp" Label="Functions & SPs" Color="Color.Primary" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudCheckBox T="bool" @bind-Checked="backupViews" Label="Views" Color="Color.Primary" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudCheckBox T="bool" @bind-Checked="backupTriggers" Label="Triggers" Color="Color.Primary" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudCheckBox T="bool" @bind-Checked="backupEvents" Label="Events" Color="Color.Primary" />
+            </MudItem>
+        </MudGrid>
+        
+        <MudText Typo="Typo.h6" Class="mt-4 mb-2">Backup Options</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudNumericField @bind-Value="compressionLevel" Label="Compression Level" Min="1" Max="9" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudNumericField @bind-Value="threads" Label="Thread Count" Min="1" Max="16" />
+            </MudItem>
+        </MudGrid>
+        
+        <MudSelect T="string" Label="Storage Destination" AnchorOrigin="Origin.BottomCenter" Class="mt-3">
+            <MudSelectItem Value="@("s3")">S3 Storage</MudSelectItem>
+            <MudSelectItem Value="@("b2")">Backblaze B2</MudSelectItem>
+            <MudSelectItem Value="@("local")">Local Storage</MudSelectItem>
+        </MudSelect>
+        
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4">Start Backup</MudButton>
+    </MudForm>
+</MudPaper>
+
+@code {
+    private bool backupSchema = true;
+    private bool backupData = true;
+    private bool backupFunctionSp = true;
+    private bool backupViews = true;
+    private bool backupTriggers = true;
+    private bool backupEvents = true;
+    private int compressionLevel = 3;
+    private int threads = 4;
+}

@@ -1,4 +1,4 @@
-namespace SCREAM.Models.Database
+namespace SCREAM.Web.Models.Database
 {
     public class DatabaseConnection
     {
