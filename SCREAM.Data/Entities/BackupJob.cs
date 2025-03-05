@@ -1,6 +1,4 @@
-﻿using SCREAM.Data.Entities;
-
-namespace SCREAM.Web.Models
+﻿namespace SCREAM.Data.Entities
 {
     /// <summary>
     /// Represents a backup job that tracks the execution of a backup plan.
