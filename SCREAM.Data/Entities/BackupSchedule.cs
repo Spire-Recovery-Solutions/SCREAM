@@ -11,5 +11,7 @@ namespace SCREAM.Data.Entities
         public DateTime? LastRun { get; set; }
 
         public DateTime? NextRun { get; set; }
+        public BackupPlan BackupPlan { get; set; } = null!;
+        public long BackupPlanId { get; set; }
     }
 }
