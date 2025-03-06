@@ -1,9 +1,65 @@
 @page "/Storage/Local"
+@using SCREAM.Data.Entities.StorageTargets
+@using MudBlazor
+@inject ISnackbar Snackbar
 
-<PageTitle>Local - SCREAM</PageTitle>
+<PageTitle>Local Storage</PageTitle>
 
-<MudText Typo="Typo.h3" Class="mb-4">Local</MudText>
+<MudText Align="Align.Center" Typo="Typo.h5" Class="mb-4">Add Local Storage Target</MudText>
 
-<MudPaper Class="pa-4">
-    <MudText>This is the Local page.</MudText>
-</MudPaper>
+<MudForm @ref="_form">
+    <MudStack Spacing="2">
+        <MudTextField @bind-Value="localTarget.Name"
+                      Label="Name"
+                      Variant="Variant.Outlined"
+                      Required="true" />
+        <MudTextField @bind-Value="localTarget.Description"
+                      Label="Description"
+                      Variant="Variant.Outlined" />
+        <MudTextField @bind-Value="localTarget.Path"
+                      Label="Path"
+                      Variant="Variant.Outlined"
+                      Required="true" />
+         </MudStack>
+        <MudStack Class="mt-4" Row="true" Justify="Justify.Center">
+            <MudButton OnClick="SaveLocalTarget"
+                       Color="Color.Primary"
+                       Variant="Variant.Filled">
+                Save Local Storage
+            </MudButton>
+        </MudStack>
+</MudForm>
+
+@code {
+    private MudForm _form;
+    private LocalStorageTarget localTarget = new LocalStorageTarget()
+        {
+            Name = string.Empty,
+            Description = string.Empty,
+            Path = string.Empty,
+            Type = StorageTargetType.Local
+        };
+
+    private async Task SaveLocalTarget()
+    {
+        await _form.Validate();
+        if (!_form.IsValid)
+        {
+            Snackbar.Add("Please fill in the required fields.", Severity.Error);
+            return;
+        }
+
+        await Task.Delay(500);
+        Snackbar.Add("Local Storage Target saved successfully.", Severity.Success);
+
+        localTarget = new LocalStorageTarget()
+            {
+                Name = string.Empty,
+                Description = string.Empty,
+                Path = string.Empty,
+                Type = StorageTargetType.Local
+            };
+
+        StateHasChanged();
+    }
+}

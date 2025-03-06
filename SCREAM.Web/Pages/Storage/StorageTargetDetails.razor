@@ -1,0 +1,174 @@
+﻿@page "/Storage/StorageTarget"
+@using SCREAM.Data.Entities.StorageTargets
+@using SCREAM.Data.Enums
+@using SCREAM.Web.Dialogs
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudText Typo="Typo.h6" Class="mb-4">Manage Storage Targets</MudText>
+
+<MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add" OnClick="AddNewTarget">
+    Add Storage Target
+</MudButton>
+
+<MudTable Items="@_model" Dense="true" Hover="true" Striped="true">
+    <HeaderContent>
+        <MudTh>Name</MudTh>
+        <MudTh>Type</MudTh>
+        <MudTh>Details</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Name">@context.Name</MudTd>
+        <MudTd DataLabel="Type">@context.Type</MudTd>
+        <MudTd DataLabel="Details">
+            @switch (context.Type)
+            {
+                case StorageTargetType.Local:
+                    <div>
+                        <MudText>Path: @((context as LocalStorageTarget)?.Path)</MudText>
+                        @if (!string.IsNullOrWhiteSpace(context.Description))
+                        {
+                            <MudText> - @context.Description</MudText>
+                        }
+                    </div>
+                    break;
+
+                case StorageTargetType.S3:
+                    <div>
+                        <MudText>Bucket: @((context as S3StorageTarget)?.BucketName)</MudText>
+                        <MudText> - Access Key: @((context as S3StorageTarget)?.AccessKey)</MudText>
+                        @if (!string.IsNullOrWhiteSpace(context.Description))
+                        {
+                            <MudText> - @context.Description</MudText>
+                        }
+                    </div>
+                    break;
+
+                default:
+                    <MudText>Unknown storage type</MudText>
+                    break;
+            }
+        </MudTd>
+        <MudTd DataLabel="Actions">
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => EditTarget(context))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => DeleteTarget(context))" />
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+    private List<StorageTarget> _model = new List<StorageTarget>
+    {
+        new LocalStorageTarget {
+            Id = 1,
+            Name = "Local Storage 1",
+            Type = StorageTargetType.Local,
+            Description = "Local storage target",
+            Path = @"C:\Data"
+        },
+        new S3StorageTarget {
+            Id = 2,
+            Name = "AWS S3 Storage 1",
+            Type = StorageTargetType.S3,
+            Description = "S3 storage target",
+            BucketName = "my-bucket",
+            AccessKey = "ACCESS_KEY",
+            SecretKey = "SECRET_KEY"
+        }
+    };
+
+    private async Task AddNewTarget()
+    {
+        var newTarget = new LocalStorageTarget
+            {
+                Name = string.Empty,
+                Type = StorageTargetType.Local,
+                Description = string.Empty,
+                Path = string.Empty
+            };
+
+        await OpenTargetDialog(newTarget, "Add Storage Target");
+    }
+
+    private async Task EditTarget(StorageTarget target)
+    {
+        StorageTarget targetToEdit;
+
+        switch (target.Type)
+        {
+            case StorageTargetType.Local:
+                {
+                    var local = target as LocalStorageTarget;
+                    targetToEdit = new LocalStorageTarget
+                        {
+                            Id = target.Id,
+                            Name = target.Name,
+                            Type = target.Type,
+                            Description = target.Description,
+                            Path = local?.Path ?? string.Empty
+                        };
+                    break;
+                }
+            case StorageTargetType.S3:
+                {
+                    var s3 = target as S3StorageTarget;
+                    targetToEdit = new S3StorageTarget
+                        {
+                            Id = target.Id,
+                            Name = target.Name,
+                            Type = target.Type,
+                            Description = target.Description,
+                            BucketName = s3?.BucketName ?? string.Empty,
+                            AccessKey = s3?.AccessKey ?? string.Empty,
+                            SecretKey = s3?.SecretKey ?? string.Empty
+                        };
+                    break;
+                }
+            default:
+                {
+                    targetToEdit = target;
+                    break;
+                }
+        }
+
+        await OpenTargetDialog(targetToEdit, "Edit Storage Target");
+    }
+
+    private async Task OpenTargetDialog(StorageTarget target, string title)
+    {
+        var parameters = new DialogParameters 
+        { 
+            { "CurrentEditingTarget", target } 
+        };
+        var dialog = await DialogService.ShowAsync<StorageTargetDialog>(title, parameters, _dialogOptions);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            var updatedTarget = result.Data as StorageTarget;
+            if (updatedTarget.Id == 0)
+            {
+                updatedTarget.Id = _model.Any() ? _model.Max(x => x.Id) + 1 : 1;
+                _model.Add(updatedTarget);
+                Snackbar.Add("Storage target added successfully.", Severity.Success);
+            }
+            else
+            {
+                var index = _model.FindIndex(x => x.Id == updatedTarget.Id);
+                if (index != -1)
+                {
+                    _model[index] = updatedTarget;
+                    Snackbar.Add("Storage target updated successfully.", Severity.Success);
+                }
+            }
+        }
+    }
+
+    private void DeleteTarget(StorageTarget target)
+    {
+        _model.Remove(target);
+        Snackbar.Add("Storage target deleted successfully.", Severity.Success);
+    }
+}

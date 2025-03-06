@@ -1,9 +1,78 @@
 @page "/Storage/S3"
+@using SCREAM.Data.Entities.StorageTargets
+@using MudBlazor
+@inject ISnackbar Snackbar
 
-<PageTitle>S3 - SCREAM</PageTitle>
+<PageTitle>S3 Storage</PageTitle>
 
-<MudText Typo="Typo.h3" Class="mb-4">S3</MudText>
+<MudText Align="Align.Center" Typo="Typo.h5" Class="mb-4">Add S3 Storage Target</MudText>
 
-<MudPaper Class="pa-4">
-    <MudText>This is the S3 page.</MudText>
-</MudPaper>
+<MudForm @ref="_form">
+    <MudStack Spacing="2">
+        <MudTextField @bind-Value="s3Target.Name"
+                      Label="Name"
+                      Variant="Variant.Outlined"
+                      Required="true" />
+        <MudTextField @bind-Value="s3Target.Description"
+                      Label="Description"
+                      Variant="Variant.Outlined" />
+        <MudTextField @bind-Value="s3Target.BucketName"
+                      Label="Bucket Name"
+                      Variant="Variant.Outlined"
+                      Required="true" />
+        <MudTextField @bind-Value="s3Target.AccessKey"
+                      Label="Access Key"
+                      Variant="Variant.Outlined"
+                      Required="true" />
+        <MudTextField @bind-Value="s3Target.SecretKey"
+                      Label="Secret Key"
+                      Variant="Variant.Outlined"
+                      InputType="InputType.Password"
+                      Required="true" />
+    </MudStack>
+     <MudStack Class="mt-4" Row="true" Justify="Justify.Center">
+        <MudButton OnClick="SaveS3Target"
+                   Color="Color.Primary"
+                   Variant="Variant.Filled">
+            Save S3 Storage
+        </MudButton>
+    </MudStack>
+</MudForm>
+
+@code {
+    private MudForm _form;
+    private S3StorageTarget s3Target = new S3StorageTarget()
+        {
+            Name = string.Empty,
+            Description = string.Empty,
+            BucketName = string.Empty,
+            AccessKey = string.Empty,
+            SecretKey = string.Empty,
+            Type = StorageTargetType.S3
+        };
+
+    private async Task SaveS3Target()
+    {
+        await _form.Validate();
+        if (!_form.IsValid)
+        {
+            Snackbar.Add("Please fill in the required fields.", Severity.Error);
+            return;
+        }
+
+        await Task.Delay(500);
+        Snackbar.Add("S3 Storage Target saved successfully.", Severity.Success);
+
+        s3Target = new S3StorageTarget()
+            {
+                Name = string.Empty,
+                Description = string.Empty,
+                BucketName = string.Empty,
+                AccessKey = string.Empty,
+                SecretKey = string.Empty,
+                Type = StorageTargetType.S3
+            };
+
+        StateHasChanged();
+    }
+}

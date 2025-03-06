@@ -1,0 +1,134 @@
+﻿@using SCREAM.Data.Entities.StorageTargets
+@using SCREAM.Data.Enums
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Storage Target Editor</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form">
+            @if (CurrentEditingTarget != null)
+            {
+                    <MudStack Row Spacing="2">
+                        <MudTextField @bind-Value="CurrentEditingTarget.Name" Label="Name" Variant="Variant.Outlined" Required="true"/>
+                        <MudTextField @bind-Value="CurrentEditingTarget.Description" Label="Description" Variant="Variant.Outlined"/>
+                    </MudStack>
+
+                    <MudText Typo="Typo.subtitle1">Storage Type</MudText>
+                    <MudRadioGroup T="StorageTargetType" Value="CurrentEditingTarget.Type" ValueChanged="OnTypeChanged">
+                        <MudStack Row Spacing="2">
+                            <MudRadio T="StorageTargetType" Value="StorageTargetType.Local" Color="Color.Primary">Local</MudRadio>
+                            <MudRadio T="StorageTargetType" Value="StorageTargetType.S3" Color="Color.Primary">S3</MudRadio>
+                        </MudStack>
+                    </MudRadioGroup>
+
+                    @switch (CurrentEditingTarget.Type)
+                    {
+                        case StorageTargetType.Local:
+                            var localTarget = CurrentEditingTarget as LocalStorageTarget;
+                            if (localTarget != null)
+                            {
+                                <MudTextField @bind-Value="localTarget.Path" Label="Path" Variant="Variant.Outlined" Required="true"/>
+                            }
+                            break;
+                        case StorageTargetType.S3:
+                            var s3Target = CurrentEditingTarget as S3StorageTarget;
+                            if (s3Target != null)
+                            {
+                                <MudStack Row Spacing="2">
+                                    <MudTextField @bind-Value="s3Target.BucketName" Label="Bucket Name" Variant="Variant.Outlined" Required="true" />
+                                    <MudTextField @bind-Value="s3Target.AccessKey" Label="Access Key" Variant="Variant.Outlined" Required="true"/>
+                                    <MudTextField @bind-Value="s3Target.SecretKey" Label="Secret Key" Variant="Variant.Outlined" InputType="InputType.Password" Required="true"/>
+                                </MudStack>
+                            }
+                            break;
+                    }
+            }
+            else
+            {
+                <MudText>Failed to initialize editing target.</MudText>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudStack Row Spacing="2">
+            <MudButton Color="Color.Primary" OnClick="Save">Save</MudButton>
+            <MudButton Color="Color.Secondary" OnClick="Cancel">Cancel</MudButton>
+        </MudStack>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private MudForm _form;
+
+    [CascadingParameter] public IMudDialogInstance MudDialog { get; set; }
+    [Parameter] public StorageTarget CurrentEditingTarget { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (CurrentEditingTarget == null)
+        {
+            CurrentEditingTarget = new LocalStorageTarget
+                {
+                    Type = StorageTargetType.Local,
+                    Name = string.Empty,
+                    Path = string.Empty
+                };
+        }
+        EnsureCorrectTargetType(CurrentEditingTarget.Type);
+    }
+
+    private void OnTypeChanged(StorageTargetType newType)
+    {
+        if (CurrentEditingTarget.Type != newType)
+        {
+            EnsureCorrectTargetType(newType);
+        }
+    }
+
+    private void EnsureCorrectTargetType(StorageTargetType type)
+    {
+        if (type == StorageTargetType.Local && !(CurrentEditingTarget is LocalStorageTarget))
+        {
+            CurrentEditingTarget = new LocalStorageTarget
+                {
+                    Id = CurrentEditingTarget?.Id ?? 0,
+                    Name = CurrentEditingTarget?.Name ?? string.Empty,
+                    Description = CurrentEditingTarget?.Description ?? string.Empty,
+                    Type = StorageTargetType.Local,
+                    Path = string.Empty
+                };
+        }
+        else if (type == StorageTargetType.S3 && !(CurrentEditingTarget is S3StorageTarget))
+        {
+            CurrentEditingTarget = new S3StorageTarget
+                {
+                    Id = CurrentEditingTarget?.Id ?? 0,
+                    Name = CurrentEditingTarget?.Name ?? string.Empty,
+                    Description = CurrentEditingTarget?.Description ?? string.Empty,
+                    Type = StorageTargetType.S3,
+                    BucketName = string.Empty,
+                    AccessKey = string.Empty,
+                    SecretKey = string.Empty
+                };
+        }
+    }
+
+    private async Task Save()
+    {
+        await _form.Validate();
+        if (!_form.IsValid)
+        {
+            Snackbar.Add("Please fix the errors before submitting.", Severity.Error);
+            return;
+        }
+        await Task.Delay(500);
+        MudDialog.Close(DialogResult.Ok(CurrentEditingTarget));
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+}
