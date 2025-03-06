@@ -1,0 +1,179 @@
+﻿@page "/BackupPlan/Create"
+@using SCREAM.Data.Entities
+@using SCREAM.Data.Entities.StorageTargets
+@using SCREAM.Data.Entities.BackupItems
+@using SCREAM.Data.Enums
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h5" Align="Align.Center">Create Backup Plan</MudText>
+
+<MudForm @ref="_form" Model="_backupPlan">
+    <MudStack Row>
+        <MudTextField @bind-Value="_backupPlan.Name" Label="Plan Name" Variant="Variant.Outlined" Required="true" />
+        <MudTextField @bind-Value="_backupPlan.Description" Label="Description" Variant="Variant.Outlined" Required="true" />
+    </MudStack>
+
+    <MudStack Row>
+        <MudSelect T="long" @bind-Value="_selectedDatabaseConnectionId" Label="Database Connection" Variant="Variant.Outlined" Required="true">
+            <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
+            @foreach (var conn in _databaseConnections)
+            {
+                <MudSelectItem Value="@conn.Id">@conn.HostName (@conn.Type)</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudSelect T="long" @bind-Value="_selectedStorageTargetId" Label="Storage Target" Variant="Variant.Outlined" Required="true">
+            <MudSelectItem T="long" Value="0">Select Storage Target</MudSelectItem>
+            @foreach (var target in _storageTargets)
+            {
+                <MudSelectItem Value="@target.Id">@target.Name (@target.Type)</MudSelectItem>
+            }
+        </MudSelect>
+    </MudStack>
+
+    <MudText Align="Align.Center" Typo="Typo.subtitle1">Schedule Settings</MudText>
+
+    <MudStack Row>
+        <MudSelect T="ScheduleType" @bind-Value="_backupPlan.Schedule.ScheduledType" Label="Schedule Type" Variant="Variant.Outlined">
+            @foreach (ScheduleType type in Enum.GetValues(typeof(ScheduleType)))
+            {
+                <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
+            }
+        </MudSelect>
+        @if (_backupPlan.Schedule.ScheduledType != ScheduleType.OneTime)
+        {
+            <MudTextField @bind-Value="_backupPlan.Schedule.CronExpression" Label="Cron Expression" Variant="Variant.Outlined" Required="true" />
+        }
+    </MudStack>
+
+    <MudStack Class="mt-2 mb-2" Row Justify="Justify.Center">
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Search" OnClick="ScanDatabase" Disabled="@(_selectedDatabaseConnectionId == 0)">
+            Scan Database
+        </MudButton>
+    </MudStack>
+
+    @if (_isScanning)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+
+    @if (_selectedDatabaseConnectionId != 0 && _backupPlan.Items?.Count > 0)
+    {
+        <MudPaper Class="pa-4 mt-2 mb-2" Elevation="1">
+            <MudText Typo="Typo.h6" Align="Align.Center" Class="mb-2">Backup Items</MudText>
+            <MudDivider Class="mb-2" />
+            <MudStack Spacing="2">
+                @foreach (var item in _backupPlan.Items)
+                {
+                    <MudCheckBox @bind-Value="item.IsSelected" Label="@($"{item.Schema} - {item.Name} ({item.Type})")" Color="Color.Primary" />
+                }
+            </MudStack>
+        </MudPaper>
+    }
+
+    <MudDivider />
+
+    <MudStack Row Class="mt-4" Justify="Justify.Center">
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="SavePlan">Save Backup Plan</MudButton>
+    </MudStack>
+</MudForm>
+
+@code {
+    private MudForm _form;
+    private long _selectedDatabaseConnectionId;
+    private long _selectedStorageTargetId;
+    private bool _isScanning;
+    private List<DatabaseConnection> _databaseConnections = new();
+    private List<StorageTarget> _storageTargets = new();
+    private BackupPlan _backupPlan = new()
+        {
+            Name = string.Empty,
+            Description = string.Empty,
+            DatabaseConnection = new DatabaseConnection { HostName = string.Empty, UserName = string.Empty, Password = string.Empty, Port = 3306, Type = DatabaseType.MySQL },
+            StorageTarget = new LocalStorageTarget { Name = string.Empty, Path = string.Empty, Type = StorageTargetType.Local },
+            Schedule = new BackupSchedule { CronExpression = "0 0 * * *", ScheduledType = ScheduleType.OneTime },
+            Items = new List<BackupItem>(),
+            IsActive = false
+        };
+
+    protected override void OnInitialized()
+    {
+        _databaseConnections = new()
+        {
+            new() { Id = 1, HostName = "localhost", Port = 3306, UserName = "root", Password = "******", Type = DatabaseType.MySQL },
+            new() { Id = 2, HostName = "prod-db.example.com", Port = 5432, UserName = "Mariadb", Password = "******", Type = DatabaseType.MariaDB }
+        };
+
+        _storageTargets = new()
+        {
+            new LocalStorageTarget { Id = 1, Name = "Local Disk", Path = "/backups", Type = StorageTargetType.Local },
+            new S3StorageTarget { Id = 2, Name = "AWS Backup", BucketName = "scream-backups", AccessKey = "AKIAXXXXXXXX", SecretKey = "******", Type = StorageTargetType.S3 }
+        };
+    }
+
+    private async Task ScanDatabase()
+    {
+        if (_selectedDatabaseConnectionId == 0) return;
+
+        _isScanning = true;
+        StateHasChanged();
+
+        try
+        {
+            // Call the API endpoint to scan the database
+            // Comment out for now as requested
+            /*
+            var response = await HttpClient.PostAsync(
+                $"/connections/{_selectedDatabaseConnectionId}/scan",
+                null);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _backupPlan.Items = await response.Content.ReadFromJsonAsync<List<BackupItem>>();
+            }
+            else
+            {
+                throw new Exception($"Error scanning database: {response.ReasonPhrase}");
+            }
+            */
+
+            // Keep the fake data for now
+            await Task.Delay(1000);
+            _backupPlan.Items = new()
+            {
+                new TableDataItem { Id = 1, Schema = "public", Name = "users"},
+                new TableStructureItem { Id = 2, Schema = "public", Name = "products"},
+                new ViewItem { Id = 3, Schema = "analytics", Name = "sales_report"},
+                new FunctionProcedureItem { Id = 4, Schema = "public", Name = "calculate_totals"},
+                new TriggerItem { Id = 5, Schema = "public", Name = "after_insert_log"}
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _isScanning = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SavePlan()
+    {
+        await _form.Validate();
+
+        if (_form.IsValid)
+        {
+            _backupPlan.DatabaseConnection = _databaseConnections.FirstOrDefault(c => c.Id == _selectedDatabaseConnectionId) ?? 
+            new DatabaseConnection { Id = _selectedDatabaseConnectionId, HostName = string.Empty, UserName = string.Empty, Password = string.Empty, Port = 0, Type = DatabaseType.MySQL };
+            _backupPlan.StorageTarget = _storageTargets.FirstOrDefault(t => t.Id == _selectedStorageTargetId) ?? 
+            new LocalStorageTarget { Id = _selectedStorageTargetId, Name = string.Empty, Path = string.Empty, Type = StorageTargetType.Local };
+            _backupPlan.Items = _backupPlan.Items.Where(i => i.IsSelected).ToList();
+            _backupPlan.IsActive = false;
+
+            await Task.Delay(500);
+            Snackbar.Add("Backup plan created successfully", Severity.Success);
+        }
+    }
+}
