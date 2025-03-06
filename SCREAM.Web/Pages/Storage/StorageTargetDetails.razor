@@ -15,47 +15,47 @@
     <HeaderContent>
         <MudTh>Name</MudTh>
         <MudTh>Type</MudTh>
-        <MudTh>Details</MudTh>
+        <MudTh>Path</MudTh>
+        <MudTh>Bucket Name</MudTh>
+        <MudTh>Access Key</MudTh>
+        <MudTh>Description</MudTh>
         <MudTh>Actions</MudTh>
     </HeaderContent>
     <RowTemplate>
         <MudTd DataLabel="Name">@context.Name</MudTd>
         <MudTd DataLabel="Type">@context.Type</MudTd>
-        <MudTd DataLabel="Details">
-            @switch (context.Type)
-            {
-                case StorageTargetType.Local:
-                    <div>
-                        <MudText>Path: @((context as LocalStorageTarget)?.Path)</MudText>
-                        @if (!string.IsNullOrWhiteSpace(context.Description))
-                        {
-                            <MudText> - @context.Description</MudText>
-                        }
-                    </div>
-                    break;
 
-                case StorageTargetType.S3:
-                    <div>
-                        <MudText>Bucket: @((context as S3StorageTarget)?.BucketName)</MudText>
-                        <MudText> - Access Key: @((context as S3StorageTarget)?.AccessKey)</MudText>
-                        @if (!string.IsNullOrWhiteSpace(context.Description))
-                        {
-                            <MudText> - @context.Description</MudText>
-                        }
-                    </div>
+        @switch (context.Type)
+        {
+            case StorageTargetType.Local:
+                {
+                    <MudTd DataLabel="Path">@((context as LocalStorageTarget)?.Path)</MudTd>
+                    <MudTd DataLabel="Bucket Name"></MudTd>
+                    <MudTd DataLabel="Access Key"></MudTd>
                     break;
-
-                default:
+                }
+            case StorageTargetType.S3:
+                {
+                    <MudTd DataLabel="Path"></MudTd>
+                    <MudTd DataLabel="Bucket Name">@((context as S3StorageTarget)?.BucketName)</MudTd>
+                    <MudTd DataLabel="Access Key">@((context as S3StorageTarget)?.AccessKey)</MudTd>
+                    break;
+                }
+            default:
+                {
                     <MudText>Unknown storage type</MudText>
                     break;
-            }
-        </MudTd>
+                }
+        }
+
+        <MudTd DataLabel="Description">@context.Description</MudTd>
         <MudTd DataLabel="Actions">
             <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => EditTarget(context))" />
             <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => DeleteTarget(context))" />
         </MudTd>
     </RowTemplate>
 </MudTable>
+
 
 @code {
     private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
