@@ -1,9 +1,8 @@
 @page "/backup-settings"
 @using SCREAM.Business.Services
-@inject IBackupSettingsService SettingsService
+@* @inject IBackupSettingsService SettingsService *@
 @inject ISnackbar Snackbar
 
-<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
     <MudPaper Elevation="3" Class="pa-4 mb-3">
         <MudText Typo="Typo.h4" Class="mb-4">Backup Settings</MudText>
 
@@ -63,7 +62,6 @@
             </MudForm>
         }
     </MudPaper>
-</MudContainer>
 
 @code {
     private BackupSettings _settings = new();
@@ -83,7 +81,17 @@
 
         try
         {
-            _settings = await SettingsService.GetSettingsAsync();
+            //_settings = await SettingsService.GetSettingsAsync();
+         
+            // Use fake data for settings
+            _settings = new BackupSettings
+                {
+                    MaxAutoRetries = 3,
+                    BackupHistoryRetentionDays = 30,
+                    DefaultMaxAllowedPacket = "64M",
+                    SendEmailNotifications = false,
+                    NotificationEmail = "user@example.com"
+                };
         }
         catch (Exception ex)
         {
