@@ -3,66 +3,67 @@
 @* @inject IBackupSettingsService SettingsService *@
 @inject ISnackbar Snackbar
 
-    <MudPaper Elevation="3" Class="pa-4 mb-3">
-        <MudText Typo="Typo.h4" Class="mb-4">Backup Settings</MudText>
+<MudPaper Elevation="3" Class="pa-4 mb-3">
+    <MudText Typo="Typo.h5" Class="mb-4">Backup Settings</MudText>
 
-        @if (_loading)
-        {
-            <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
-        }
-        else
-        {
-            <MudForm @ref="_form" Model="@_settings" @bind-IsValid="@_success">
-                <MudCard Elevation="0">
-                    <MudCardContent>
-                        <MudText Typo="Typo.h6" Class="mb-3">General Settings</MudText>
-                        
-                        <MudNumericField T="int" Label="Maximum Auto-Retries" 
-                                        @bind-Value="_settings.MaxAutoRetries"
-                                        Min="0" Max="10" Required="true"
-                                        RequiredError="Please enter a value"
-                                        HelperText="Maximum number of automatic retries for failed backup items" />
-                        
-                        <MudNumericField T="int" Label="Backup History Retention (days)" 
-                                        @bind-Value="_settings.BackupHistoryRetentionDays"
-                                        Min="1" Max="365" Required="true" 
-                                        RequiredError="Please enter a value"
-                                        HelperText="How long to keep backup job history" />
-                        
-                        <MudTextField Label="Default Max Allowed Packet" 
-                                     @bind-Value="_settings.DefaultMaxAllowedPacket" 
-                                     Required="true"
+    @if (_loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else
+    {
+        <MudForm @ref="_form" Model="@_settings" @bind-IsValid="@_success">
+            <MudStack>
+                <MudText Typo="Typo.h6" Class="mb-2">General Settings</MudText>
+
+                <MudStack Row Spacing="4">
+                    <MudNumericField T="int" Label="Maximum Auto-Retries"
+                                     @bind-Value="_settings.MaxAutoRetries"
+                                     Min="0" Max="10" Required="true"
                                      RequiredError="Please enter a value"
-                                     HelperText="Default maximum allowed packet size for mysqldump (e.g. 64M)" />
-                        
-                        <MudDivider Class="my-6" />
-                        
-                        <MudText Typo="Typo.h6" Class="mb-3">Notifications</MudText>
-                        
-                        <MudSwitch T="string" @bind-Checked="@_settings.SendEmailNotifications" 
-                                  Label="Send Email Notifications" 
-                                  Color="Color.Primary" />
-                        
-                        <MudTextField Label="Notification Email" 
-                                     @bind-Value="_settings.NotificationEmail" 
-                                     Disabled="!_settings.SendEmailNotifications"
-                                     Required="@_settings.SendEmailNotifications"
-                                     RequiredError="Please enter an email address"
-                                     Validation="@(new Func<string, IEnumerable<string>>(ValidateEmail))"
-                                     HelperText="Email address for backup job notifications" />
-                    </MudCardContent>
-                    <MudCardActions>
-                        <MudButton Variant="Variant.Filled" 
-                                  Color="Color.Primary" 
-                                  Class="ml-auto" 
-                                  Disabled="@(!_success)"
-                                  OnClick="SaveSettings">Save Settings</MudButton>
-                    </MudCardActions>
-                </MudCard>
-            </MudForm>
-        }
-    </MudPaper>
+                                     HelperText="Maximum number of automatic retries for failed backup items" />
 
+                    <MudNumericField T="int" Label="Backup History Retention (days)"
+                                     @bind-Value="_settings.BackupHistoryRetentionDays"
+                                     Min="1" Max="365" Required="true"
+                                     RequiredError="Please enter a value"
+                                     HelperText="How long to keep backup job history" />
+                </MudStack>
+
+                <MudTextField Label="Default Max Allowed Packet"
+                              @bind-Value="_settings.DefaultMaxAllowedPacket"
+                              Required="true"
+                              RequiredError="Please enter a value"
+                              HelperText="Default maximum allowed packet size for mysqldump (e.g. 64M)" />
+
+                <MudDivider Class="my-4" />
+
+                <MudText Typo="Typo.h6" Class="mb-2">Notifications</MudText>
+
+                <MudStack Row Spacing="4">
+                    <MudSwitch T="string" @bind-Checked="@_settings.SendEmailNotifications"
+                               Label="Send Email Notifications"
+                               Color="Color.Primary" />
+
+                    <MudTextField Label="Notification Email"
+                                  @bind-Value="_settings.NotificationEmail"
+                                  Disabled="!_settings.SendEmailNotifications"
+                                  Required="@_settings.SendEmailNotifications"
+                                  RequiredError="Please enter an email address"
+                                  Validation="@(new Func<string, IEnumerable<string>>(ValidateEmail))"
+                                  HelperText="Email address for backup job notifications" />
+                </MudStack>
+
+                <MudStack Row Justify="Justify.Center" Class="mt-4">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="@(!_success)"
+                               OnClick="SaveSettings">Save Settings</MudButton>
+                </MudStack>
+            </MudStack>
+        </MudForm>
+    }
+</MudPaper>
 @code {
     private BackupSettings _settings = new();
     private bool _loading = true;
