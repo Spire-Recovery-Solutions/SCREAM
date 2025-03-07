@@ -1,87 +1,86 @@
 @page "/backup-jobs"
 @using SCREAM.Business.Services
 @using SCREAM.Data.Entities
-@inject IBackupJobService BackupJobService
+@using SCREAM.Data.Entities.BackupItems
+@using SCREAM.Data.Entities.StorageTargets
+@using SCREAM.Data.Enums
+@* @inject IBackupJobService BackupJobService *@
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
-    <MudText Typo="Typo.h4" Class="mb-4">Backup Jobs</MudText>
+<MudText Typo="Typo.h4" Class="mb-4">Backup Jobs</MudText>
 
-    <MudPaper Elevation="3" Class="pa-4 mb-3">
-        <MudGrid>
-            <MudItem xs="12" md="9">
-                <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start"
-                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
-            </MudItem>
-            <MudItem xs="12" md="3" Class="d-flex justify-end">
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" 
-                           OnClick="RefreshData">Refresh</MudButton>
-            </MudItem>
-        </MudGrid>
-    </MudPaper>
+<MudPaper Elevation="3" Class="pa-4 mb-3">
+    <MudGrid>
+        <MudItem xs="12" md="9">
+            <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start"
+            AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+        </MudItem>
+        <MudItem xs="12" md="3" Class="d-flex justify-end">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" 
+            OnClick="RefreshData">Refresh</MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
 
-    <MudPaper>
-        <MudTable Items="@_backupJobs" Dense="true" Hover="true" Loading="@_loading" LoadingProgressColor="Color.Info"
-                  Filter="new Func<BackupJobViewModel, bool>(FilterFunc)" @bind-SelectedItem="_selectedJob"
-                  OnRowClick="RowClickEvent" T="BackupJobViewModel" Elevation="0">
-            <ToolBarContent>
-                <MudSpacer />
-            </ToolBarContent>
-            <HeaderContent>
-                <MudTh>Name</MudTh>
-                <MudTh>Status</MudTh>
-                <MudTh>Progress</MudTh>
-                <MudTh>Started</MudTh>
-                <MudTh>Completed</MudTh>
-                <MudTh>Duration</MudTh>
-                <MudTh>Actions</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd DataLabel="Name">@context.PlanName</MudTd>
-                <MudTd DataLabel="Status">
-                    <MudChip T="string" Color="@GetStatusColor(context.Status)" Size="Size.Small">
-                        @context.Status.ToString()
-                    </MudChip>
-                </MudTd>
-                <MudTd DataLabel="Progress">
-                    <MudProgressLinear Color="@GetProgressColor(context.Status)" 
-                                       Value="@context.ProgressPercentage" 
-                                       Class="my-2" 
-                                       Striped="@(context.Status == TaskStatus.Running)"
-                                       Indeterminate="@(context.Status == TaskStatus.Running && context.ProgressPercentage < 5)" />
-                    @context.ProgressPercentage.ToString("0.#")%
-                </MudTd>
-                <MudTd DataLabel="Started">@context.StartedAt.ToLocalTime().ToString("g")</MudTd>
-                <MudTd DataLabel="Completed">
-                    @(context.CompletedAt.HasValue ? context.CompletedAt.Value.ToLocalTime().ToString("g") : "-")
-                </MudTd>
-                <MudTd DataLabel="Duration">
-                    @GetDuration(context)
-                </MudTd>
-                <MudTd DataLabel="Actions">
-                    <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" 
-                                  OnClick="@(() => ViewJob(context.Id))" />
-                    @if (context.Status == TaskStatus.Faulted)
-                    {
-                        <MudIconButton Icon="@Icons.Material.Filled.Replay" Color="Color.Warning" 
-                                     OnClick="@(() => RetryJob(context.Id))" />
-                    }
-                </MudTd>
-            </RowTemplate>
-            <NoRecordsContent>
-                <MudText>No backup jobs found</MudText>
-            </NoRecordsContent>
-            <LoadingContent>
-                <MudText>Loading backup jobs...</MudText>
-            </LoadingContent>
-            <PagerContent>
-                <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
-            </PagerContent>
-        </MudTable>
-    </MudPaper>
-</MudContainer>
+    <MudTable Items="@_backupJobs" Dense="true" Hover="true" Loading="@_loading" LoadingProgressColor="Color.Info"
+    Filter="new Func<BackupJobViewModel, bool>(FilterFunc)" @bind-SelectedItem="_selectedJob"
+    OnRowClick="RowClickEvent" T="BackupJobViewModel" Elevation="0">
+        <ToolBarContent>
+            <MudSpacer />
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>Name</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Progress</MudTh>
+            <MudTh>Started</MudTh>
+            <MudTh>Completed</MudTh>
+            <MudTh>Duration</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Name">@context.PlanName</MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Color="@GetStatusColor(context.Status)" Size="Size.Small">
+                    @context.Status.ToString()
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Progress">
+                <MudProgressLinear Color="@GetProgressColor(context.Status)" 
+                Value="@context.ProgressPercentage" 
+                Class="my-2" 
+                Striped="@(context.Status == TaskStatus.Running)"
+                Indeterminate="@(context.Status == TaskStatus.Running && context.ProgressPercentage < 5)" />
+                @context.ProgressPercentage.ToString("0.#")%
+            </MudTd>
+            <MudTd DataLabel="Started">@context.StartedAt.ToLocalTime().ToString("g")</MudTd>
+            <MudTd DataLabel="Completed">
+                @(context.CompletedAt.HasValue ? context.CompletedAt.Value.ToLocalTime().ToString("g") : "-")
+            </MudTd>
+            <MudTd DataLabel="Duration">
+                @GetDuration(context)
+            </MudTd>
+            <MudTd DataLabel="Actions">
+                <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" 
+                OnClick="@(() => ViewJob(context.Id))" />
+                @if (context.Status == TaskStatus.Faulted)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Replay" Color="Color.Warning" 
+                    OnClick="@(() => RetryJob(context.Id))" />
+                }
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>No backup jobs found</MudText>
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText>Loading backup jobs...</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
 
 @code {
     private List<BackupJobViewModel> _backupJobs = new();
@@ -106,8 +105,9 @@
 
         try
         {
-            var jobs = await BackupJobService.GetAllJobsAsync();
-            
+            // var jobs = await BackupJobService.GetAllJobsAsync();
+            var jobs = await GetAllJobsAsync();
+
             _backupJobs = jobs
                 .OrderByDescending(j => GetStatusPriority(j.Status))
                 .ThenByDescending(j => j.StartedAt)
@@ -133,6 +133,60 @@
             StateHasChanged();
         }
     }
+
+    public Task<List<BackupJob>> GetAllJobsAsync()
+    {
+        var plan = new BackupPlan
+            {
+                Id = 1,
+                Name = "Daily Database Backup",
+                Description = "Automated daily backup of production database",
+                DatabaseConnection = new DatabaseConnection
+                {
+                    Id = 1,
+                    HostName = "prod-db-server.example.com",
+                    UserName = "admin",
+                    Password = "******",
+                    Port = 3306,
+                    Type = DatabaseType.MySQL
+                },
+                StorageTarget = new LocalStorageTarget
+                {
+                    Id = 1,
+                    Name = "Local Disk",
+                    Path = "/backups",
+                    Type = StorageTargetType.Local
+                },
+                Schedule = new BackupSchedule
+                {
+                    Id = 1,
+                    CronExpression = "0 0 * * *",
+                    ScheduledType = ScheduleType.Repeating,
+                    LastRun = DateTime.Now.AddHours(-1),
+                    NextRun = DateTime.Now.AddHours(1),
+                    BackupPlanId = 1,
+                    BackupPlan = null!
+                },
+                Items = new List<BackupItem>()
+            };
+        plan.Schedule.BackupPlan = plan;
+
+        var _job = new List<BackupJob>
+       {
+           new()
+            {
+                Id = 1,
+                BackupPlanId = plan.Id,
+                BackupPlan = plan,
+                Status = TaskStatus.Running,
+                StartedAt = DateTime.Now.AddMinutes(-35),
+                CompletedAt = null
+            }
+       };
+
+        return Task.FromResult(_job);
+    }
+
 
     private async Task RefreshRunningJobs()
     {
@@ -168,7 +222,7 @@
         {
             try
             {
-                await BackupJobService.RetryJobAsync(jobId);
+               // await BackupJobService.RetryJobAsync(jobId);
                 Snackbar.Add("Backup job retry initiated", Severity.Success);
                 await RefreshData();
             }
