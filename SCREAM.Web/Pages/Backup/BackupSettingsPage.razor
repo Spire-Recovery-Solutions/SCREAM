@@ -68,6 +68,7 @@
     private bool _loading = true;
     private bool _success;
     private MudForm _form = null!;
+    private static BackupSettings? _savedSettings = null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -113,6 +114,7 @@
             try
             {
                 //await SettingsService.UpdateSettingsAsync(_settings);
+                _savedSettings = _settings;
                 Snackbar.Add("Settings saved successfully", Severity.Success);
             }
             catch (Exception ex)
