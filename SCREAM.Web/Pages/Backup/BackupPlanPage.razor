@@ -43,8 +43,7 @@
                                    Label="Database Connection"
                                    Variant="Variant.Outlined"
                                    Required="true"
-                                   HelperText="Select the database you want to back up"
-                                   AnchorOrigin="Origin.BottomCenter">
+                                   HelperText="Select the database you want to back up">
                             <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
                             @foreach (var conn in _databaseConnections)
                             {
@@ -64,8 +63,7 @@
                                    Label="Storage Target"
                                    Variant="Variant.Outlined"
                                    Required="true"
-                                   HelperText="Select where to store your backups"
-                                   AnchorOrigin="Origin.BottomCenter">
+                                   HelperText="Select where to store your backups">
                             <MudSelectItem T="long" Value="0">Select Storage Target</MudSelectItem>
                             @foreach (var target in _storageTargets)
                             {
