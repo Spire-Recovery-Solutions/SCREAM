@@ -35,7 +35,7 @@
 
     @if (Items.Any())
     {
-        <MudDivider Class="my-3"/>
+        <MudDivider Class="my-3" />
         <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="mt-2 mb-4">
             Selected: @Items.Count(i => i.IsSelected) / @Items.Count total items
         </MudChip>
@@ -45,7 +45,7 @@
 @if (_isLoading)
 {
     <MudPaper Elevation="0" Class="pa-6 d-flex flex-column align-center">
-        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" Class="mb-4"/>
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" Class="mb-4" />
         <MudText Align="Align.Center">Scanning database and organizing items...</MudText>
     </MudPaper>
 }
@@ -66,28 +66,16 @@ else
                         <CardHeaderContent>
                             <div class="d-flex align-center" @onclick="() => ToggleSchema(schema)"
                                  style="cursor: pointer;">
-                                <MudIcon
-                                    Icon="@(schema.IsExpanded ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ChevronRight)"
-                                    Size="Size.Small" Class="mr-2"/>
-
+                                <MudIcon Icon="@(schema.IsExpanded ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ChevronRight)"
+                                         Size="Size.Small" Class="mr-2" />
                                 <MudCheckBox T="bool"
-                                             @onclick:stopPropagation
+                                @onclick:stopPropagation
                                              Value="@schema.IsFullySelected"
                                              ValueChanged="@(value => OnSchemaSelectionChanged(schema, value))"
-                                             Size="Size.Medium"/>
-                                
-                                @if (schema.HasPartialSelection)
-                                {
-                                    <MudIcon Icon="@Icons.Material.Filled.IndeterminateCheckBox"
-                                             Color="Color.Primary"
-                                             Size="Size.Small"
-                                             Class="mud-icon-root mud-checkbox-icon ml-n4"/>
-                                }
-
+                                             Size="Size.Medium" />
                                 <div class="ml-2">
                                     <MudText Typo="Typo.h6" Style="font-weight: 500;">@schema.SchemaName</MudText>
                                 </div>
-
                                 <MudChip T="string" Color="Color.Default" Size="Size.Small" Class="ml-3" Label="true">
                                     @schema.Items.Count(i => i.IsSelected)/@schema.Items.Count items
                                 </MudChip>
@@ -95,10 +83,9 @@ else
                         </CardHeaderContent>
                         <CardHeaderActions>
                             <MudTooltip Text="@(schema.IsExpanded ? "Collapse" : "Expand")">
-                                <MudIconButton
-                                    Icon="@(schema.IsExpanded ? Icons.Material.Filled.UnfoldLess : Icons.Material.Filled.UnfoldMore)"
-                                    Color="Color.Default"
-                                    OnClick="() => ToggleSchema(schema)"/>
+                                <MudIconButton Icon="@(schema.IsExpanded ? Icons.Material.Filled.UnfoldLess : Icons.Material.Filled.UnfoldMore)"
+                                               Color="Color.Default"
+                                               OnClick="() => ToggleSchema(schema)" />
                             </MudTooltip>
                         </CardHeaderActions>
                     </MudCardHeader>
@@ -111,10 +98,9 @@ else
                                 <MudPaper Elevation="0" Class="pa-3 mb-4 mud-theme-primary"
                                           Style="border-radius: 8px; background-color: var(--mud-palette-primary-lighten);">
                                     <MudText Typo="Typo.subtitle1" Class="mb-2">
-                                        <MudIcon Icon="@Icons.Material.Filled.Storage" Size="Size.Small" Class="mr-1"/>
+                                        <MudIcon Icon="@Icons.Material.Filled.Storage" Size="Size.Small" Class="mr-1" />
                                         Schema-Level Objects
                                     </MudText>
-
                                     <MudGrid>
                                         @foreach (var item in schema.SchemaItems)
                                         {
@@ -122,16 +108,13 @@ else
                                                 <MudPaper Elevation="0" Class="pa-2 d-flex align-center">
                                                     <MudCheckBox T="bool"
                                                                  Value="@item.IsSelected"
-                                                                 ValueChanged="(value) => OnItemSelectionChanged(item, schema, null, value)"
-                                                                 Color="Color.Primary"/>
-
+                                                                 ValueChanged="@(value => OnItemSelectionChanged(item, schema, null, value))"
+                                                                 Color="Color.Primary" />
                                                     <MudIcon Icon="@GetIconForBackupItemType(item.Type)"
                                                              Size="Size.Small"
                                                              Class="mx-2"
-                                                             Color="Color.Primary"/>
-
-                                                    <MudText
-                                                        Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
+                                                             Color="Color.Primary" />
+                                                    <MudText Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
                                                 </MudPaper>
                                             </MudItem>
                                         }
@@ -140,7 +123,7 @@ else
                             }
 
                             <MudText Typo="Typo.subtitle1" Class="mb-3">
-                                <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Small" Class="mr-1"/>
+                                <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Small" Class="mr-1" />
                                 Tables and Views
                             </MudText>
 
@@ -153,24 +136,13 @@ else
                                                 <CardHeaderContent>
                                                     <div class="d-flex align-center" @onclick="() => ToggleTable(table)"
                                                          style="cursor: pointer;">
-                                                        <MudIcon
-                                                            Icon="@(table.IsExpanded ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ChevronRight)"
-                                                            Size="Size.Small" Class="mr-2"/>
-
+                                                        <MudIcon Icon="@(table.IsExpanded ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ChevronRight)"
+                                                                 Size="Size.Small" Class="mr-2" />
                                                         <MudCheckBox T="bool"
-                                                                     @onclick:stopPropagation
+                                                        @onclick:stopPropagation
                                                                      Value="@table.IsFullySelected"
-                                                                     ValueChanged="(value) => OnTableSelectionChanged(table, schema, value)"
-                                                                     Color="Color.Primary"/>
-
-                                                        @if (table.HasPartialSelection)
-                                                        {
-                                                            <MudIcon Icon="@Icons.Material.Filled.IndeterminateCheckBox"
-                                                                     Color="Color.Primary"
-                                                                     Size="Size.Small"
-                                                                     Class="mud-icon-root mud-checkbox-icon ml-n4"/>
-                                                        }
-
+                                                                     ValueChanged="@(value => OnTableSelectionChanged(table, schema, value))"
+                                                                     Color="Color.Primary" />
                                                         <MudTooltip Text="@table.TableName">
                                                             <MudText Typo="Typo.body1" Class="ml-2 text-truncate"
                                                                      Style="max-width: 150px;">
@@ -180,7 +152,6 @@ else
                                                     </div>
                                                 </CardHeaderContent>
                                             </MudCardHeader>
-
                                             @if (table.IsExpanded)
                                             {
                                                 <MudCardContent Style="padding: 8px 16px 16px 16px;">
@@ -191,17 +162,14 @@ else
                                                                 <div class="d-flex align-center py-1">
                                                                     <MudCheckBox T="bool"
                                                                                  Value="@item.IsSelected"
-                                                                                 ValueChanged="(value) => OnItemSelectionChanged(item, schema, table, value)"
+                                                                                 ValueChanged="@(value => OnItemSelectionChanged(item, schema, table, value))"
                                                                                  Color="Color.Primary"
-                                                                                 Size="Size.Small"/>
-
+                                                                                 Size="Size.Small" />
                                                                     <MudIcon Icon="@GetIconForBackupItemType(item.Type)"
                                                                              Size="Size.Small"
                                                                              Class="mx-2"
-                                                                             Color="@GetColorForBackupItemType(item.Type)"/>
-
-                                                                    <MudText
-                                                                        Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
+                                                                             Color="@GetColorForBackupItemType(item.Type)" />
+                                                                    <MudText Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
                                                                 </div>
                                                             </MudListItem>
                                                         }
@@ -222,7 +190,6 @@ else
 
 @code {
     [Parameter] public List<BackupItem> Items { get; set; } = new();
-
     [Parameter] public EventCallback<List<BackupItem>> ItemsChanged { get; set; }
 
     private List<SchemaGroup> _schemaGroups = new();
@@ -234,7 +201,6 @@ else
         {
             _isLoading = true;
             StateHasChanged();
-
             try
             {
                 GroupItemsBySchema();
@@ -260,11 +226,11 @@ else
         foreach (var schemaGroup in schemaGroups)
         {
             var schema = new SchemaGroup
-            {
-                SchemaName = schemaGroup.Key,
-                Items = schemaGroup.ToList(),
-                IsExpanded = true // Default to expanded for better UX
-            };
+                {
+                    SchemaName = schemaGroup.Key,
+                    Items = schemaGroup.ToList(),
+                    IsExpanded = true // Default to expanded for better UX
+                };
 
             // Handle schema-level items
             schema.SchemaItems = schemaGroup
@@ -291,13 +257,12 @@ else
             foreach (var tableName in tableNames)
             {
                 var items = tableItems.Where(i => i.Name == tableName).ToList();
-
                 schema.Tables.Add(new TableGroup
-                {
-                    TableName = tableName,
-                    Items = items,
-                    IsExpanded = false
-                });
+                    {
+                        TableName = tableName,
+                        Items = items,
+                        IsExpanded = false
+                    });
             }
 
             // Update selection states
@@ -323,36 +288,14 @@ else
         StateHasChanged();
     }
 
-    private void UpdateSchemaSelectionState(SchemaGroup schema)
-    {
-        if (schema.Items.Count == 0)
-        {
-            schema.IsFullySelected = false;
-            schema.HasPartialSelection = false;
-            return;
-        }
-
-        bool allSelected = schema.Items.All(i => i.IsSelected);
-        bool anySelected = schema.Items.Any(i => i.IsSelected);
-
-        schema.IsFullySelected = allSelected;
-        schema.HasPartialSelection = anySelected && !allSelected;
-    }
-
     private void UpdateTableSelectionState(TableGroup table)
     {
-        if (table.Items.Count == 0)
-        {
-            table.IsFullySelected = false;
-            table.HasPartialSelection = false;
-            return;
-        }
+        table.IsFullySelected = table.Items.Any(i => i.IsSelected);
+    }
 
-        bool allSelected = table.Items.All(i => i.IsSelected);
-        bool anySelected = table.Items.Any(i => i.IsSelected);
-
-        table.IsFullySelected = allSelected;
-        table.HasPartialSelection = anySelected && !allSelected;
+    private void UpdateSchemaSelectionState(SchemaGroup schema)
+    {
+        schema.IsFullySelected = schema.Items.Any(i => i.IsSelected);
     }
 
     private async Task OnSchemaSelectionChanged(SchemaGroup schema, bool isSelected)
@@ -361,12 +304,10 @@ else
         {
             item.IsSelected = isSelected;
         }
-
         foreach (var table in schema.Tables)
         {
             UpdateTableSelectionState(table);
         }
-
         UpdateSchemaSelectionState(schema);
         await NotifyItemsChanged();
     }
@@ -377,7 +318,6 @@ else
         {
             item.IsSelected = isSelected;
         }
-
         UpdateTableSelectionState(table);
         UpdateSchemaSelectionState(schema);
         await NotifyItemsChanged();
@@ -386,12 +326,10 @@ else
     private async Task OnItemSelectionChanged(BackupItem item, SchemaGroup schema, TableGroup table, bool isSelected)
     {
         item.IsSelected = isSelected;
-
         if (table != null)
         {
             UpdateTableSelectionState(table);
         }
-
         UpdateSchemaSelectionState(schema);
         await NotifyItemsChanged();
     }
@@ -402,11 +340,9 @@ else
         {
             item.IsSelected = true;
         }
-
         foreach (var schema in _schemaGroups)
         {
             UpdateSchemaSelectionState(schema);
-
             foreach (var table in schema.Tables)
             {
                 UpdateTableSelectionState(table);
@@ -422,11 +358,9 @@ else
         {
             item.IsSelected = false;
         }
-
         foreach (var schema in _schemaGroups)
         {
             UpdateSchemaSelectionState(schema);
-
             foreach (var table in schema.Tables)
             {
                 UpdateTableSelectionState(table);
@@ -492,7 +426,6 @@ else
         public List<BackupItem> SchemaItems { get; set; } = new();
         public List<TableGroup> Tables { get; set; } = new();
         public bool IsFullySelected { get; set; }
-        public bool HasPartialSelection { get; set; }
         public bool IsExpanded { get; set; }
     }
 
@@ -501,8 +434,6 @@ else
         public string TableName { get; set; } = string.Empty;
         public List<BackupItem> Items { get; set; } = new();
         public bool IsFullySelected { get; set; }
-        public bool HasPartialSelection { get; set; }
         public bool IsExpanded { get; set; }
     }
-
 }
