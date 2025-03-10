@@ -146,7 +146,6 @@ else
                                                     Color="Color.Primary" />
                                                     <MudIcon Icon="@GetIconForBackupItemType(item.Type)"
                                                     Size="Size.Small"
-                                                    @onclick:stopPropagation
                                                     Class="mx-2"
                                                     Color="Color.Primary" />
                                                     <MudText Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
@@ -196,7 +195,6 @@ else
                                                             <MudListItem Class="pa-0">
                                                                 <div class="d-flex align-center py-1">
                                                                     <MudCheckBox T="bool"
-                                                                        @onclick:stopPropagation
                                                                     Value="@item.IsSelected"
                                                                     ValueChanged="@(value => OnItemSelectionChanged(item, schema, table, value))"
                                                                     Color="Color.Primary"
