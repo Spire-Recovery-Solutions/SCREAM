@@ -146,6 +146,7 @@ else
                                                     Color="Color.Primary" />
                                                     <MudIcon Icon="@GetIconForBackupItemType(item.Type)"
                                                     Size="Size.Small"
+                                                    @onclick:stopPropagation
                                                     Class="mx-2"
                                                     Color="Color.Primary" />
                                                     <MudText Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
@@ -195,6 +196,7 @@ else
                                                             <MudListItem Class="pa-0">
                                                                 <div class="d-flex align-center py-1">
                                                                     <MudCheckBox T="bool"
+                                                                        @onclick:stopPropagation
                                                                     Value="@item.IsSelected"
                                                                     ValueChanged="@(value => OnItemSelectionChanged(item, schema, table, value))"
                                                                     Color="Color.Primary"
@@ -266,9 +268,9 @@ else
 
     private void GroupItemsBySchema()
     {
-        _schemaGroups.Clear();
+        var existingSchemas = _schemaGroups.ToDictionary(s => s.SchemaName);
+        var newSchemaGroups = new List<SchemaGroup>();
 
-        // Group items by schema
         var schemaGroups = Items
             .GroupBy(i => i.Schema)
             .OrderBy(g => g.Key)
@@ -276,55 +278,45 @@ else
 
         foreach (var schemaGroup in schemaGroups)
         {
-            var schema = new SchemaGroup
-                {
-                    SchemaName = schemaGroup.Key,
-                    Items = schemaGroup.ToList(),
-                    IsExpanded = true // Default to expanded for better UX
-                };
+            var schemaName = schemaGroup.Key;
+            var existingSchema = existingSchemas.GetValueOrDefault(schemaName);
 
-            // Handle schema-level items
-            schema.SchemaItems = schemaGroup
-                .Where(i => string.IsNullOrEmpty(i.Name) ||
-                            i.Type == BackupItemType.Event ||
-                            i.Type == BackupItemType.Trigger ||
-                            i.Type == BackupItemType.FunctionProcedure)
-                .ToList();
+            var schema = existingSchema ?? new SchemaGroup();
+            schema.SchemaName = schemaName;
+            schema.Items = schemaGroup.ToList();
 
-            // Group table-specific items
+            // Preserve existing expansion state or default to true
+            schema.IsExpanded = existingSchema?.IsExpanded ?? true;
+
+            // Similar preservation for table states
+            var existingTables = schema.Tables.ToDictionary(t => t.TableName);
+            schema.Tables.Clear();
+
             var tableItems = schemaGroup
-                .Where(i => !string.IsNullOrEmpty(i.Name) &&
-                            (i.Type == BackupItemType.TableStructure ||
-                             i.Type == BackupItemType.TableData ||
-                             i.Type == BackupItemType.View))
+                .Where(i => !string.IsNullOrEmpty(i.Name))
                 .ToList();
 
-            var tableNames = tableItems
-                .Select(i => i.Name)
-                .Distinct()
-                .OrderBy(n => n)
-                .ToList();
-
-            foreach (var tableName in tableNames)
+            foreach (var tableGroup in tableItems
+                .GroupBy(i => i.Name)
+                .OrderBy(g => g.Key))
             {
-                var items = tableItems.Where(i => i.Name == tableName).ToList();
-                schema.Tables.Add(new TableGroup
-                    {
-                        TableName = tableName,
-                        Items = items,
-                        IsExpanded = false
-                    });
-            }
+                var tableName = tableGroup.Key!;
+                var existingTable = existingTables.GetValueOrDefault(tableName);
 
-            // Update selection states
-            UpdateSchemaSelectionState(schema);
-            foreach (var table in schema.Tables)
-            {
+                var table = existingTable ?? new TableGroup();
+                table.TableName = tableName;
+                table.Items = tableGroup.ToList();
+                table.IsExpanded = existingTable?.IsExpanded ?? false;
+
+                schema.Tables.Add(table);
                 UpdateTableSelectionState(table);
             }
 
-            _schemaGroups.Add(schema);
+            UpdateSchemaSelectionState(schema);
+            newSchemaGroups.Add(schema);
         }
+
+        _schemaGroups = newSchemaGroups;
     }
 
     private void ToggleSchema(SchemaGroup schema)
