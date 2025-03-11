@@ -13,8 +13,8 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowBlazorClient", policy =>
     {
         policy.AllowAnyOrigin()
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+            .AllowAnyHeader()
+            .AllowAnyMethod();
     });
 });
 
@@ -47,7 +47,70 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapPost("/connections/{databaseConnectionId:long}/scan", async (HttpContext httpContext,
+#region Connections
+
+// Get a list of all connections
+app.MapGet("/connections", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var databaseConnections = await dbContext.DatabaseConnections.ToListAsync();
+    return Results.Ok(databaseConnections);
+});
+
+// Get a connection by id
+app.MapGet("/connections/{databaseConnectionId:long}", async (HttpContext _,
+    IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var databaseConnection = await dbContext.DatabaseConnections
+        .FirstOrDefaultAsync(x => x.Id == databaseConnectionId);
+    return databaseConnection == null ? Results.NotFound() : Results.Ok(databaseConnection);
+});
+
+//Edit connection
+app.MapPut("/connections/{databaseConnectionId:long}", async (HttpContext _,
+    IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId, DatabaseConnection databaseConnection) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var existingConnection = await dbContext.DatabaseConnections
+        .FirstOrDefaultAsync(x => x.Id == databaseConnectionId);
+    if (existingConnection == null)
+    {
+        return Results.NotFound();
+    }
+
+    existingConnection.HostName = databaseConnection.HostName;
+    existingConnection.Port = databaseConnection.Port;
+    existingConnection.UserName = databaseConnection.UserName;
+    existingConnection.Password = databaseConnection.Password;
+    existingConnection.Type = databaseConnection.Type;
+
+    await dbContext.SaveChangesAsync();
+
+    return Results.NoContent();
+});
+
+// Test a connection
+app.MapPost("/connections/{databaseConnectionId:long}/test", async (HttpContext _,
+    IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var databaseConnection = await dbContext.DatabaseConnections
+        .FirstOrDefaultAsync(x => x.Id == databaseConnectionId);
+    if (databaseConnection == null)
+    {
+        return Results.NotFound();
+    }
+
+    //TODO: Test connection
+    // var connectionTester = new ConnectionTester();
+    // var result = await connectionTester.TestConnection(databaseConnection);
+
+    return Results.Ok();
+});
+
+// Scan a connections database
+app.MapPost("/connections/{databaseConnectionId:long}/scan", async (HttpContext _,
     IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
@@ -59,10 +122,11 @@ app.MapPost("/connections/{databaseConnectionId:long}/scan", async (HttpContext 
 
     var big = new BackupItemGenerator();
     var backupItems = await big.GetBackupItems(databaseConnection);
-    
+
     return Results.Ok(backupItems);
 });
 
+#endregion
 
 // Ensure database is created
 using (var scope = app.Services.CreateScope())
