@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SCREAM.Business;
 using SCREAM.Data;
 using SCREAM.Data.Entities;
+using SCREAM.Data.Entities.StorageTargets;
 using SCREAM.Data.Enums;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,6 +48,95 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+
+#region Storage 
+
+// Get a list of all storage targets
+app.MapGet("/storage", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var storageTargets = await dbContext.StorageTargets.ToListAsync();
+    return Results.Ok(storageTargets);
+});
+
+// Get a storage target by id
+app.MapGet("/storage/{storageTargetId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+    long storageTargetId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var storageTarget = await dbContext.StorageTargets
+        .FirstOrDefaultAsync(x => x.Id == storageTargetId);
+    return storageTarget == null ? Results.NotFound() : Results.Ok(storageTarget);
+});
+
+// Edit storage target
+app.MapPut("/storage/{storageTargetId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+    long storageTargetId, StorageTarget storageTarget) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var existingStorageTarget = await dbContext.StorageTargets
+        .FirstOrDefaultAsync(x => x.Id == storageTargetId);
+    if (existingStorageTarget == null)
+    {
+        return Results.NotFound();
+    }
+    // Use EF Update function 
+    dbContext.Entry(existingStorageTarget).CurrentValues.SetValues(storageTarget);
+    
+    await dbContext.SaveChangesAsync();
+
+    return Results.NoContent();
+});
+
+// Create a new storage target
+app.MapPost("/storage", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+    StorageTarget storageTarget) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    dbContext.StorageTargets.Add(storageTarget);
+    await dbContext.SaveChangesAsync();
+    return Results.Created($"/storage/{storageTarget.Id}", storageTarget);
+});
+
+// Test a storage target
+app.MapPost("/storage/{storageTargetId:long}/test", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+    long storageTargetId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var storageTarget = await dbContext.StorageTargets
+        .FirstOrDefaultAsync(x => x.Id == storageTargetId);
+    if (storageTarget == null)
+    {
+        return Results.NotFound();
+    }
+
+    //TODO: Implement Storage testing
+    return Results.Ok();
+});
+
+// Delete a storage target
+app.MapDelete("/storage/{storageTargetId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+    long storageTargetId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var storageTarget = await dbContext.StorageTargets
+        .FirstOrDefaultAsync(x => x.Id == storageTargetId);
+    if (storageTarget == null)
+    {
+        return Results.NotFound();
+    }
+
+    dbContext.StorageTargets.Remove(storageTarget);
+    await dbContext.SaveChangesAsync();
+
+    return Results.NoContent();
+});
+
+
+
+#endregion
+
+
 #region Connections
 
 // Get a list of all connections
@@ -85,6 +175,24 @@ app.MapPut("/connections/{databaseConnectionId:long}", async (HttpContext _,
     existingConnection.Password = databaseConnection.Password;
     existingConnection.Type = databaseConnection.Type;
 
+    await dbContext.SaveChangesAsync();
+
+    return Results.NoContent();
+});
+
+// Delete a connection
+app.MapDelete("/connections/{databaseConnectionId:long}", async (HttpContext _,
+    IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var databaseConnection = await dbContext.DatabaseConnections
+        .FirstOrDefaultAsync(x => x.Id == databaseConnectionId);
+    if (databaseConnection == null)
+    {
+        return Results.NotFound();
+    }
+
+    dbContext.DatabaseConnections.Remove(databaseConnection);
     await dbContext.SaveChangesAsync();
 
     return Results.NoContent();
