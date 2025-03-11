@@ -26,7 +26,7 @@
                                       Label="Plan Name"
                                       Variant="Variant.Outlined"
                                       Required="true"
-                                      HelperText="Give your backup plan a descriptive name" />
+                                      HelperText="Give your backup plan a descriptive name"/>
                     </MudItem>
 
                     <MudItem xs="12" md="6">
@@ -34,7 +34,7 @@
                                       Label="Description"
                                       Variant="Variant.Outlined"
                                       Required="true"
-                                      HelperText="Add details about this backup plan" />
+                                      HelperText="Add details about this backup plan"/>
                     </MudItem>
 
                     <MudItem xs="12" md="6">
@@ -49,7 +49,7 @@
                             {
                                 <MudSelectItem Value="@conn.Id">
                                     <div class="d-flex align-center">
-                                        <MudIcon Icon="@Icons.Material.Filled.Storage" Class="mr-2" />
+                                        <MudIcon Icon="@Icons.Material.Filled.Storage" Class="mr-2"/>
                                         @conn.HostName (@conn.Type)
                                     </div>
                                 </MudSelectItem>
@@ -69,8 +69,9 @@
                             {
                                 <MudSelectItem Value="@target.Id">
                                     <div class="d-flex align-center">
-                                        <MudIcon Icon="@(target.Type == StorageTargetType.Local ? Icons.Material.Filled.Folder : Icons.Material.Filled.CloudUpload)"
-                                                 Class="mr-2" />
+                                        <MudIcon
+                                            Icon="@(target.Type == StorageTargetType.Local ? Icons.Material.Filled.Folder : Icons.Material.Filled.CloudUpload)"
+                                            Class="mr-2"/>
                                         @target.Name (@target.Type)
                                     </div>
                                 </MudSelectItem>
@@ -82,7 +83,7 @@
                         <MudExpansionPanel>
                             <TitleContent>
                                 <div class="d-flex align-center">
-                                    <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2" />
+                                    <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2"/>
                                     <MudText Typo="Typo.h6">Schedule Settings</MudText>
                                 </div>
                             </TitleContent>
@@ -90,7 +91,7 @@
                                 <MudGrid Class="mt-2">
                                     <MudItem xs="12" md="6">
                                         <MudSelect T="ScheduleType"
-                                                   @bind-Value="_backupPlan.Schedule.ScheduledType"
+                                                   @bind-Value="_backupPlan.ScheduleType"
                                                    Label="Schedule Type"
                                                    Variant="Variant.Outlined"
                                                    HelperText="How often should this backup run?">
@@ -101,14 +102,14 @@
                                         </MudSelect>
                                     </MudItem>
 
-                                    @if (_backupPlan.Schedule.ScheduledType != ScheduleType.OneTime)
+                                    @if (_backupPlan.ScheduleType != ScheduleType.OneTime)
                                     {
                                         <MudItem xs="12" md="6">
-                                            <MudTextField @bind-Value="_backupPlan.Schedule.CronExpression"
+                                            <MudTextField @bind-Value="_backupPlan.ScheduleCron"
                                                           Label="Cron Expression"
                                                           Variant="Variant.Outlined"
                                                           Required="true"
-                                                          HelperText="e.g., '0 0 * * *' for daily at midnight" />
+                                                          HelperText="e.g., '0 0 * * *' for daily at midnight"/>
                                         </MudItem>
                                     }
                                 </MudGrid>
@@ -128,7 +129,7 @@
                        Class="ml-auto">
                 @if (_isScanning)
                 {
-                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2"/>
                     <span>Scanning...</span>
                 }
                 else
@@ -144,7 +145,7 @@
         <MudCard Elevation="3" Class="mt-4 mb-4">
             <MudCardContent>
                 <!-- Replace the checkboxes with the enhanced hierarchical component -->
-                <EnhancedBackupTree @bind-Items="_backupPlan.Items" />
+                <EnhancedBackupTree @bind-Items="_backupPlan.Items"/>
             </MudCardContent>
         </MudCard>
     }
@@ -170,13 +171,14 @@
     private JsonSerializerOptions _jsonSerializerOptions;
     private List<DatabaseConnection> _databaseConnections = new();
     private List<StorageTarget> _storageTargets = new();
+
     private BackupPlan _backupPlan = new()
     {
         Name = string.Empty,
         Description = string.Empty,
         DatabaseConnection = new DatabaseConnection { HostName = string.Empty, UserName = string.Empty, Password = string.Empty, Port = 3306, Type = DatabaseType.MySQL },
         StorageTarget = new LocalStorageTarget { Name = string.Empty, Path = string.Empty, Type = StorageTargetType.Local },
-        Schedule = new BackupSchedule { CronExpression = "0 0 * * *", ScheduledType = ScheduleType.OneTime },
+        ScheduleCron = "0 0 * * *", ScheduleType = ScheduleType.OneTime,
         Items = new List<BackupItem>(),
         IsActive = false
     };
@@ -282,4 +284,5 @@
             }
         }
     }
+
 }
