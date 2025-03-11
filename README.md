@@ -258,7 +258,7 @@ Even small improvements are welcome!
 
 ## 📜 License
 
-SCREAM is licensed under the MIT License © 2025 [Your Name/Organization].
+SCREAM is licensed under the MIT License © 2025 Spire Recovery Solutions.
 
 This project stands on the shoulders of giants with these dependencies:
 * .NET 8+ & Blazor WASM: MIT License
