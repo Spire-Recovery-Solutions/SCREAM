@@ -1,0 +1,503 @@
+@using SCREAM.Data.Entities.BackupItems
+
+<MudPaper Elevation="3" Class="pa-4 mb-4 rounded-lg">
+    <MudGrid>
+        <MudItem xs="12">
+            <MudText Typo="Typo.h6" Class="mb-2">Select Backup Items</MudText>
+        </MudItem>
+        <MudItem xs="12" md="7">
+            <MudText Typo="Typo.body2" Class="mb-3">
+                Select the database objects you want to include in your backup plan
+            </MudText>
+        </MudItem>
+        <MudItem xs="12" md="5">
+            <div class="d-flex justify-end">
+                <MudButton Variant="Variant.Filled"
+                Color="Color.Primary"
+                Size="Size.Small"
+                OnClick="() => ToggleAllItems(true)"
+                Class="mr-2"
+                Disabled="@_isLoading"
+                StartIcon="@Icons.Material.Filled.CheckBox">
+                    Select All
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                Color="Color.Primary"
+                Size="Size.Small"
+                OnClick="() => ToggleAllItems(false)"
+                Disabled="@_isLoading"
+                StartIcon="@Icons.Material.Filled.DisabledByDefault">
+                    Unselect All
+                </MudButton>
+            </div>
+        </MudItem>
+    </MudGrid>
+
+    <MudDivider Class="my-3" />
+
+    <MudGrid>
+        <MudItem xs="12">
+            <MudText Typo="Typo.subtitle1" Class="mb-2">Quick Selection Options</MudText>
+        </MudItem>
+        <MudItem xs="12">
+            <div class="d-flex flex-wrap gap-2">
+                @foreach (var option in _quickSelectOptions)
+                {
+                    <MudButton Variant="Variant.Outlined"
+                    Color="@option.Color"
+                    Size="Size.Small"
+                    OnClick="() => SelectItemsByType(option.Type)"
+                    Disabled="@_isLoading"
+                    StartIcon="@GetIconForBackupItemType(option.Type)">
+                        @option.Label
+                    </MudButton>
+                }
+            </div>
+        </MudItem>
+    </MudGrid>
+
+    @if (Items.Any())
+    {
+        <MudDivider Class="my-3" />
+        <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="mt-2 mb-4">
+            Selected: @Items.Count(i => i.IsSelected) / @Items.Count total items
+        </MudChip>
+    }
+</MudPaper>
+
+@if (_isLoading)
+{
+    <MudPaper Elevation="0" Class="pa-6 d-flex flex-column align-center">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" Class="mb-4" />
+        <MudText Align="Align.Center">Scanning database and organizing items...</MudText>
+    </MudPaper>
+}
+else if (!_schemaGroups.Any())
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Filled" Class="my-4">
+        <MudText>No backup items available. Try scanning the database again.</MudText>
+    </MudAlert>
+}
+else
+{
+    <MudGrid>
+        @foreach (var schema in _schemaGroups)
+        {
+            <MudItem xs="12">
+                <MudCard Elevation="2" Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <div class="d-flex align-center" @onclick="() => ToggleSchema(schema)"
+                            style="cursor: pointer;">
+                                <MudIcon Icon="@(schema.IsExpanded ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ChevronRight)"
+                                Size="Size.Small" Class="mr-2" />
+                                <MudCheckBox T="bool"
+                                @onclick:stopPropagation
+                                Value="@schema.IsFullySelected"
+                                ValueChanged="@(value => ToggleSchemaSelection(schema, value))"
+                                Size="Size.Medium" />
+                                <div class="ml-2">
+                                    <MudText Typo="Typo.h6" Style="font-weight: 500;">@schema.SchemaName</MudText>
+                                </div>
+                                <MudChip T="string" Color="Color.Default" Size="Size.Small" Class="ml-3" Label="true">
+                                    @schema.Items.Count(i => i.IsSelected)/@schema.Items.Count items
+                                </MudChip>
+                            </div>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            <div class="d-flex">
+                                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Color="Color.Default" Dense="true" AnchorOrigin="Origin.BottomRight">
+                                    <MudMenuItem OnClick="() => ToggleSchemaSelection(schema, true)">Select All</MudMenuItem>
+                                    @foreach (var option in _quickSelectOptions)
+                                    {
+                                        <MudMenuItem OnClick="() => SelectSchemaItemsByType(schema, option.Type)">@option.Label</MudMenuItem>
+                                    }
+                                    <MudDivider />
+                                    <MudMenuItem OnClick="() => ToggleSchemaSelection(schema, false)">Unselect All</MudMenuItem>
+                                </MudMenu>
+                                <MudTooltip Text="@(schema.IsExpanded ? "Collapse" : "Expand")">
+                                    <MudIconButton Icon="@(schema.IsExpanded ? Icons.Material.Filled.UnfoldLess : Icons.Material.Filled.UnfoldMore)"
+                                    Color="Color.Default"
+                                    OnClick="() => ToggleSchema(schema)" />
+                                </MudTooltip>
+                            </div>
+                        </CardHeaderActions>
+                    </MudCardHeader>
+
+                    @if (schema.IsExpanded)
+                    {
+                        <MudCardContent>
+                            @if (schema.SchemaItems.Count > 0)
+                            {
+                                <MudPaper Elevation="0" Class="pa-3 mb-4 mud-theme-primary"
+                                Style="border-radius: 8px; background-color: var(--mud-palette-primary-lighten);">
+                                    <MudText Typo="Typo.subtitle1" Class="mb-2">
+                                        <MudIcon Icon="@Icons.Material.Filled.Storage" Size="Size.Small" Class="mr-1" />
+                                        Schema-Level Objects
+                                    </MudText>
+                                    <MudGrid>
+                                        @foreach (var item in schema.SchemaItems)
+                                        {
+                                            <MudItem xs="12" sm="6" md="4">
+                                                <MudPaper Elevation="0" Class="pa-2 d-flex align-center">
+                                                    <MudCheckBox T="bool"
+                                                    Value="@item.IsSelected"
+                                                    ValueChanged="@(value => OnItemSelectionChanged(item, schema, null, value))"
+                                                    Color="Color.Primary" />
+                                                    <MudIcon Icon="@GetIconForBackupItemType(item.Type)"
+                                                    Size="Size.Small"
+                                                    Class="mx-2"
+                                                    Color="Color.Primary" />
+                                                    <MudText Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
+                                                </MudPaper>
+                                            </MudItem>
+                                        }
+                                    </MudGrid>
+                                </MudPaper>
+                            }
+
+                            <MudText Typo="Typo.subtitle1" Class="mb-3">
+                                <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Small" Class="mr-1" />
+                                Tables and Views
+                            </MudText>
+
+                            <MudGrid Spacing="2">
+                                @foreach (var table in schema.Tables)
+                                {
+                                    <MudItem xs="12" sm="6" lg="4">
+                                        <MudCard Elevation="1" Class="mb-2">
+                                            <MudCardHeader Style="padding: 8px 16px;">
+                                                <CardHeaderContent>
+                                                    <div class="d-flex align-center" @onclick="() => ToggleTable(table)"
+                                                    style="cursor: pointer;">
+                                                        <MudIcon Icon="@(table.IsExpanded ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ChevronRight)"
+                                                        Size="Size.Small" Class="mr-2" />
+                                                        <MudCheckBox T="bool"
+                                                        @onclick:stopPropagation
+                                                        Value="@table.IsFullySelected"
+                                                        ValueChanged="@(value => ToggleTableSelection(table, schema, value))"
+                                                        Color="Color.Primary" />
+                                                        <MudTooltip Text="@table.TableName">
+                                                            <MudText Typo="Typo.body1" Class="ml-2 text-truncate"
+                                                            Style="max-width: 150px;">
+                                                                @table.TableName
+                                                            </MudText>
+                                                        </MudTooltip>
+                                                    </div>
+                                                </CardHeaderContent>
+                                            </MudCardHeader>
+                                            @if (table.IsExpanded)
+                                            {
+                                                <MudCardContent Style="padding: 8px 16px 16px 16px;">
+                                                    <MudList T="string" Dense="true" Padding="false">
+                                                        @foreach (var item in table.Items)
+                                                        {
+                                                            <MudListItem Class="pa-0">
+                                                                <div class="d-flex align-center py-1">
+                                                                    <MudCheckBox T="bool"
+                                                                    Value="@item.IsSelected"
+                                                                    ValueChanged="@(value => OnItemSelectionChanged(item, schema, table, value))"
+                                                                    Color="Color.Primary"
+                                                                    Size="Size.Small" />
+                                                                    <MudIcon Icon="@GetIconForBackupItemType(item.Type)"
+                                                                    Size="Size.Small"
+                                                                    Class="mx-2"
+                                                                    Color="@GetColorForBackupItemType(item.Type)" />
+                                                                    <MudText Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
+                                                                </div>
+                                                            </MudListItem>
+                                                        }
+                                                    </MudList>
+                                                </MudCardContent>
+                                            }
+                                        </MudCard>
+                                    </MudItem>
+                                }
+                            </MudGrid>
+                        </MudCardContent>
+                    }
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public List<BackupItem> Items { get; set; } = new();
+    [Parameter] public EventCallback<List<BackupItem>> ItemsChanged { get; set; }
+
+    private List<SchemaGroup> _schemaGroups = new();
+    private bool _isLoading = false;
+
+    private class QuickSelectOption
+    {
+        public BackupItemType Type { get; set; }
+        public string Label { get; set; }
+        public Color Color { get; set; }
+    }
+
+    private readonly List<QuickSelectOption> _quickSelectOptions = new()
+    {
+        new QuickSelectOption { Type = BackupItemType.TableStructure, Label = "Select All Structure", Color = Color.Primary },
+        new QuickSelectOption { Type = BackupItemType.TableData, Label = "Select All Data", Color = Color.Secondary },
+        new QuickSelectOption { Type = BackupItemType.View, Label = "Select All Views", Color = Color.Tertiary },
+        new QuickSelectOption { Type = BackupItemType.Trigger, Label = "Select All Triggers", Color = Color.Info },
+        new QuickSelectOption { Type = BackupItemType.Event, Label = "Select All Events", Color = Color.Success },
+        new QuickSelectOption { Type = BackupItemType.FunctionProcedure, Label = "Select All Functions/Procedures", Color = Color.Warning }
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (Items.Any())
+        {
+            _isLoading = true;
+            StateHasChanged();
+            try
+            {
+                GroupItemsBySchema();
+            }
+            finally
+            {
+                _isLoading = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void GroupItemsBySchema()
+    {
+        var existingSchemas = _schemaGroups.ToDictionary(s => s.SchemaName);
+        var newSchemaGroups = new List<SchemaGroup>();
+
+        var schemaGroups = Items
+            .GroupBy(i => i.Schema)
+            .OrderBy(g => g.Key)
+            .ToList();
+
+        foreach (var schemaGroup in schemaGroups)
+        {
+            var schemaName = schemaGroup.Key;
+            var existingSchema = existingSchemas.GetValueOrDefault(schemaName);
+
+            var schema = existingSchema ?? new SchemaGroup();
+            schema.SchemaName = schemaName;
+            schema.Items = schemaGroup.ToList();
+
+            // Preserve existing expansion state or default to true
+            schema.IsExpanded = existingSchema?.IsExpanded ?? true;
+
+            // Similar preservation for table states
+            var existingTables = schema.Tables.ToDictionary(t => t.TableName);
+            schema.Tables.Clear();
+
+            var tableItems = schemaGroup
+                .Where(i => !string.IsNullOrEmpty(i.Name))
+                .ToList();
+
+            foreach (var tableGroup in tableItems
+                .GroupBy(i => i.Name)
+                .OrderBy(g => g.Key))
+            {
+                var tableName = tableGroup.Key!;
+                var existingTable = existingTables.GetValueOrDefault(tableName);
+
+                var table = existingTable ?? new TableGroup();
+                table.TableName = tableName;
+                table.Items = tableGroup.ToList();
+                table.IsExpanded = existingTable?.IsExpanded ?? false;
+
+                schema.Tables.Add(table);
+                UpdateTableSelectionState(table);
+            }
+
+            UpdateSchemaSelectionState(schema);
+            newSchemaGroups.Add(schema);
+        }
+
+        _schemaGroups = newSchemaGroups;
+    }
+
+    private void ToggleSchema(SchemaGroup schema)
+    {
+        schema.IsExpanded = !schema.IsExpanded;
+    }
+
+    private void ToggleTable(TableGroup table)
+    {
+        table.IsExpanded = !table.IsExpanded;
+    }
+
+    private void UpdateTableSelectionState(TableGroup table)
+    {
+        table.IsFullySelected = table.Items.Any(i => i.IsSelected);
+    }
+
+    private void UpdateSchemaSelectionState(SchemaGroup schema)
+    {
+        schema.IsFullySelected = schema.Items.Any(i => i.IsSelected);
+    }
+
+    private async Task ToggleSchemaSelection(SchemaGroup schema, bool isSelected)
+    {
+        foreach (var item in schema.Items)
+        {
+            item.IsSelected = isSelected;
+        }
+        foreach (var table in schema.Tables)
+        {
+            UpdateTableSelectionState(table);
+        }
+        UpdateSchemaSelectionState(schema);
+        await NotifyItemsChanged();
+    }
+
+    private async Task ToggleTableSelection(TableGroup table, SchemaGroup schema, bool isSelected)
+    {
+        foreach (var item in table.Items)
+        {
+            item.IsSelected = isSelected;
+        }
+        UpdateTableSelectionState(table);
+        UpdateSchemaSelectionState(schema);
+        await NotifyItemsChanged();
+    }
+
+    private async Task OnItemSelectionChanged(BackupItem item, SchemaGroup schema, TableGroup table, bool isSelected)
+    {
+        item.IsSelected = isSelected;
+        if (table != null)
+        {
+            UpdateTableSelectionState(table);
+        }
+        UpdateSchemaSelectionState(schema);
+        await NotifyItemsChanged();
+    }
+
+    private async Task ToggleAllItems(bool isSelected)
+    {
+        foreach (var item in Items)
+        {
+            item.IsSelected = isSelected;
+        }
+        foreach (var schema in _schemaGroups)
+        {
+            UpdateSchemaSelectionState(schema);
+            foreach (var table in schema.Tables)
+            {
+                UpdateTableSelectionState(table);
+            }
+        }
+
+        await NotifyItemsChanged();
+        StateHasChanged();
+    }
+
+    private async Task SelectItemsByType(BackupItemType type)
+    {
+        foreach (var item in Items)
+        {
+            if (item.Type == type)
+            {
+                item.IsSelected = true;
+            }
+        }
+
+        foreach (var schema in _schemaGroups)
+        {
+            UpdateSchemaSelectionState(schema);
+            foreach (var table in schema.Tables)
+            {
+                UpdateTableSelectionState(table);
+            }
+        }
+
+        await NotifyItemsChanged();
+    }
+
+    private async Task SelectSchemaItemsByType(SchemaGroup schema, BackupItemType type)
+    {
+        foreach (var item in schema.Items)
+        {
+            if (item.Type == type)
+            {
+                item.IsSelected = true;
+            }
+        }
+
+        foreach (var table in schema.Tables)
+        {
+            UpdateTableSelectionState(table);
+        }
+
+        UpdateSchemaSelectionState(schema);
+        await NotifyItemsChanged();
+    }
+
+    private async Task NotifyItemsChanged()
+    {
+        if (ItemsChanged.HasDelegate)
+        {
+            await ItemsChanged.InvokeAsync(Items);
+        }
+    }
+
+    private string GetBackupItemTypeLabel(BackupItemType type)
+    {
+        return type switch
+        {
+            BackupItemType.TableStructure => "Structure",
+            BackupItemType.TableData => "Data",
+            BackupItemType.View => "View",
+            BackupItemType.Trigger => "Triggers",
+            BackupItemType.Event => "Events",
+            BackupItemType.FunctionProcedure => "Functions/Procedures",
+            _ => type.ToString()
+        };
+    }
+
+    private string GetIconForBackupItemType(BackupItemType type)
+    {
+        return type switch
+        {
+            BackupItemType.TableStructure => Icons.Material.Filled.Schema,
+            BackupItemType.TableData => Icons.Material.Filled.Storage,
+            BackupItemType.View => Icons.Material.Filled.TableView,
+            BackupItemType.Trigger => Icons.Material.Filled.Bolt,
+            BackupItemType.Event => Icons.Material.Filled.Event,
+            BackupItemType.FunctionProcedure => Icons.Material.Filled.Code,
+            _ => Icons.Material.Filled.Backup
+        };
+    }
+
+    private Color GetColorForBackupItemType(BackupItemType type)
+    {
+        return type switch
+        {
+            BackupItemType.TableStructure => Color.Primary,
+            BackupItemType.TableData => Color.Secondary,
+            BackupItemType.View => Color.Tertiary,
+            BackupItemType.Trigger => Color.Info,
+            BackupItemType.Event => Color.Success,
+            BackupItemType.FunctionProcedure => Color.Warning,
+            _ => Color.Default
+        };
+    }
+
+    private class SchemaGroup
+    {
+        public string SchemaName { get; set; } = string.Empty;
+        public List<BackupItem> Items { get; set; } = new();
+        public List<BackupItem> SchemaItems { get; set; } = new();
+        public List<TableGroup> Tables { get; set; } = new();
+        public bool IsFullySelected { get; set; }
+        public bool IsExpanded { get; set; }
+    }
+
+    private class TableGroup
+    {
+        public string TableName { get; set; } = string.Empty;
+        public List<BackupItem> Items { get; set; } = new();
+        public bool IsFullySelected { get; set; }
+        public bool IsExpanded { get; set; }
+    }
+}

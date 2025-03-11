@@ -1,4 +1,5 @@
 using CliWrap.Builders;
+using System.Text.Json.Serialization;
 
 namespace SCREAM.Data.Entities.BackupItems;
 
@@ -7,6 +8,11 @@ namespace SCREAM.Data.Entities.BackupItems;
 /// </summary>
 public class ViewItem : BackupItem
 {
+    public ViewItem()
+    {
+    }
+
+    [JsonIgnore]
     public override BackupItemType Type
     {
         get => BackupItemType.View;

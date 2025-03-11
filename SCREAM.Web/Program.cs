@@ -7,8 +7,11 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
-
+builder.Services.AddHttpClient("SCREAM", client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5102");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
 builder.Services.AddMudServices();
 
 await builder.Build().RunAsync();

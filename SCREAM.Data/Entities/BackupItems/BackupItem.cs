@@ -15,6 +15,7 @@ namespace SCREAM.Data.Entities.BackupItems;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 public abstract class BackupItem : ScreamDbBaseEntity
 {
+
     /// <summary>
     /// The schema (database) the item belongs to.
     /// </summary>
@@ -33,6 +34,7 @@ public abstract class BackupItem : ScreamDbBaseEntity
     /// <summary>
     /// The type of backup item.
     /// </summary>
+    [JsonIgnore]
     public abstract BackupItemType Type { get; set; }
 
 
