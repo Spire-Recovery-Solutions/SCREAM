@@ -103,11 +103,6 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
         mb.Entity<BackupPlan>(e =>
         {
             e.ToTable("BackupPlans");
-
-            // One-to-one relationship between BackupPlan and BackupSchedule
-            e.HasOne(p => p.Schedule)
-                .WithOne(w => w.BackupPlan)
-                .HasForeignKey<BackupSchedule>(k => k.BackupPlanId);
             
             // One-to-many relationship between BackupPlan and BackupJobs
             e.HasMany<BackupJob>()

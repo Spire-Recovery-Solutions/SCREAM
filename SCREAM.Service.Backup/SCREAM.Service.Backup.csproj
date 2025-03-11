@@ -18,4 +18,8 @@
         <Link>.dockerignore</Link>
       </Content>
     </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SCREAM.Data\SCREAM.Data.csproj" />
+    </ItemGroup>
 </Project>
