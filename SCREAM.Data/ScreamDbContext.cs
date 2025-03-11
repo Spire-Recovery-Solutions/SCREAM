@@ -14,6 +14,8 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
     public DbSet<BackupItemStatus> BackupItemStatuses { get; set; }
     public DbSet<BackupJobLog> BackupJobLogs { get; set; }
     public DbSet<BackupSettings> BackupSettings { get; set; }
+    
+    public DbSet<StorageTarget> StorageTargets { get; set; }
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
