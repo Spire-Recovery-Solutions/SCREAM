@@ -27,7 +27,7 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddPooledDbContextFactory<ScreamDbContext>(o =>
 {
-    var dbPath = Path.combine(Directory.GetCurrentDirectory(), "ScreamDb.db");
+    var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "ScreamDb.db");
     o.UseSqlite($"Data Source={dbPath}");
 });
 
