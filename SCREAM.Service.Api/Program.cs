@@ -7,6 +7,7 @@ using SCREAM.Data.Entities;
 using SCREAM.Data.Entities.StorageTargets;
 using SCREAM.Data.Enums;
 using SCREAM.Service.Api.Validators;
+using MySqlConnector;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -222,17 +223,8 @@ app.MapDelete("/connections/{databaseConnectionId:long}", async (HttpContext _,
 });
 
 // Test a connection
-app.MapPost("/connections/{databaseConnectionId:long}/test", async (HttpContext _,
-    IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
+app.MapPost("/connections/test", async (DatabaseConnection databaseConnection) =>
 {
-    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-    var databaseConnection = await dbContext.DatabaseConnections
-        .FirstOrDefaultAsync(x => x.Id == databaseConnectionId);
-    if (databaseConnection == null)
-    {
-        return Results.NotFound();
-    }
-
     var isValid = ValidateDatabaseConnection(databaseConnection);
     if (!isValid)
     {
@@ -272,9 +264,16 @@ bool ValidateDatabaseConnection(DatabaseConnection databaseConnection)
 
 async Task<bool> TestDatabaseConnection(DatabaseConnection databaseConnection)
 {
-    // Add testing logic for the database connection
-    await Task.Delay(1000);
-    return true;
+    try
+    {
+        using var connection = new MySqlConnection(databaseConnection.ConnectionString);
+        await connection.OpenAsync();
+        return true;
+    }
+    catch (Exception)
+    {
+        return false;
+    }
 }
 
 #endregion
