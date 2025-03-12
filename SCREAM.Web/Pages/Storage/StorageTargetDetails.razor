@@ -1,170 +1,177 @@
-﻿@page "/Storage/StorageTarget"
+﻿@page "/storage/storage-target/{Id:long?}"
 @using SCREAM.Data.Entities.StorageTargets
-@using SCREAM.Web.Dialogs
-@using SCREAM.Web.Pages.Backup
+@using SCREAM.Data.Enums
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject IHttpClientFactory ClientFactory
 @inject ISnackbar Snackbar
-@inject IDialogService DialogService
+@inject NavigationManager NavigationManager
 
-<MudText Typo="Typo.h6" Class="mb-4">Manage Storage Targets</MudText>
+<MudText Align="Align.Center" Typo="Typo.h5" Class="mb-4">
+    @(Model?.Id > 0 ? "Edit" : "New") @(Model?.Type.ToString() ?? _storageType.ToString()) Target
+</MudText>
 
-<MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add" OnClick="AddNewTarget">
-    Add Storage Target
-</MudButton>
+<MudForm @ref="_form">
+    <MudStack Spacing="2">
+        <MudSelect T="StorageTargetType" @bind-Value="_storageType" Label="Storage Type" Variant="Variant.Outlined"
+                   ReadOnly="@(Model?.Id > 0)" Disabled="@(Model?.Id > 0)"
+                   SelectedValuesChanged="@((_) => UpdateModelType())">
+            <MudSelectItem Value="StorageTargetType.Local">Local Storage</MudSelectItem>
+            <MudSelectItem Value="StorageTargetType.S3">S3 Storage</MudSelectItem>
+        </MudSelect>
 
-<MudTable Items="@_model" Dense="true" Hover="true" Striped="true">
-    <HeaderContent>
-        <MudTh>Name</MudTh>
-        <MudTh>Type</MudTh>
-        <MudTh>Path</MudTh>
-        <MudTh>Bucket Name</MudTh>
-        <MudTh>Access Key</MudTh>
-        <MudTh>Description</MudTh>
-        <MudTh>Actions</MudTh>
-    </HeaderContent>
-    <RowTemplate>
-        <MudTd DataLabel="Name">@context.Name</MudTd>
-        <MudTd DataLabel="Type">@context.Type</MudTd>
-        @switch (context.Type)
+        <MudTextField @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Required="true" />
+        <MudTextField @bind-Value="_description" Label="Description" Variant="Variant.Outlined" />
+
+        @if (_storageType == StorageTargetType.Local)
         {
-            case StorageTargetType.Local:
-                <MudTd DataLabel="Path">@((context as LocalStorageTarget)?.Path)</MudTd>
-                <MudTd DataLabel="Bucket Name"></MudTd>
-                <MudTd DataLabel="Access Key"></MudTd>
-                break;
-            case StorageTargetType.S3:
-                <MudTd DataLabel="Path"></MudTd>
-                <MudTd DataLabel="Bucket Name">@((context as S3StorageTarget)?.BucketName)</MudTd>
-                <MudTd DataLabel="Access Key">@((context as S3StorageTarget)?.AccessKey)</MudTd>
-                break;
-            default:
-                <MudTd DataLabel="Path"></MudTd>
-                <MudTd DataLabel="Bucket Name"></MudTd>
-                <MudTd DataLabel="Access Key"></MudTd>
-                break;
+            <MudTextField @bind-Value="_path" Label="Path" Variant="Variant.Outlined" Required="true" />
         }
-        <MudTd DataLabel="Description">@context.Description</MudTd>
-        <MudTd DataLabel="Actions">
-            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => EditTarget(context))" />
-            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => DeleteTarget(context))" />
-        </MudTd>
-    </RowTemplate>
-</MudTable>
+        else if (_storageType == StorageTargetType.S3)
+        {
+            <MudTextField @bind-Value="_bucketName" Label="Bucket Name" Variant="Variant.Outlined" Required="true" />
+            <MudTextField @bind-Value="_accessKey" Label="Access Key" Variant="Variant.Outlined" Required="true" />
+            <MudTextField @bind-Value="_secretKey" Label="Secret Key" Variant="Variant.Outlined" InputType="InputType.Password" Required="true" />
+        }
+    </MudStack>
+
+    <MudDivider Class="my-3" />
+
+    <MudStack Row="true" Justify="Justify.Center">
+        <MudButton OnClick="Cancel" Variant="Variant.Outlined">Cancel</MudButton>
+        <MudButton OnClick="SaveTarget" Color="Color.Primary" Variant="Variant.Filled">Test & Save</MudButton>
+    </MudStack>
+</MudForm>
 
 @code {
-    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
-    private List<StorageTarget> _model = new List<StorageTarget>
-    {
-        new LocalStorageTarget {
-            Id = 1,
-            Name = "Local Storage 1",
-            Type = StorageTargetType.Local,
-            Description = "Local storage target",
-            Path = @"C:\Data"
-        },
-        new S3StorageTarget {
-            Id = 2,
-            Name = "AWS S3 Storage 1",
-            Type = StorageTargetType.S3,
-            Description = "S3 storage target",
-            BucketName = "my-bucket",
-            AccessKey = "ACCESS_KEY",
-            SecretKey = "SECRET_KEY"
-        }
-    };
+    [Parameter] public long? Id { get; set; }
+    private MudForm _form;
+    private HttpClient _httpClient;
+    private JsonSerializerOptions _jsonOptions;
 
-    private async Task AddNewTarget()
+    private StorageTargetType _storageType = StorageTargetType.Local;
+    private string _name = string.Empty;
+    private string _description = string.Empty;
+    private string _path = string.Empty;
+    private string _bucketName = string.Empty;
+    private string _accessKey = string.Empty;
+    private string _secretKey = string.Empty;
+
+    private StorageTarget Model { get; set; }
+
+    protected override async Task OnInitializedAsync()
     {
-        var newTarget = new LocalStorageTarget
+        _httpClient = ClientFactory.CreateClient("SCREAM");
+        _jsonOptions = new JsonSerializerOptions
             {
-                Name = string.Empty,
-                Type = StorageTargetType.Local,
-                Description = string.Empty,
-                Path = string.Empty
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
             };
 
-        await OpenTargetDialog(newTarget, "Add Storage Target");
-    }
+        UpdateModelType();
 
-    private async Task EditTarget(StorageTarget target)
-    {
-        StorageTarget targetToEdit;
-        switch (target.Type)
+        if (Id.HasValue)
         {
-            case StorageTargetType.Local:
-                var local = target as LocalStorageTarget;
-                targetToEdit = new LocalStorageTarget
-                    {
-                        Id = target.Id,
-                        Name = target.Name,
-                        Type = target.Type,
-                        Description = target.Description,
-                        Path = local?.Path ?? string.Empty
-                    };
-                break;
-            case StorageTargetType.S3:
-                var s3 = target as S3StorageTarget;
-                targetToEdit = new S3StorageTarget
-                    {
-                        Id = target.Id,
-                        Name = target.Name,
-                        Type = target.Type,
-                        Description = target.Description,
-                        BucketName = s3?.BucketName ?? string.Empty,
-                        AccessKey = s3?.AccessKey ?? string.Empty,
-                        SecretKey = s3?.SecretKey ?? string.Empty
-                    };
-                break;
-            default:
-                targetToEdit = target;
-                break;
-        }
-        await OpenTargetDialog(targetToEdit, "Edit Storage Target");
-    }
-
-    private async Task OpenTargetDialog(StorageTarget target, string title)
-    {
-        var parameters = new DialogParameters { { "CurrentEditingTarget", target } };
-        var dialog = await DialogService.ShowAsync<StorageTargetDialog>(title, parameters, _dialogOptions);
-        var result = await dialog.Result;
-        if (result is { Canceled: false })
-        {
-            var updatedTarget = result.Data as StorageTarget;
-            if (updatedTarget != null)
+            try
             {
-                if (updatedTarget.Id == 0)
+                Model = await _httpClient.GetFromJsonAsync<StorageTarget>($"/storage/{Id.Value}", _jsonOptions);
+                if (Model != null)
                 {
-                    updatedTarget.Id = _model.Any() ? _model.Max(x => x.Id) + 1 : 1;
-                    _model.Add(updatedTarget);
-                    Snackbar.Add("Storage target added successfully.", Severity.Success);
-                }
-                else
-                {
-                    var index = _model.FindIndex(x => x.Id == updatedTarget.Id);
-                    if (index != -1)
+                    _storageType = Model.Type;
+                    _name = Model.Name;
+                    _description = Model.Description ?? string.Empty;
+
+                    switch (Model)
                     {
-                        _model[index] = updatedTarget;
-                        Snackbar.Add("Storage target updated successfully.", Severity.Success);
+                        case LocalStorageTarget localTarget:
+                            _path = localTarget.Path;
+                            break;
+                        case S3StorageTarget s3Target:
+                            _bucketName = s3Target.BucketName;
+                            _accessKey = s3Target.AccessKey;
+                            _secretKey = s3Target.SecretKey;
+                            break;
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add("Error fetching target: " + ex.Message, Severity.Error);
+                UpdateModelType();
             }
         }
     }
 
-    private async Task DeleteTarget(StorageTarget target)
+    private void UpdateModelType()
     {
-        var parameters = new DialogParameters
+        switch (_storageType)
         {
-            { "ContentText", $"Are you sure you want to delete the storage target '{target.Name}'?" },
-            { "ButtonText", "Delete" },
-            { "Color", Color.Error }
-        };
-
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete Confirmation", parameters, _dialogOptions);
-        var result = await dialog.Result;
-        if (result is { Canceled: false } && result.Data is bool confirmed && confirmed)
-        {
-            _model.Remove(target);
-            Snackbar.Add("Storage target deleted successfully.", Severity.Success);
+            case StorageTargetType.Local:
+                Model = new LocalStorageTarget
+                    {
+                        Id = Id ?? 0,
+                        Name = _name,
+                        Description = string.IsNullOrWhiteSpace(_description) ? null : _description,
+                        Type = StorageTargetType.Local,
+                        Path = _path
+                    };
+                break;
+            case StorageTargetType.S3:
+                Model = new S3StorageTarget
+                    {
+                        Id = Id ?? 0,
+                        Name = _name,
+                        Description = string.IsNullOrWhiteSpace(_description) ? null : _description,
+                        Type = StorageTargetType.S3,
+                        BucketName = _bucketName,
+                        AccessKey = _accessKey,
+                        SecretKey = _secretKey
+                    };
+                break;
+            default:
+                throw new NotSupportedException("Unsupported storage type");
         }
     }
+
+    private async Task SaveTarget()
+    {
+        await _form.Validate();
+        if (!_form.IsValid)
+        {
+            Snackbar.Add("Please fill in the required fields.", Severity.Error);
+            return;
+        }
+
+        UpdateModelType();
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.PostAsJsonAsync("/storage", Model, _jsonOptions);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+
+                if (errorContent.Contains("Storage target test failed"))
+                {
+                    Snackbar.Add("Storage target test failed. Please check your configuration.", Severity.Error);
+                }
+                else
+                {
+                    Snackbar.Add($"Error saving target: {response.StatusCode} - {errorContent}", Severity.Error);
+                }
+                return;
+            }
+
+            Snackbar.Add("Storage target saved successfully.", Severity.Success);
+            NavigationManager.NavigateTo("/storage/storage-targets");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error saving target: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private void Cancel() => NavigationManager.NavigateTo("/storage/storage-targets");
 }

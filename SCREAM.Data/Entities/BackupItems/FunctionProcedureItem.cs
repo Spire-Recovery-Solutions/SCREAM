@@ -8,11 +8,6 @@ namespace SCREAM.Data.Entities.BackupItems;
 /// </summary>
 public class FunctionProcedureItem : BackupItem
 {
-    public FunctionProcedureItem()
-    {  
-    }
-
-    [JsonIgnore]
     public override BackupItemType Type
     {
         get => BackupItemType.FunctionProcedure;

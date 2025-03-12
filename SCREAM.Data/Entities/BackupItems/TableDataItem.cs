@@ -8,9 +8,6 @@ namespace SCREAM.Data.Entities.BackupItems;
 /// </summary>
 public class TableDataItem : BackupItem
 {
-    public TableDataItem() { }
-
-    [JsonIgnore]
     public override BackupItemType Type
     {
         get => BackupItemType.TableData;

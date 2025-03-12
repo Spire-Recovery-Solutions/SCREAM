@@ -1,4 +1,4 @@
-@page "/BackupPlan/Create"
+@page "/backupplan/create"
 @using SCREAM.Data.Entities
 @using SCREAM.Data.Entities.StorageTargets
 @using SCREAM.Data.Entities.BackupItems
@@ -186,12 +186,13 @@
     protected override void OnInitialized()
     {
         _jsonSerializerOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            ReferenceHandler = ReferenceHandler.Preserve
-        };
+            {
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = JsonIgnoreCondition.Never,
+                ReferenceHandler = ReferenceHandler.Preserve
+            };
+
 
         _httpClient = ClientFactory.CreateClient("SCREAM");
 

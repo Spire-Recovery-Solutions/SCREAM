@@ -1,76 +1,150 @@
-﻿@page "/DatabaseManagement/Connection/{id?}"
+﻿@page "/databasemanagement/connection/{Id:long?}"
 @using SCREAM.Data.Entities
 @using SCREAM.Data.Enums
+@using System.Text.Json
+@using System.Text.Json.Serialization
 @inject ISnackbar Snackbar
+@inject IHttpClientFactory ClientFactory
+@inject NavigationManager NavigationManager
 
-<MudStack Spacing="3">
-    <MudText Align="Align.Center" Typo="Typo.h6">@_connection.HostName</MudText>
-    <MudTextField Label="Host Name"
-                  Value="@_connection.HostName"
-                  ReadOnly="true" />
-    <MudTextField Label="Port"
-                  Value="@_connection.Port.ToString()"
-                  ReadOnly="true" />
-    <MudTextField Label="User Name"
-                  Value="@_connection.UserName"
-                  ReadOnly="true" />
+<MudText Align="Align.Center" Typo="Typo.h6" Class="mb-4">
+    @(Id.HasValue ? "View / Edit Database Connection" : "New Database Connection")
+</MudText>
 
-    <MudTextField Label="Password"
-                  InputType="InputType.Password"
-                  Value="@_connection.Password"
-                  ReadOnly="true" />
+<MudForm @ref="_form">
+    <MudStack Spacing="3">
+        <MudTextField @bind-Value="_connection.HostName"
+                      Label="Host Name"
+                      Required="true"
+                      Variant="Variant.Outlined" />
 
-    <MudSelect T="DatabaseType" Label="Database Type" @bind-Value="@_connection.Type" Disabled="true">
-        @foreach (var type in Enum.GetValues<DatabaseType>())
-        {
-            <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
-        }
-    </MudSelect>
+        <MudNumericField @bind-Value="_connection.Port"
+                         Label="Port"
+                         Required="true"
+                         Variant="Variant.Outlined"
+                         Min="1"
+                         Max="65535" />
 
-    <MudTextField Label="Connection String"
-                  Value="@_connection.ConnectionString"
-                  ReadOnly="true"
-                  Variant="Variant.Outlined"
-                  Lines="3" />
-    <MudDivider />
+        <MudTextField @bind-Value="_connection.UserName"
+                      Label="User Name"
+                      Required="true"
+                      Variant="Variant.Outlined" />
 
-    <MudStack Row="true" Justify="Justify.Center">
-        <MudButton OnClick="TestConnection"
-                   Color="Color.Primary"
-                   Variant="Variant.Filled"
-                   Size="Size.Small"
-                   FullWidth="false"
-                   Class="mx-auto">
-            Test Connection
-        </MudButton>
+        <MudTextField @bind-Value="_connection.Password"
+                      Label="Password"
+                      Required="true"
+                      InputType="InputType.Password"
+                      Variant="Variant.Outlined" />
+        <MudSelect T="DatabaseType"
+                   @bind-Value="_connection.Type"
+                   Label="Database Type"
+                   Required="true"
+                   Variant="Variant.Outlined">
+            @foreach (DatabaseType type in Enum.GetValues(typeof(DatabaseType)))
+            {
+                <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudTextField Label="Connection String"
+                      Value="@_connection.ConnectionString"
+                      ReadOnly="true"
+                      Variant="Variant.Outlined"
+                      Lines="3" />
+
+        <MudDivider Class="my-3" />
+
+        <MudStack Row="true" Justify="Justify.Center">
+            <MudButton OnClick="Cancel" Variant="Variant.Outlined" Class="mr-2">Back</MudButton>
+            <MudButton OnClick="SaveConnection" Color="Color.Primary" Variant="Variant.Filled">
+                Test & Save
+            </MudButton>
+        </MudStack>
     </MudStack>
-</MudStack>
+</MudForm>
 
 @code {
-    [Parameter]
-    public long? id { get; set; }
+    [Parameter] public long? Id { get; set; }
 
-    private DatabaseConnection _connection { get; set; } = new()
+    private MudForm _form;
+    private DatabaseConnection _connection = new()
         {
-            HostName = "localhost",
+            HostName = "",
             Port = 3306,
-            UserName = "root",
-            Password = "password",
+            UserName = "",
+            Password = "",
             Type = DatabaseType.MySQL
         };
+    private HttpClient _httpClient;
+    private JsonSerializerOptions _jsonOptions;
 
     protected override async Task OnInitializedAsync()
     {
-        if (id.HasValue)
+        _httpClient = ClientFactory.CreateClient("SCREAM");
+        _jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            };
+
+        if (Id.HasValue)
         {
-            // Fetch the connection details using an injected service
-            // _connection = await DatabaseConnectionService.GetConnectionByIdAsync(id.Value);
+            try
+            {
+                var connectionResult = await _httpClient.GetFromJsonAsync<DatabaseConnection>($"/connections/{Id.Value}", _jsonOptions);
+                if (connectionResult is not null)
+                {
+                    _connection = connectionResult;
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error fetching connection: {ex.Message}", Severity.Error);
+            }
         }
     }
 
-    private async Task TestConnection()
+    private async Task SaveConnection()
     {
-        await Task.Delay(500);
-        Snackbar.Add("Connection test succeeded!", Severity.Success);
+        await _form.Validate();
+        if (!_form.IsValid)
+        {
+            Snackbar.Add("Please fill in all required fields.", Severity.Error);
+            return;
+        }
+
+        if (Id.HasValue)
+        {
+            _connection.Id = Id.Value;
+        }
+
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("/connections", _connection, _jsonOptions);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+
+                if (errorContent.Contains("Database connection test failed."))
+                {
+                    Snackbar.Add("Connection test failed. Please check your configuration.", Severity.Error);
+                }
+                else
+                {
+                    Snackbar.Add($"Error saving connection: {response.StatusCode} - {errorContent}", Severity.Error);
+                }
+                return;
+            }
+
+            Snackbar.Add("Connection saved successfully.", Severity.Success);
+            NavigationManager.NavigateTo("/databasemanagement/connections");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving connection: {ex.Message}", Severity.Error);
+        }
     }
+
+    private void Cancel() => NavigationManager.NavigateTo("/databasemanagement/connections");
 }

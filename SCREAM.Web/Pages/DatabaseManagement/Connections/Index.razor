@@ -1,21 +1,36 @@
-@page "/DatabaseManagement/Connections"
+@page "/databasemanagement/connections"
 @using SCREAM.Data.Entities
-@using SCREAM.Data.Enums
-@using SCREAM.Web.Dialogs
-@inject IDialogService DialogService
+@using SCREAM.Web.Pages.Backup
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject IHttpClientFactory ClientFactory
+@inject NavigationManager NavigationManager
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudText Align="Align.Center" Typo="Typo.h6" Class="mb-4">
+    Manage Database Connections
+</MudText>
 
 <MudTable Items="@_connections"
           Dense="true"
           Hover="true"
-          Striped="true">
+          Striped="true"
+          Loading="@_isLoading"
+          LoadingProgressColor="Color.Primary">
     <ToolBarContent>
-        <MudStack Row="true" AlignItems="AlignItems.End">
+        <MudStack Row Style="width:100%;" Class="mb-4" Justify="Justify.SpaceBetween">
             <MudButton StartIcon="@Icons.Material.Filled.Add"
                        Variant="Variant.Filled"
                        Color="Color.Primary"
                        OnClick="AddNewConnection">
                 Add Connection
+            </MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.Refresh"
+                       Variant="Variant.Outlined"
+                       Color="Color.Default"
+                       OnClick="RefreshConnections">
+                Refresh
             </MudButton>
         </MudStack>
     </ToolBarContent>
@@ -43,91 +58,81 @@
 </MudTable>
 
 @code {
-    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+    private List<DatabaseConnection> _connections = new();
+    private HttpClient _httpClient;
+    private bool _isLoading = true;
+    private JsonSerializerOptions _jsonOptions;
 
-    private List<DatabaseConnection> _connections = new()
+    protected override async Task OnInitializedAsync()
     {
-        new DatabaseConnection
-        {
-            Id = 1,
-            HostName = "localhost",
-            Port = 3306,
-            UserName = "admin",
-            Password = "secret",
-            Type = DatabaseType.MySQL
-        },
-        new DatabaseConnection
-        {
-            Id = 2,
-            HostName = "192.168.1.100",
-            Port = 5432,
-            UserName = "test2",
-            Password = "password",
-            Type = DatabaseType.MariaDB
-        }
-    };
-
-    private async Task AddNewConnection()
-    {
-        var newConnection = new DatabaseConnection
+        _httpClient = ClientFactory.CreateClient("SCREAM");
+        _jsonOptions = new JsonSerializerOptions
             {
-                HostName = string.Empty,
-                Port = 3306,
-                UserName = string.Empty,
-                Password = string.Empty,
-                Type = DatabaseType.MySQL
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
             };
-        await OpenConnectionDialog(newConnection, "Add Connection");
+        await RefreshConnections();
     }
 
-    private async Task EditConnection(DatabaseConnection connection)
+    private void AddNewConnection()
     {
-        var connectionToEdit = new DatabaseConnection
-            {
-                Id = connection.Id,
-                HostName = connection.HostName,
-                Port = connection.Port,
-                UserName = connection.UserName,
-                Password = connection.Password,
-                Type = connection.Type
-            };
-
-        await OpenConnectionDialog(connectionToEdit, "Edit Connection");
+        NavigationManager.NavigateTo("/databasemanagement/connection");
     }
 
-    private async Task OpenConnectionDialog(DatabaseConnection connection, string title)
+    private void EditConnection(DatabaseConnection connection)
+    {
+        NavigationManager.NavigateTo($"/databasemanagement/connection/{connection.Id}");
+    }
+
+    private async Task DeleteConnection(DatabaseConnection connection)
     {
         var parameters = new DialogParameters
         {
-            { "Connection", connection }
+            { "ContentText", $"Are you sure you want to delete the database connection '{connection.HostName}'?" },
+            { "ButtonText", "Delete" },
+            { "Color", Color.Error }
         };
-        var dialog = await DialogService.ShowAsync<DatabaseConnectionDialog>(title, parameters, _dialogOptions);
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete Confirmation", parameters);
         var result = await dialog.Result;
 
-        if (!result.Canceled)
+        if (result is { Canceled: false } && result.Data is bool confirmed && confirmed)
         {
-            var updatedConnection = (DatabaseConnection)result.Data;
-            if (updatedConnection.Id == 0)
+            try
             {
-                updatedConnection.Id = _connections.Any() ? _connections.Max(c => c.Id) + 1 : 1;
-                _connections.Add(updatedConnection);
-                Snackbar.Add("Connection added successfully", Severity.Success);
+                var response = await _httpClient.DeleteAsync($"/connections/{connection.Id}");
+                response.EnsureSuccessStatusCode();
+                _connections.Remove(connection);
+                Snackbar.Add("Database connection deleted successfully.", Severity.Success);
             }
-            else
+            catch (Exception ex)
             {
-                var index = _connections.FindIndex(c => c.Id == updatedConnection.Id);
-                if (index != -1)
-                {
-                    _connections[index] = updatedConnection;
-                    Snackbar.Add("Connection updated successfully", Severity.Success);
-                }
+                Snackbar.Add($"Error deleting connection: {ex.Message}", Severity.Error);
             }
         }
     }
 
-    private void DeleteConnection(DatabaseConnection connection)
+    private async Task RefreshConnections()
     {
-        _connections.Remove(connection);
-        Snackbar.Add("Connection deleted successfully", Severity.Success);
+        _isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var connections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/connections", _jsonOptions);
+            _connections = connections ?? new List<DatabaseConnection>();
+            Snackbar.Add("Connections refreshed.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error fetching connections: {ex.Message}", Severity.Error);
+            _connections = new List<DatabaseConnection>();
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
     }
 }
