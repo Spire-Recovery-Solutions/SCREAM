@@ -181,6 +181,27 @@ app.MapGet("/connections/{databaseConnectionId:long}", async (HttpContext _,
     return databaseConnection == null ? Results.NotFound() : Results.Ok(databaseConnection);
 });
 
+// Create endpoint for creating a database connection
+app.MapPost("/connections", async (IDbContextFactory<ScreamDbContext> dbContextFactory, DatabaseConnection databaseConnection) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+
+    // Validate the database connection
+    if (!DatabaseConnectionValidator.Validate(databaseConnection))
+    {
+        return Results.BadRequest("Invalid database connection configuration.");
+    }
+
+    // Add the new database connection to the database
+    dbContext.DatabaseConnections.Add(databaseConnection);
+
+    // Save changes to the database
+    await dbContext.SaveChangesAsync();
+
+    // Return a CreatedAtAction result with the new database connection
+    return Results.Created($"/connections/{databaseConnection.Id}", databaseConnection);
+});
+
 //Edit connection
 app.MapPut("/connections/{databaseConnectionId:long}", async (HttpContext _,
     IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId, DatabaseConnection databaseConnection) =>
