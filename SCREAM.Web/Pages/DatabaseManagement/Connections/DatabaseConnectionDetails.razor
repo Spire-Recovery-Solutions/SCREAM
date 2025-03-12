@@ -1,4 +1,4 @@
-﻿@page "/databasemanagement/connection/{id:long?}"
+﻿@page "/databasemanagement/connection/{Id:long?}"
 @using SCREAM.Data.Entities
 @using SCREAM.Data.Enums
 @using System.Text.Json
@@ -8,7 +8,7 @@
 @inject NavigationManager NavigationManager
 
 <MudText Align="Align.Center" Typo="Typo.h6" Class="mb-4">
-    @(_connectionId.HasValue ? "View / Edit Database Connection" : "New Database Connection")
+    @(Id.HasValue ? "View / Edit Database Connection" : "New Database Connection")
 </MudText>
 
 <MudForm @ref="_form">
@@ -64,7 +64,7 @@
 </MudForm>
 
 @code {
-    [Parameter] public long? id { get; set; }
+    [Parameter] public long? Id { get; set; }
 
     private MudForm _form;
     private DatabaseConnection _connection = new()
@@ -75,7 +75,6 @@
             Password = "",
             Type = DatabaseType.MySQL
         };
-    private long? _connectionId;
     private HttpClient _httpClient;
     private JsonSerializerOptions _jsonOptions;
 
@@ -88,12 +87,11 @@
                 DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
             };
 
-        _connectionId = id;
-        if (_connectionId.HasValue)
+        if (Id.HasValue)
         {
             try
             {
-                var connectionResult = await _httpClient.GetFromJsonAsync<DatabaseConnection>($"/connections/{_connectionId.Value}", _jsonOptions);
+                var connectionResult = await _httpClient.GetFromJsonAsync<DatabaseConnection>($"/connections/{Id.Value}", _jsonOptions);
                 if (connectionResult is not null)
                 {
                     _connection = connectionResult;
@@ -115,9 +113,9 @@
             return;
         }
 
-        if (_connectionId.HasValue)
+        if (Id.HasValue)
         {
-            _connection.Id = _connectionId.Value;
+            _connection.Id = Id.Value;
         }
 
         try

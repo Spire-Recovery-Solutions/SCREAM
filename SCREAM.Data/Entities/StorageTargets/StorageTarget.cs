@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace SCREAM.Data.Entities.StorageTargets;
 
-[JsonPolymorphic(TypeDiscriminatorPropertyName = "typeObj")]
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "objType")]
 [JsonDerivedType(typeof(LocalStorageTarget), typeDiscriminator:  (int)(StorageTargetType.Local))]
 [JsonDerivedType(typeof(S3StorageTarget), typeDiscriminator:  (int)(StorageTargetType.S3))]
 [JsonDerivedType(typeof(AzureBlobStorageTarget),  (int)(StorageTargetType.AzureBlob))]
