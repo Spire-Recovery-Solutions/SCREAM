@@ -180,7 +180,7 @@ app.MapGet("/connections/{databaseConnectionId:long}", async (HttpContext _,
 });
 
 // Combined endpoint for creating/editing and testing database connections
-app.MapPost("/connections/save-and-test", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+app.MapPost("/connections", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
     DatabaseConnection databaseConnection) =>
 {
     // First test the database connection
