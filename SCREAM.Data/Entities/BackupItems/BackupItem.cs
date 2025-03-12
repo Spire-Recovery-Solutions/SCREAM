@@ -12,7 +12,7 @@ namespace SCREAM.Data.Entities.BackupItems;
 [JsonDerivedType(typeof(TriggerItem), typeDiscriminator: (int)BackupItemType.Trigger)]
 [JsonDerivedType(typeof(EventItem), typeDiscriminator: (int)BackupItemType.Event)]
 [JsonDerivedType(typeof(FunctionProcedureItem), typeDiscriminator: (int)BackupItemType.FunctionProcedure)]
-[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "objType")]
 public abstract class BackupItem : ScreamDbBaseEntity
 {
 
@@ -34,7 +34,6 @@ public abstract class BackupItem : ScreamDbBaseEntity
     /// <summary>
     /// The type of backup item.
     /// </summary>
-    [JsonIgnore]
     public abstract BackupItemType Type { get; set; }
 
 

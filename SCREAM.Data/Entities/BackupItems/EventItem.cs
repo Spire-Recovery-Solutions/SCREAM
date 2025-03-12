@@ -8,12 +8,6 @@ namespace SCREAM.Data.Entities.BackupItems;
 /// </summary>
 public class EventItem : BackupItem
 {
-    public EventItem()
-    {
-        
-    }
-
-    [JsonIgnore]
     public override BackupItemType Type
     {
         get => BackupItemType.Event;

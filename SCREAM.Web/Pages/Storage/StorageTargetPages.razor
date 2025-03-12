@@ -1,0 +1,129 @@
+﻿@page "/storage/storage-targets"
+@using SCREAM.Data.Entities.StorageTargets
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using SCREAM.Web.Pages.Backup
+@inject IHttpClientFactory ClientFactory
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudText Align="Align.Center" Typo="Typo.h6" Class="mb-4">Manage Storage Targets</MudText>
+
+<MudStack Row Style="width:100%;" Class="mb-4" Justify="Justify.SpaceBetween">
+    <MudButton StartIcon="@Icons.Material.Filled.Add"
+               Variant="Variant.Filled"
+               Color="Color.Primary"
+               OnClick="AddNewTarget">
+        Add Storage Target
+    </MudButton>
+    <MudButton StartIcon="@Icons.Material.Filled.Refresh"
+               Variant="Variant.Outlined"
+               Color="Color.Default"
+               OnClick="RefreshTargets">
+        Refresh
+    </MudButton>
+</MudStack>
+
+<MudTable Items="@_storageTargets" Dense="true" Hover="true" Striped="true">
+    <HeaderContent>
+        <MudTh>Name</MudTh>
+        <MudTh>Type</MudTh>
+        <MudTh>Description</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.Name</MudTd>
+        <MudTd>@context.Type</MudTd>
+        <MudTd>@context.Description</MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                           Color="Color.Primary"
+                           OnClick="@(() => EditTarget(context))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                           Color="Color.Error"
+                           OnClick="@(() => DeleteTarget(context))" />
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<StorageTarget> _storageTargets = new();
+    private HttpClient _httpClient;
+    private JsonSerializerOptions _jsonOptions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _httpClient = ClientFactory.CreateClient("SCREAM");
+        _jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            };
+        await LoadStorageTargets();
+    }
+
+    private async Task LoadStorageTargets()
+    {
+        try
+        {
+            _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("storage", _jsonOptions)
+                               ?? new List<StorageTarget>();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Error loading storage targets: " + ex.Message, Severity.Error);
+        }
+    }
+
+    private void AddNewTarget()
+    {
+        NavigationManager.NavigateTo("/storage/storage-target");
+    }
+
+    private void EditTarget(StorageTarget target)
+    {
+        NavigationManager.NavigateTo($"/storage/storage-target/{target.Id}");
+    }
+
+    private async Task DeleteTarget(StorageTarget target)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Are you sure you want to delete the storage target '{target.Name}'?" },
+            { "ButtonText", "Delete" },
+            { "Color", Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete Confirmation", parameters);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false } && result.Data is bool confirmed && confirmed)
+        {
+            try
+            {
+                var response = await _httpClient.DeleteAsync($"storage/{target.Id}");
+                if (response.IsSuccessStatusCode)
+                {
+                    _storageTargets.Remove(target);
+                    Snackbar.Add("Storage target deleted.", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add("Failed to delete storage target.", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add("Error: " + ex.Message, Severity.Error);
+            }
+        }
+    }
+
+    private async Task RefreshTargets()
+    {
+        await LoadStorageTargets();
+        Snackbar.Add("Storage targets refreshed.", Severity.Info);
+    }
+}
