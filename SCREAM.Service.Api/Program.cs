@@ -253,7 +253,7 @@ app.MapPost("/connections/{databaseConnectionId:long}/scan", async (HttpContext 
     IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-    var databaseConnection = dbContext.DatabaseConnections.Find(databaseConnectionId);
+    var databaseConnection = dbContext.DatabaseConnections.FirstOrDefault(c => c.Id == databaseConnectionId);
     if (databaseConnection == null)
     {
         return Results.NotFound();
