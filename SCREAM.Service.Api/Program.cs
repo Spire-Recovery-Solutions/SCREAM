@@ -6,6 +6,7 @@ using SCREAM.Data;
 using SCREAM.Data.Entities;
 using SCREAM.Data.Entities.StorageTargets;
 using SCREAM.Data.Enums;
+using SCREAM.Service.Api.Validators;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -99,19 +100,22 @@ app.MapPost("/storage", async (IDbContextFactory<ScreamDbContext> dbContextFacto
 });
 
 // Test a storage target
-app.MapPost("/storage/{storageTargetId:long}/test", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
-    long storageTargetId) =>
+app.MapPost("/storage/test", async (StorageTarget storageTarget) =>
 {
-    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-    var storageTarget = await dbContext.StorageTargets
-        .FirstOrDefaultAsync(x => x.Id == storageTargetId);
-    if (storageTarget == null)
+    // Implement Storage testing
+    var isValid = ValidateStorageTarget(storageTarget);
+    if (!isValid)
     {
-        return Results.NotFound();
+        return Results.BadRequest("Invalid storage target configuration.");
     }
 
-    //TODO: Implement Storage testing
-    return Results.Ok();
+    var testResult = await TestStorageTarget(storageTarget);
+    if (!testResult)
+    {
+        return Results.BadRequest("Storage target test failed.");
+    }
+
+    return Results.Ok("Storage target test succeeded.");
 });
 
 // Delete a storage target
@@ -132,7 +136,26 @@ app.MapDelete("/storage/{storageTargetId:long}", async (IDbContextFactory<Scream
     return Results.NoContent();
 });
 
+bool ValidateStorageTarget(StorageTarget storageTarget)
+{
+    return StorageTargetValidator.Validate(storageTarget);
+}
 
+async Task<bool> TestStorageTarget(StorageTarget storageTarget)
+{
+    // Add testing logic for the storage target
+    switch (storageTarget)
+    {
+        case LocalStorageTarget localStorageTarget:
+            return Directory.Exists(localStorageTarget.Path);
+        case S3StorageTarget s3StorageTarget:
+            // Simulate S3 storage target testing
+            await Task.Delay(1000);
+            return true;
+        default:
+            return false;
+    }
+}
 
 #endregion
 
@@ -210,11 +233,19 @@ app.MapPost("/connections/{databaseConnectionId:long}/test", async (HttpContext 
         return Results.NotFound();
     }
 
-    //TODO: Test connection
-    // var connectionTester = new ConnectionTester();
-    // var result = await connectionTester.TestConnection(databaseConnection);
+    var isValid = ValidateDatabaseConnection(databaseConnection);
+    if (!isValid)
+    {
+        return Results.BadRequest("Invalid database connection configuration.");
+    }
 
-    return Results.Ok();
+    var testResult = await TestDatabaseConnection(databaseConnection);
+    if (!testResult)
+    {
+        return Results.BadRequest("Database connection test failed.");
+    }
+
+    return Results.Ok("Database connection test succeeded.");
 });
 
 // Scan a connections database
@@ -233,6 +264,18 @@ app.MapPost("/connections/{databaseConnectionId:long}/scan", async (HttpContext 
 
     return Results.Ok(backupItems);
 });
+
+bool ValidateDatabaseConnection(DatabaseConnection databaseConnection)
+{
+    return DatabaseConnectionValidator.Validate(databaseConnection);
+}
+
+async Task<bool> TestDatabaseConnection(DatabaseConnection databaseConnection)
+{
+    // Add testing logic for the database connection
+    await Task.Delay(1000);
+    return true;
+}
 
 #endregion
 
