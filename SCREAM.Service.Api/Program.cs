@@ -51,7 +51,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 
-#region Storage 
+#region Storage
 
 // Get a list of all storage targets
 app.MapGet("/storage", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
@@ -71,39 +71,11 @@ app.MapGet("/storage/{storageTargetId:long}", async (IDbContextFactory<ScreamDbC
     return storageTarget == null ? Results.NotFound() : Results.Ok(storageTarget);
 });
 
-// Edit storage target
-app.MapPut("/storage/{storageTargetId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
-    long storageTargetId, StorageTarget storageTarget) =>
-{
-    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-    var existingStorageTarget = await dbContext.StorageTargets
-        .FirstOrDefaultAsync(x => x.Id == storageTargetId);
-    if (existingStorageTarget == null)
-    {
-        return Results.NotFound();
-    }
-    // Use EF Update function 
-    dbContext.Entry(existingStorageTarget).CurrentValues.SetValues(storageTarget);
-    
-    await dbContext.SaveChangesAsync();
-
-    return Results.NoContent();
-});
-
-// Create a new storage target
+// Combined endpoint for creating/editing and testing storage targets
 app.MapPost("/storage", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
     StorageTarget storageTarget) =>
 {
-    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-    dbContext.StorageTargets.Add(storageTarget);
-    await dbContext.SaveChangesAsync();
-    return Results.Created($"/storage/{storageTarget.Id}", storageTarget);
-});
-
-// Test a storage target
-app.MapPost("/storage/test", async (StorageTarget storageTarget) =>
-{
-    // Implement Storage testing
+    // First test the storage target
     var isValid = ValidateStorageTarget(storageTarget);
     if (!isValid)
     {
@@ -116,7 +88,33 @@ app.MapPost("/storage/test", async (StorageTarget storageTarget) =>
         return Results.BadRequest("Storage target test failed.");
     }
 
-    return Results.Ok("Storage target test succeeded.");
+    // If test succeeds, save the storage target
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+
+    if (storageTarget.Id == 0)
+    {
+        // Create new storage target
+        dbContext.StorageTargets.Add(storageTarget);
+        await dbContext.SaveChangesAsync();
+        return Results.Created($"/storage/{storageTarget.Id}", storageTarget);
+    }
+    else
+    {
+        // Update existing storage target
+        var existingStorageTarget = await dbContext.StorageTargets
+            .FirstOrDefaultAsync(x => x.Id == storageTarget.Id);
+
+        if (existingStorageTarget == null)
+        {
+            return Results.NotFound();
+        }
+
+        // Use EF Update function 
+        dbContext.Entry(existingStorageTarget).CurrentValues.SetValues(storageTarget);
+        await dbContext.SaveChangesAsync();
+
+        return Results.Ok(storageTarget);
+    }
 });
 
 // Delete a storage target
@@ -181,48 +179,55 @@ app.MapGet("/connections/{databaseConnectionId:long}", async (HttpContext _,
     return databaseConnection == null ? Results.NotFound() : Results.Ok(databaseConnection);
 });
 
-// Create endpoint for creating a database connection
-app.MapPost("/connections", async (IDbContextFactory<ScreamDbContext> dbContextFactory, DatabaseConnection databaseConnection) =>
+// Combined endpoint for creating/editing and testing database connections
+app.MapPost("/connections/save-and-test", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+    DatabaseConnection databaseConnection) =>
 {
-    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-
-    // Validate the database connection
-    if (!DatabaseConnectionValidator.Validate(databaseConnection))
+    // First test the database connection
+    var isValid = ValidateDatabaseConnection(databaseConnection);
+    if (!isValid)
     {
         return Results.BadRequest("Invalid database connection configuration.");
     }
 
-    // Add the new database connection to the database
-    dbContext.DatabaseConnections.Add(databaseConnection);
-
-    // Save changes to the database
-    await dbContext.SaveChangesAsync();
-
-    // Return a CreatedAtAction result with the new database connection
-    return Results.Created($"/connections/{databaseConnection.Id}", databaseConnection);
-});
-
-//Edit connection
-app.MapPut("/connections/{databaseConnectionId:long}", async (HttpContext _,
-    IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId, DatabaseConnection databaseConnection) =>
-{
-    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-    var existingConnection = await dbContext.DatabaseConnections
-        .FirstOrDefaultAsync(x => x.Id == databaseConnectionId);
-    if (existingConnection == null)
+    var testResult = await TestDatabaseConnection(databaseConnection);
+    if (!testResult)
     {
-        return Results.NotFound();
+        return Results.BadRequest("Database connection test failed.");
     }
 
-    existingConnection.HostName = databaseConnection.HostName;
-    existingConnection.Port = databaseConnection.Port;
-    existingConnection.UserName = databaseConnection.UserName;
-    existingConnection.Password = databaseConnection.Password;
-    existingConnection.Type = databaseConnection.Type;
+    // If test succeeds, save the database connection
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
 
-    await dbContext.SaveChangesAsync();
+    if (databaseConnection.Id == 0)
+    {
+        // Create new database connection
+        dbContext.DatabaseConnections.Add(databaseConnection);
+        await dbContext.SaveChangesAsync();
+        return Results.Created($"/connections/{databaseConnection.Id}", databaseConnection);
+    }
+    else
+    {
+        // Update existing database connection
+        var existingConnection = await dbContext.DatabaseConnections
+            .FirstOrDefaultAsync(x => x.Id == databaseConnection.Id);
 
-    return Results.NoContent();
+        if (existingConnection == null)
+        {
+            return Results.NotFound();
+        }
+
+        // Update properties
+        existingConnection.HostName = databaseConnection.HostName;
+        existingConnection.Port = databaseConnection.Port;
+        existingConnection.UserName = databaseConnection.UserName;
+        existingConnection.Password = databaseConnection.Password;
+        existingConnection.Type = databaseConnection.Type;
+
+        await dbContext.SaveChangesAsync();
+
+        return Results.Ok(databaseConnection);
+    }
 });
 
 // Delete a connection
@@ -241,24 +246,6 @@ app.MapDelete("/connections/{databaseConnectionId:long}", async (HttpContext _,
     await dbContext.SaveChangesAsync();
 
     return Results.NoContent();
-});
-
-// Test a connection
-app.MapPost("/connections/test", async (DatabaseConnection databaseConnection) =>
-{
-    var isValid = ValidateDatabaseConnection(databaseConnection);
-    if (!isValid)
-    {
-        return Results.BadRequest("Invalid database connection configuration.");
-    }
-
-    var testResult = await TestDatabaseConnection(databaseConnection);
-    if (!testResult)
-    {
-        return Results.BadRequest("Database connection test failed.");
-    }
-
-    return Results.Ok("Database connection test succeeded.");
 });
 
 // Scan a connections database
