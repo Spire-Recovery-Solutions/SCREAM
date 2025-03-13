@@ -56,7 +56,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .OnDelete(DeleteBehavior.Restrict);
             
             e.HasMany(p => p.Items)
-                .WithOne(i => i.BackupPlan)
+                .WithOne()
                 .HasForeignKey(i => i.BackupPlanId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -136,13 +136,13 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             
             // One-to-many relationship between BackupJob and BackupItemStatuses
             e.HasMany<BackupItemStatus>()
-                .WithOne(s => s.BackupJob)
+                .WithOne()
                 .HasForeignKey(k => k.BackupJobId)
                 .OnDelete(DeleteBehavior.Cascade);
                 
             // One-to-many relationship between BackupJob and BackupJobLogs
             e.HasMany<BackupJobLog>()
-                .WithOne(l => l.BackupJob)
+                .WithOne()
                 .HasForeignKey(k => k.BackupJobId)
                 .OnDelete(DeleteBehavior.Cascade);
         });

@@ -19,11 +19,6 @@ public abstract class BackupItem : ScreamDbBaseEntity
     /// The ID of the backup plan this item belongs to.
     /// </summary>
     public long? BackupPlanId { get; set; }
-    
-    /// <summary>
-    /// The backup plan this item belongs to.
-    /// </summary>
-    public BackupPlan? BackupPlan { get; set; }
 
     /// <summary>
     /// The schema (database) the item belongs to.

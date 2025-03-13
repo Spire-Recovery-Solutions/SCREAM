@@ -11,9 +11,7 @@ namespace SCREAM.Data.Entities
         /// The backup job this log belongs to
         /// </summary>
         public long BackupJobId { get; set; }
-
-        public BackupJob BackupJob { get; set; } = null!;
-
+        
         /// <summary>
         /// The related backup item status if applicable
         /// </summary>
