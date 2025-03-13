@@ -183,7 +183,7 @@
         IsActive = false
     };
 
-    protected override void OnInitialized()
+    protected async override void OnInitialized()
     {
         _jsonSerializerOptions = new JsonSerializerOptions
             {
@@ -195,17 +195,25 @@
 
         _httpClient = ClientFactory.CreateClient("SCREAM");
 
-        _databaseConnections = new()
+        try
         {
-            new() { Id = 1, HostName = "localhost", Port = 3306, UserName = "root", Password = "******", Type = DatabaseType.MySQL },
-            new() { Id = 2, HostName = "prod-db.example.com", Port = 5432, UserName = "Mariadb", Password = "******", Type = DatabaseType.MariaDB }
-        };
+            _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/connections", _jsonSerializerOptions)
+                                   ?? new List<DatabaseConnection>();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading database connections: {ex.Message}", Severity.Error);
+        }
 
-        _storageTargets = new()
+        try
         {
-            new LocalStorageTarget { Id = 1, Name = "Local Disk", Path = "/backups", Type = StorageTargetType.Local },
-            new S3StorageTarget { Id = 2, Name = "Cloud Backup", BucketName = "scream-backups", AccessKey = "AKIAXXXXXXXX", SecretKey = "******", Type = StorageTargetType.S3 }
-        };
+            _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("/storage", _jsonSerializerOptions)
+                               ?? new List<StorageTarget>();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading storage targets: {ex.Message}", Severity.Error);
+        }
     }
 
     private async Task ScanDatabase()
@@ -253,28 +261,25 @@
         if (!_form.IsValid)
             return;
 
-        _backupPlan.DatabaseConnection = _databaseConnections.FirstOrDefault(c => c.Id == _selectedDatabaseConnectionId) ??
-            new DatabaseConnection { Id = _selectedDatabaseConnectionId, HostName = string.Empty, UserName = string.Empty, Password = string.Empty, Port = 0, Type = DatabaseType.MySQL };
-
-        _backupPlan.StorageTarget = _storageTargets.FirstOrDefault(t => t.Id == _selectedStorageTargetId) ??
-            new LocalStorageTarget { Id = _selectedStorageTargetId, Name = string.Empty, Path = string.Empty, Type = StorageTargetType.Local };
+        _backupPlan.DatabaseConnectionId = _selectedDatabaseConnectionId;
+        _backupPlan.StorageTargetId = _selectedStorageTargetId;
 
         _backupPlan.Items = _backupPlan.Items.Where(i => i.IsSelected).ToList();
         _backupPlan.IsActive = false;
 
         var confirmParameters = new DialogParameters
-        {
-         { "ContentText", $"Are you sure you want to create backup plan '{_backupPlan.Name}' with {_backupPlan.Items.Count} items selected?" },
-         { "ButtonText", "Confirm" },
-         { "Color", Color.Primary }
-        };
+    {
+        { "ContentText", $"Are you sure you want to create backup plan '{_backupPlan.Name}' with {_backupPlan.Items.Count} items selected?" },
+        { "ButtonText", "Confirm" },
+        { "Color", Color.Primary }
+    };
 
         var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirm Backup Plan Creation", confirmParameters);
         var result = await dialog.Result;
 
         if (result.Canceled)
         {
-            Snackbar.Add("Error creating backup plan", Severity.Error);
+            Snackbar.Add("Backup plan creation cancelled.", Severity.Info);
             return;
         }
 
@@ -289,7 +294,6 @@
             }
 
             Snackbar.Add("Backup plan created successfully.", Severity.Success);
-
             NavigationManager.NavigateTo("/backup-plans");
         }
         catch (Exception ex)
@@ -297,4 +301,5 @@
             Snackbar.Add($"Error creating backup plan: {ex.Message}", Severity.Error);
         }
     }
+
 }
