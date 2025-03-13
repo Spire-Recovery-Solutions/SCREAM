@@ -13,7 +13,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
     public DbSet<BackupItemStatus> BackupItemStatuses { get; set; }
     public DbSet<BackupJobLog> BackupJobLogs { get; set; }
     public DbSet<BackupSettings> BackupSettings { get; set; }
-    
+    public DbSet<BackupItem> BackupItems { get; set; }
     public DbSet<StorageTarget> StorageTargets { get; set; }
 
     protected override void OnModelCreating(ModelBuilder mb)
@@ -35,16 +35,39 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             });
         }
 
-        // DatabaseConnection configuration
-        mb.Entity<DatabaseConnection>(e =>
+        // BackupPlan configuration
+        mb.Entity<BackupPlan>(e =>
         {
-            e.ToTable("DatabaseConnections");
-            e.Property(p => p.Type).HasConversion<string>();
-        });
+            e.ToTable("BackupPlans");
+            
+            e.HasMany(p => p.Jobs)
+                .WithOne(j => j.BackupPlan)
+                .HasForeignKey(j => j.BackupPlanId)
+                .OnDelete(DeleteBehavior.Cascade);
+            
+            e.HasOne(p => p.DatabaseConnection)
+                .WithMany()
+                .HasForeignKey(p => p.DatabaseConnectionId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            e.HasOne(p => p.StorageTarget)
+                .WithMany()
+                .HasForeignKey(p => p.StorageTargetId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            e.HasMany(p => p.Items)
+                .WithOne(i => i.BackupPlan)
+                .HasForeignKey(i => i.BackupPlanId)
+                .OnDelete(DeleteBehavior.Cascade);
 
+            e.Property(p => p.Name).IsRequired();
+        });
+        
         // BackupItem configuration
         mb.Entity<BackupItem>(e =>
         {
+            e.ToTable("BackupItems");
+            
             e.HasDiscriminator<BackupItemType>("Type")
                 .HasValue<TableStructureItem>(BackupItemType.TableStructure)
                 .HasValue<TableDataItem>(BackupItemType.TableData)
@@ -58,10 +81,17 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             e.Property(p => p.IsSelected).HasDefaultValue(true);
             e.Property(p => p.Type).HasConversion<string>().HasMaxLength(50);
         });
-
+        
         mb.Entity<TableStructureItem>().Property(e => e.Engine).HasMaxLength(50);
         mb.Entity<TableDataItem>().Property(e => e.RowCount);
-
+        
+        // DatabaseConnection configuration
+        mb.Entity<DatabaseConnection>(e =>
+        {
+            e.ToTable("DatabaseConnections");
+            e.Property(p => p.Type).HasConversion<string>();
+        });
+        
         // StorageTarget configuration
         mb.Entity<StorageTarget>(e =>
         {
@@ -97,35 +127,6 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
         });
 
         mb.Entity<LocalStorageTarget>().Property(e => e.Path).IsRequired();
-
-        // BackupPlan configuration
-        mb.Entity<BackupPlan>(e =>
-        {
-            e.ToTable("BackupPlans");
-            
-            e.HasMany(p => p.Jobs)
-                .WithOne(j => j.BackupPlan)
-                .HasForeignKey(j => j.BackupPlanId)
-                .OnDelete(DeleteBehavior.Cascade);
-            
-            e.HasOne<DatabaseConnection>()
-                .WithMany()
-                .HasForeignKey(p => p.DatabaseConnectionId)
-                .OnDelete(DeleteBehavior.Restrict);
-            
-            e.HasOne<StorageTarget>()
-                .WithMany()
-                .HasForeignKey(p => p.StorageTargetId)
-                .OnDelete(DeleteBehavior.Restrict);
-            
-            e.HasMany<BackupItem>()
-                .WithOne()
-                .HasForeignKey(p => p.BackupPlanId)
-                .OnDelete(DeleteBehavior.Cascade);
-            
-
-            e.Property(p => p.Name).IsRequired();
-        });
         
         // BackupJob configuration
         mb.Entity<BackupJob>(e =>

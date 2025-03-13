@@ -15,7 +15,14 @@ namespace SCREAM.Data.Entities.BackupItems;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "objType")]
 public abstract class BackupItem : ScreamDbBaseEntity
 {
+    /// <summary>
+    /// The ID of the backup plan this item belongs to.
+    /// </summary>
     public long? BackupPlanId { get; set; }
+    
+    /// <summary>
+    /// The backup plan this item belongs to.
+    /// </summary>
     public BackupPlan? BackupPlan { get; set; }
 
     /// <summary>
