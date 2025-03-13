@@ -118,6 +118,11 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .HasForeignKey(p => p.StorageTargetId)
                 .OnDelete(DeleteBehavior.Restrict);
             
+            e.HasMany<BackupItem>()
+                .WithOne()
+                .HasForeignKey(p => p.BackupPlanId)
+                .OnDelete(DeleteBehavior.Cascade);
+            
 
             e.Property(p => p.Name).IsRequired();
         });

@@ -15,6 +15,8 @@ namespace SCREAM.Data.Entities.BackupItems;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "objType")]
 public abstract class BackupItem : ScreamDbBaseEntity
 {
+    public long? BackupPlanId { get; set; }
+    public BackupPlan? BackupPlan { get; set; }
 
     /// <summary>
     /// The schema (database) the item belongs to.
@@ -40,7 +42,8 @@ public abstract class BackupItem : ScreamDbBaseEntity
     /// <summary>
     /// Configures the CliWrap ArgumentsBuilder with arguments specific to this item type
     /// </summary>
-    public abstract void ConfigureArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize);
+    public abstract void ConfigureArguments(ArgumentsBuilder args, string host, string user, string password,
+        string maxPacketSize);
 
     /// <summary>
     /// Gets the output filename for this backup item
