@@ -9,7 +9,6 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
 {
     public DbSet<BackupPlan> BackupPlans { get; set; }
     public DbSet<DatabaseConnection> DatabaseConnections { get; set; }
-    public DbSet<BackupSchedule> BackupSchedules { get; set; }
     public DbSet<BackupJob> BackupJobs { get; set; }
     public DbSet<BackupItemStatus> BackupItemStatuses { get; set; }
     public DbSet<BackupJobLog> BackupJobLogs { get; set; }
@@ -108,17 +107,21 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .WithOne(j => j.BackupPlan)
                 .HasForeignKey(j => j.BackupPlanId)
                 .OnDelete(DeleteBehavior.Cascade);
+            
+            e.HasOne<DatabaseConnection>()
+                .WithMany()
+                .HasForeignKey(p => p.DatabaseConnectionId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            e.HasOne<StorageTarget>()
+                .WithMany()
+                .HasForeignKey(p => p.StorageTargetId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
 
             e.Property(p => p.Name).IsRequired();
         });
-
-        // BackupSchedule configuration
-        mb.Entity<BackupSchedule>(e =>
-        {
-            e.ToTable("BackupSchedules");
-            e.Property(p => p.ScheduledType).HasConversion<string>();
-        });
-
+        
         // BackupJob configuration
         mb.Entity<BackupJob>(e =>
         {

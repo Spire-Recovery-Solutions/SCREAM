@@ -8,19 +8,25 @@ public class BackupPlan : ScreamDbBaseEntity
 {
     public required string Name { get; set; }
     public required string Description { get; set; }
+    
+    public required long DatabaseConnectionId { get; set; }
     public required DatabaseConnection DatabaseConnection { get; set; }
+    
+    public required long StorageTargetId { get; set; }
     public required StorageTarget StorageTarget { get; set; }
-    public required List<BackupItem> Items { get; set; }
     public bool IsActive { get; set; }
 
     public ICollection<BackupJob> Jobs { get; set; } = new List<BackupJob>();
     public string ScheduleCron { get; set; } = string.Empty;
-
     public ScheduleType ScheduleType { get; set; }
 
     public DateTime? LastRun { get; set; }
 
     public DateTime? NextRun { get; set; }
+    
+    
+    public required List<BackupItem> Items { get; set; }
+
 
     public DateTime? GetNextRun(DateTime utcNow)
     {
