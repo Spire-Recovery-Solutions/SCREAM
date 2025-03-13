@@ -92,17 +92,6 @@ else
                 <MudSelectItem Value="@schema.SchemaName">@schema.SchemaName</MudSelectItem>
             }
         </MudSelect>
-
-        <MudSelect T="string" Label="Filter by type"
-                   Value="_selectedTypeFilter"
-                   ValueChanged="FilterByTypeString"
-                   Clearable="true">
-            <MudSelectItem Value="@("all")">All Types</MudSelectItem>
-            @foreach (var option in _quickSelectOptions)
-            {
-                <MudSelectItem Value="@option.Type.ToString()">@option.Label</MudSelectItem>
-            }
-        </MudSelect>
     </div>
 
     <MudTable T="SchemaGroup"
