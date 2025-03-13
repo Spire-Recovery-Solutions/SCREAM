@@ -12,9 +12,8 @@ public class BackupPlan : ScreamDbBaseEntity
     public required StorageTarget StorageTarget { get; set; }
     public required List<BackupItem> Items { get; set; }
     public bool IsActive { get; set; }
-    
-    public ICollection<BackupJob> Jobs { get; set; }
-    
+
+    public ICollection<BackupJob> Jobs { get; set; } = new List<BackupJob>();
     public string ScheduleCron { get; set; } = string.Empty;
 
     public ScheduleType ScheduleType { get; set; }
