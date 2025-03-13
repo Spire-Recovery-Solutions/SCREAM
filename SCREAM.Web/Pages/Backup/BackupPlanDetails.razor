@@ -3,8 +3,6 @@
 @using SCREAM.Data.Entities.StorageTargets
 @using SCREAM.Data.Entities.BackupItems
 @using SCREAM.Data.Enums
-@using System.Text.Json
-@using System.Text.Json.Serialization
 @inject ISnackbar Snackbar
 @inject IHttpClientFactory ClientFactory
 @inject IDialogService DialogService
@@ -14,7 +12,7 @@
     <MudCard Elevation="3" Class="mb-4">
         <MudCardHeader>
             <CardHeaderContent>
-                <MudText Typo="Typo.h5">@(Id.HasValue ? "Edit Backup Plan" : "Create Backup Plan")</MudText>
+                <MudText Typo="Typo.h5">@(Id.HasValue ? "Edit" : "Create") Backup Plan</MudText>
             </CardHeaderContent>
         </MudCardHeader>
 
@@ -25,16 +23,14 @@
                         <MudTextField @bind-Value="_backupPlan.Name"
                                       Label="Plan Name"
                                       Variant="Variant.Outlined"
-                                      Required="true"
-                                      HelperText="Give your backup plan a descriptive name" />
+                                      Required="true" />
                     </MudItem>
 
                     <MudItem xs="12" md="6">
                         <MudTextField @bind-Value="_backupPlan.Description"
                                       Label="Description"
                                       Variant="Variant.Outlined"
-                                      Required="true"
-                                      HelperText="Add details about this backup plan" />
+                                      Required="true" />
                     </MudItem>
 
                     <MudItem xs="12" md="6">
@@ -48,10 +44,7 @@
                             @foreach (var conn in _databaseConnections)
                             {
                                 <MudSelectItem Value="@conn.Id">
-                                    <div class="d-flex align-center">
-                                        <MudIcon Icon="@Icons.Material.Filled.Storage" Class="mr-2" />
-                                        @conn.HostName (@conn.Type)
-                                    </div>
+                                    @conn.HostName (@conn.Type)
                                 </MudSelectItem>
                             }
                         </MudSelect>
@@ -68,11 +61,7 @@
                             @foreach (var target in _storageTargets)
                             {
                                 <MudSelectItem Value="@target.Id">
-                                    <div class="d-flex align-center">
-                                        <MudIcon Icon="@(target.Type == StorageTargetType.Local ? Icons.Material.Filled.Folder : Icons.Material.Filled.CloudUpload)"
-                                                 Class="mr-2" />
-                                        @target.Name (@target.Type)
-                                    </div>
+                                    @target.Name (@target.Type)
                                 </MudSelectItem>
                             }
                         </MudSelect>
@@ -133,7 +122,7 @@
                 }
                 else
                 {
-                    <span>Scan Database</span>
+                    <span>@(_backupPlan.Items.Count > 0 ? "Re-Scan" : "Scan") Database</span>
                 }
             </MudButton>
         </MudCardActions>
@@ -149,18 +138,13 @@
     }
 
     <MudPaper Class="d-flex justify-center pa-4" Elevation="3">
-        <MudButton Variant="Variant.Outlined"
-                   OnClick="Cancel"
-                   Class="mr-4">
-            Back
-        </MudButton>
+        <MudButton OnClick="@(() => NavigationManager.NavigateTo("/backupplans"))">Back</MudButton>
         <MudButton Variant="Variant.Filled"
                    Color="Color.Success"
-                   Size="Size.Large"
                    StartIcon="@Icons.Material.Filled.Save"
                    OnClick="SavePlan"
                    Disabled="@(_selectedDatabaseConnectionId == 0 || _selectedStorageTargetId == 0 || string.IsNullOrWhiteSpace(_backupPlan.Name))">
-            Test & Save Backup Plan
+            Save Backup Plan
         </MudButton>
     </MudPaper>
 </MudContainer>
@@ -169,77 +153,72 @@
     [Parameter] public long? Id { get; set; }
 
     private MudForm _form;
-    private long _selectedDatabaseConnectionId;
-    private long _selectedStorageTargetId;
-    private bool _isScanning;
-    private HttpClient _httpClient;
-    private JsonSerializerOptions _jsonSerializerOptions;
-    private List<DatabaseConnection> _databaseConnections = new();
-    private List<StorageTarget> _storageTargets = new();
-
     private BackupPlan _backupPlan = new()
         {
             Name = string.Empty,
             Description = string.Empty,
-            DatabaseConnection = new DatabaseConnection { HostName = string.Empty, UserName = string.Empty, Password = string.Empty, Port = 3306, Type = DatabaseType.MySQL },
-            StorageTarget = new LocalStorageTarget { Name = string.Empty, Path = string.Empty, Type = StorageTargetType.Local },
             ScheduleCron = "0 0 * * *",
             ScheduleType = ScheduleType.OneTime,
             Items = new List<BackupItem>(),
             IsActive = false
         };
 
+    private long _selectedDatabaseConnectionId;
+    private long _selectedStorageTargetId;
+    private bool _isScanning;
+    private HttpClient _httpClient;
+    private List<DatabaseConnection> _databaseConnections = new();
+    private List<StorageTarget> _storageTargets = new();
+
     protected override async Task OnInitializedAsync()
     {
-        _jsonSerializerOptions = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                DefaultIgnoreCondition = JsonIgnoreCondition.Never
-            };
-
         _httpClient = ClientFactory.CreateClient("SCREAM");
 
         try
         {
-            _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/connections", _jsonSerializerOptions);
-            _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("/storage-targets", _jsonSerializerOptions);
+            _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/connections") ?? new();
+            _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("/storage") ?? new();
+
+            if (Id.HasValue)
+            {
+                var plan = await _httpClient.GetFromJsonAsync<BackupPlan>($"/backup-plans/{Id.Value}");
+                if (plan != null)
+                {
+                    _backupPlan = plan;
+                    _selectedDatabaseConnectionId = _backupPlan.DatabaseConnectionId;
+                    _selectedStorageTargetId = _backupPlan.StorageTargetId;
+                }
+            }
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Error loading data: {ex.Message}", Severity.Error);
         }
-
-        // If editing an existing backup plan, fetch it
-        if (Id.HasValue)
-        {
-            try
-            {
-                var backupPlan = await _httpClient.GetFromJsonAsync<BackupPlan>($"/backup-plans/{Id.Value}", _jsonSerializerOptions);
-                if (backupPlan != null)
-                {
-                    _backupPlan = backupPlan;
-                    _selectedDatabaseConnectionId = _backupPlan.DatabaseConnection?.Id ?? 0;
-                    _selectedStorageTargetId = _backupPlan.StorageTarget?.Id ?? 0;
-
-                    // If items are already selected, we should scan the database to get the full tree
-                    if (_backupPlan.Items?.Count > 0 && _selectedDatabaseConnectionId > 0)
-                    {
-                        await ScanDatabase();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Error loading backup plan: {ex.Message}", Severity.Error);
-            }
-        }
     }
 
     private async Task ScanDatabase()
     {
-        if (_selectedDatabaseConnectionId == 0)
-            return;
+        if (_selectedDatabaseConnectionId == 0) return;
+
+        HashSet<string> selectedKeys = new();
+        if (_backupPlan.Items.Count > 0)
+        {
+            var parameters = new DialogParameters
+            {
+                { "ContentText", "Re-scanning will refresh all database items. Your selections will be preserved where possible. Continue?" },
+                { "ButtonText", "Re-Scan" },
+                { "Color", Color.Warning }
+            };
+
+            var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirm Re-Scan", parameters);
+            var result = await dialog.Result;
+            if (result.Canceled) return;
+
+            selectedKeys = _backupPlan.Items
+                .Where(i => i.IsSelected)
+                .Select(i => $"{i.Type}:{i.Schema}:{i.Name}")
+                .ToHashSet();
+        }
 
         _isScanning = true;
         StateHasChanged();
@@ -249,31 +228,22 @@
             var response = await _httpClient.PostAsync($"connections/{_selectedDatabaseConnectionId}/scan", null);
             response.EnsureSuccessStatusCode();
 
-            var backupItems = await response.Content.ReadFromJsonAsync<List<BackupItem>>(_jsonSerializerOptions);
-
-            if (backupItems is not null)
+            var newItems = await response.Content.ReadFromJsonAsync<List<BackupItem>>();
+            if (newItems != null)
             {
-                if (Id.HasValue && _backupPlan.Items?.Count > 0)
+                foreach (var item in newItems)
                 {
-                    var selectedItemIds = _backupPlan.Items.Where(i => i.IsSelected).Select(i => i.Id).ToHashSet();
-                    foreach (var item in backupItems)
-                    {
-                        item.IsSelected = selectedItemIds.Contains(item.Id);
-                    }
+                    string key = $"{item.Type}:{item.Schema}:{item.Name}";
+                    item.IsSelected = _backupPlan.Items.Count == 0 || selectedKeys.Contains(key);
                 }
 
-                _backupPlan.Items = backupItems;
-                Snackbar.Add("Database scanned successfully.", Severity.Success);
-            }
-            else
-            {
-                Snackbar.Add("Something went wrong: No backup items returned.", Severity.Error);
+                _backupPlan.Items = newItems;
+                Snackbar.Add("Database scanned successfully", Severity.Success);
             }
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Error scanning database: {ex.Message}", Severity.Error);
-            _backupPlan.Items = new List<BackupItem>();
         }
         finally
         {
@@ -285,56 +255,36 @@
     private async Task SavePlan()
     {
         await _form.Validate();
-
         if (!_form.IsValid)
             return;
 
-        _backupPlan.DatabaseConnection = _databaseConnections.FirstOrDefault(c => c.Id == _selectedDatabaseConnectionId) ??
-            new DatabaseConnection { Id = _selectedDatabaseConnectionId, HostName = string.Empty, UserName = string.Empty, Password = string.Empty, Port = 0, Type = DatabaseType.MySQL };
-
-        _backupPlan.StorageTarget = _storageTargets.FirstOrDefault(t => t.Id == _selectedStorageTargetId) ??
-            new LocalStorageTarget { Id = _selectedStorageTargetId, Name = string.Empty, Path = string.Empty, Type = StorageTargetType.Local };
-
-        _backupPlan.Items = _backupPlan.Items.Where(i => i.IsSelected).ToList();
-        _backupPlan.IsActive = false;
-
-        // Show confirmation dialog
-        var confirmParameters = new DialogParameters
-        {
-            { "ContentText", $"Are you sure you want to {(Id.HasValue ? "update" : "create")} backup plan '{_backupPlan.Name}' with {_backupPlan.Items.Count} items selected?" },
-            { "ButtonText", "Confirm" },
-            { "Color", Color.Primary }
-        };
-
-        var dialog = await DialogService.ShowAsync<ConfirmDialog>($"Confirm Backup Plan {(Id.HasValue ? "Update" : "Creation")}", confirmParameters);
-        var result = await dialog.Result;
-
-        if (result.Canceled)
-            return;
+        // Set foreign key values and clear navigation properties so that only IDs are sent.
+        _backupPlan.DatabaseConnectionId = _selectedDatabaseConnectionId;
+        _backupPlan.StorageTargetId = _selectedStorageTargetId;
+        _backupPlan.DatabaseConnection = null;
+        _backupPlan.StorageTarget = null;
+        _backupPlan.Items = _backupPlan.Items?.Where(i => i.IsSelected).ToList() ?? new List<BackupItem>();
 
         try
         {
-            if (Id.HasValue)
-            {
-                _backupPlan.Id = Id.Value;
-            }
+            // Always use POST for both creating and updating the backup plan.
+            HttpResponseMessage response = await _httpClient.PostAsJsonAsync("/backup-plans", _backupPlan);
 
-            var response = await _httpClient.PostAsJsonAsync("/backup-plans", _backupPlan, _jsonSerializerOptions);
-            if (!response.IsSuccessStatusCode)
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add($"Backup plan {(Id.HasValue ? "updated" : "created")} successfully", Severity.Success);
+                NavigationManager.NavigateTo("/backupplans");
+            }
+            else
             {
                 var error = await response.Content.ReadAsStringAsync();
-                Snackbar.Add($"Error {(Id.HasValue ? "updating" : "creating")} backup plan: {error}", Severity.Error);
-                return;
+                Snackbar.Add($"Error: {error}", Severity.Error);
             }
-
-            Snackbar.Add($"Backup plan {(Id.HasValue ? "updated" : "created")} successfully.", Severity.Success);
-            NavigationManager.NavigateTo("/backup-plans");
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error {(Id.HasValue ? "updating" : "creating")} backup plan: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
         }
     }
 
-    private void Cancel() => NavigationManager.NavigateTo("/backup-plans");
 }
