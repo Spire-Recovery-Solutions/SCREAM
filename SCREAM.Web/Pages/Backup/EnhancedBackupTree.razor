@@ -1,4 +1,5 @@
 @using SCREAM.Data.Entities.BackupItems
+@using Microsoft.AspNetCore.Components.Web.Virtualization
 
 <MudPaper Elevation="3" Class="pa-4 mb-4 rounded-lg">
     <MudGrid>
@@ -13,20 +14,20 @@
         <MudItem xs="12" md="5">
             <div class="d-flex justify-end">
                 <MudButton Variant="Variant.Filled"
-                Color="Color.Primary"
-                Size="Size.Small"
-                OnClick="() => ToggleAllItems(true)"
-                Class="mr-2"
-                Disabled="@_isLoading"
-                StartIcon="@Icons.Material.Filled.CheckBox">
+                           Color="Color.Primary"
+                           Size="Size.Small"
+                           OnClick="() => ToggleAllItems(true)"
+                           Class="mr-2"
+                           Disabled="@_isLoading"
+                           StartIcon="@Icons.Material.Filled.CheckBox">
                     Select All
                 </MudButton>
                 <MudButton Variant="Variant.Outlined"
-                Color="Color.Primary"
-                Size="Size.Small"
-                OnClick="() => ToggleAllItems(false)"
-                Disabled="@_isLoading"
-                StartIcon="@Icons.Material.Filled.DisabledByDefault">
+                           Color="Color.Primary"
+                           Size="Size.Small"
+                           OnClick="() => ToggleAllItems(false)"
+                           Disabled="@_isLoading"
+                           StartIcon="@Icons.Material.Filled.DisabledByDefault">
                     Unselect All
                 </MudButton>
             </div>
@@ -44,11 +45,11 @@
                 @foreach (var option in _quickSelectOptions)
                 {
                     <MudButton Variant="Variant.Outlined"
-                    Color="@option.Color"
-                    Size="Size.Small"
-                    OnClick="() => SelectItemsByType(option.Type)"
-                    Disabled="@_isLoading"
-                    StartIcon="@GetIconForBackupItemType(option.Type)">
+                               Color="@option.Color"
+                               Size="Size.Small"
+                               OnClick="() => SelectItemsByType(option.Type)"
+                               Disabled="@_isLoading"
+                               StartIcon="@GetIconForBackupItemType(option.Type)">
                         @option.Label
                     </MudButton>
                 }
@@ -80,146 +81,163 @@ else if (!_schemaGroups.Any())
 }
 else
 {
-    <MudGrid>
-        @foreach (var schema in _schemaGroups)
-        {
-            <MudItem xs="12">
-                <MudCard Elevation="2" Class="mb-4">
-                    <MudCardHeader>
-                        <CardHeaderContent>
-                            <div class="d-flex align-center" @onclick="() => ToggleSchema(schema)"
-                            style="cursor: pointer;">
-                                <MudIcon Icon="@(schema.IsExpanded ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ChevronRight)"
-                                Size="Size.Small" Class="mr-2" />
-                                <MudCheckBox T="bool"
-                                @onclick:stopPropagation
-                                Value="@schema.IsFullySelected"
-                                ValueChanged="@(value => ToggleSchemaSelection(schema, value))"
-                                Size="Size.Medium" />
-                                <div class="ml-2">
-                                    <MudText Typo="Typo.h6" Style="font-weight: 500;">@schema.SchemaName</MudText>
-                                </div>
-                                <MudChip T="string" Color="Color.Default" Size="Size.Small" Class="ml-3" Label="true">
-                                    @schema.Items.Count(i => i.IsSelected)/@schema.Items.Count items
-                                </MudChip>
-                            </div>
-                        </CardHeaderContent>
-                        <CardHeaderActions>
-                            <div class="d-flex">
-                                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Color="Color.Default" Dense="true" AnchorOrigin="Origin.BottomRight">
-                                    <MudMenuItem OnClick="() => ToggleSchemaSelection(schema, true)">Select All</MudMenuItem>
-                                    @foreach (var option in _quickSelectOptions)
-                                    {
-                                        <MudMenuItem OnClick="() => SelectSchemaItemsByType(schema, option.Type)">@option.Label</MudMenuItem>
-                                    }
-                                    <MudDivider />
-                                    <MudMenuItem OnClick="() => ToggleSchemaSelection(schema, false)">Unselect All</MudMenuItem>
-                                </MudMenu>
-                                <MudTooltip Text="@(schema.IsExpanded ? "Collapse" : "Expand")">
-                                    <MudIconButton Icon="@(schema.IsExpanded ? Icons.Material.Filled.UnfoldLess : Icons.Material.Filled.UnfoldMore)"
-                                    Color="Color.Default"
-                                    OnClick="() => ToggleSchema(schema)" />
-                                </MudTooltip>
-                            </div>
-                        </CardHeaderActions>
-                    </MudCardHeader>
+    <div class="d-flex align-center mb-4">
+        <MudSelect T="string" Label="Filter by schema"
+                   Value="_selectedSchemaFilter"
+                   ValueChanged="FilterBySchema"
+                   Class="mr-4">
+            <MudSelectItem Value="@("all")">All Schemas</MudSelectItem>
+            @foreach (var schema in _schemaGroups)
+            {
+                <MudSelectItem Value="@schema.SchemaName">@schema.SchemaName</MudSelectItem>
+            }
+        </MudSelect>
 
-                    @if (schema.IsExpanded)
-                    {
-                        <MudCardContent>
-                            @if (schema.SchemaItems.Count > 0)
+        <MudSelect T="string" Label="Filter by type"
+                   Value="_selectedTypeFilter"
+                   ValueChanged="FilterByTypeString"
+                   Clearable="true">
+            <MudSelectItem Value="@("all")">All Types</MudSelectItem>
+            @foreach (var option in _quickSelectOptions)
+            {
+                <MudSelectItem Value="@option.Type.ToString()">@option.Label</MudSelectItem>
+            }
+        </MudSelect>
+    </div>
+
+    <MudTable T="SchemaGroup"
+              Items="@_filteredSchemaGroups"
+              Dense="true"
+              Hover="true"
+              Breakpoint="Breakpoint.Sm"
+              LoadingProgressColor="Color.Primary"
+              RowsPerPage="5">
+        <HeaderContent>
+            <MudTh>Schema</MudTh>
+            <MudTh>Selected</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Schema">
+                <div class="d-flex align-center" @onclick="() => ToggleSchema(context)">
+                    <MudIcon Icon="@(context.IsExpanded ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ChevronRight)"
+                             Size="Size.Small" Class="mr-2" />
+                    <MudText Typo="Typo.body1">@context.SchemaName</MudText>
+                </div>
+            </MudTd>
+            <MudTd DataLabel="Selected">
+                <MudChip T="string" Color="Color.Default" Size="Size.Small" Label="true">
+                    @context.Items.Count(i => i.IsSelected)/@context.Items.Count
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Primary"
+                           Size="Size.Small"
+                           OnClick="() => ToggleSchemaSelection(context, true)">
+                    Select All
+                </MudButton>
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Secondary"
+                           Size="Size.Small"
+                           OnClick="() => ToggleSchemaSelection(context, false)">
+                    Unselect All
+                </MudButton>
+            </MudTd>
+        </RowTemplate>
+        <ChildRowContent>
+            @if (context.IsExpanded)
+            {
+                <MudTr>
+                    <td colspan="3" style="padding: 0">
+                        @if (context.SchemaItems.Any())
+                        {
+                            <MudPaper Elevation="0" Class="ma-2 pa-2" Style="background-color: var(--mud-palette-primary-lighten);">
+                                <MudText Typo="Typo.subtitle2" Class="mb-2">Schema-Level Objects</MudText>
+                                <div class="d-flex flex-wrap">
+                                    @foreach (var item in context.SchemaItems)
+                                    {
+                                        <div class="pa-1 ma-1 d-flex align-center" style="min-width: 200px">
+                                            <MudCheckBox T="bool"
+                                                         Value="@item.IsSelected"
+                                                         ValueChanged="@(value => OnItemSelectionChanged(item, context, null, value))"
+                                                         Color="Color.Primary" />
+                                            <MudIcon Icon="@GetIconForBackupItemType(item.Type)"
+                                                     Size="Size.Small"
+                                                     Class="mx-1"
+                                                     Color="Color.Primary" />
+                                            <MudText Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
+                                        </div>
+                                    }
+                                </div>
+                            </MudPaper>
+                        }
+
+                        <MudDivider />
+
+                        <MudContainer Class="pa-2">
+                            <MudText Typo="Typo.subtitle2" Class="mb-2">Tables and Views</MudText>
+
+                            @if (context.Tables.Count > 10)
                             {
-                                <MudPaper Elevation="0" Class="pa-3 mb-4 mud-theme-primary"
-                                Style="border-radius: 8px; background-color: var(--mud-palette-primary-lighten);">
-                                    <MudText Typo="Typo.subtitle1" Class="mb-2">
-                                        <MudIcon Icon="@Icons.Material.Filled.Storage" Size="Size.Small" Class="mr-1" />
-                                        Schema-Level Objects
-                                    </MudText>
-                                    <MudGrid>
-                                        @foreach (var item in schema.SchemaItems)
-                                        {
-                                            <MudItem xs="12" sm="6" md="4">
-                                                <MudPaper Elevation="0" Class="pa-2 d-flex align-center">
-                                                    <MudCheckBox T="bool"
-                                                    Value="@item.IsSelected"
-                                                    ValueChanged="@(value => OnItemSelectionChanged(item, schema, null, value))"
-                                                    Color="Color.Primary" />
-                                                    <MudIcon Icon="@GetIconForBackupItemType(item.Type)"
-                                                    Size="Size.Small"
-                                                    Class="mx-2"
-                                                    Color="Color.Primary" />
-                                                    <MudText Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
-                                                </MudPaper>
-                                            </MudItem>
-                                        }
-                                    </MudGrid>
-                                </MudPaper>
+                                <div class="mb-2">
+                                    <MudTextField T="string"
+                                                  Value="@_tableSearchString"
+                                                  ValueChanged="@(s => FilterTables(context, s))"
+                                                  Placeholder="Search tables..."
+                                                  Adornment="Adornment.Start"
+                                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                                  Immediate="true"
+                                                  Class="mt-0" />
+                                </div>
                             }
 
-                            <MudText Typo="Typo.subtitle1" Class="mb-3">
-                                <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Small" Class="mr-1" />
-                                Tables and Views
-                            </MudText>
+                            <Virtualize Items="@_filteredTables.GetValueOrDefault(context.SchemaName, context.Tables)" Context="table">
+                                <div class="mb-2 pa-2" style="border: 1px solid var(--mud-palette-lines-default); border-radius: 4px;">
+                                    <div class="d-flex align-center justify-space-between">
+                                        <div class="d-flex align-center">
+                                            <MudCheckBox T="bool"
+                                                         Value="@table.IsFullySelected"
+                                                         ValueChanged="@(value => ToggleTableSelection(table, context, value))"
+                                                         Color="Color.Primary" />
+                                            <MudText Typo="Typo.body2" Class="ml-2">@table.TableName</MudText>
+                                        </div>
+                                        <MudIconButton Icon="@(table.IsExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                                       Size="Size.Small"
+                                                       OnClick="() => ToggleTable(table)" />
+                                    </div>
 
-                            <MudGrid Spacing="2">
-                                @foreach (var table in schema.Tables)
-                                {
-                                    <MudItem xs="12" sm="6" lg="4">
-                                        <MudCard Elevation="1" Class="mb-2">
-                                            <MudCardHeader Style="padding: 8px 16px;">
-                                                <CardHeaderContent>
-                                                    <div class="d-flex align-center" @onclick="() => ToggleTable(table)"
-                                                    style="cursor: pointer;">
-                                                        <MudIcon Icon="@(table.IsExpanded ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ChevronRight)"
-                                                        Size="Size.Small" Class="mr-2" />
-                                                        <MudCheckBox T="bool"
-                                                        @onclick:stopPropagation
-                                                        Value="@table.IsFullySelected"
-                                                        ValueChanged="@(value => ToggleTableSelection(table, schema, value))"
-                                                        Color="Color.Primary" />
-                                                        <MudTooltip Text="@table.TableName">
-                                                            <MudText Typo="Typo.body1" Class="ml-2 text-truncate"
-                                                            Style="max-width: 150px;">
-                                                                @table.TableName
-                                                            </MudText>
-                                                        </MudTooltip>
-                                                    </div>
-                                                </CardHeaderContent>
-                                            </MudCardHeader>
-                                            @if (table.IsExpanded)
+                                    @if (table.IsExpanded)
+                                    {
+                                        <div class="mt-2 ml-6">
+                                            @foreach (var item in table.Items)
                                             {
-                                                <MudCardContent Style="padding: 8px 16px 16px 16px;">
-                                                    <MudList T="string" Dense="true" Padding="false">
-                                                        @foreach (var item in table.Items)
-                                                        {
-                                                            <MudListItem Class="pa-0">
-                                                                <div class="d-flex align-center py-1">
-                                                                    <MudCheckBox T="bool"
-                                                                    Value="@item.IsSelected"
-                                                                    ValueChanged="@(value => OnItemSelectionChanged(item, schema, table, value))"
-                                                                    Color="Color.Primary"
-                                                                    Size="Size.Small" />
-                                                                    <MudIcon Icon="@GetIconForBackupItemType(item.Type)"
-                                                                    Size="Size.Small"
-                                                                    Class="mx-2"
-                                                                    Color="@GetColorForBackupItemType(item.Type)" />
-                                                                    <MudText Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
-                                                                </div>
-                                                            </MudListItem>
-                                                        }
-                                                    </MudList>
-                                                </MudCardContent>
+                                                <div class="d-flex align-center mb-1">
+                                                    <MudCheckBox T="bool"
+                                                                 Value="@item.IsSelected"
+                                                                 ValueChanged="@(value => OnItemSelectionChanged(item, context, table, value))"
+                                                                 Color="Color.Primary"
+                                                                 Size="Size.Small" />
+                                                    <MudIcon Icon="@GetIconForBackupItemType(item.Type)"
+                                                             Size="Size.Small"
+                                                             Class="mx-1"
+                                                             Color="@GetColorForBackupItemType(item.Type)" />
+                                                    <MudText Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
+                                                </div>
                                             }
-                                        </MudCard>
-                                    </MudItem>
-                                }
-                            </MudGrid>
-                        </MudCardContent>
-                    }
-                </MudCard>
-            </MudItem>
-        }
-    </MudGrid>
+                                        </div>
+                                    }
+                                </div>
+                            </Virtualize>
+                        </MudContainer>
+                    </td>
+                </MudTr>
+            }
+        </ChildRowContent>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
 }
 
 @code {
@@ -227,7 +245,12 @@ else
     [Parameter] public EventCallback<List<BackupItem>> ItemsChanged { get; set; }
 
     private List<SchemaGroup> _schemaGroups = new();
+    private List<SchemaGroup> _filteredSchemaGroups = new();
+    private Dictionary<string, List<TableGroup>> _filteredTables = new();
     private bool _isLoading = false;
+    private string _selectedSchemaFilter = "all";
+    private string _selectedTypeFilter = "all";
+    private string _tableSearchString = "";
 
     private class QuickSelectOption
     {
@@ -255,6 +278,7 @@ else
             try
             {
                 GroupItemsBySchema();
+                ApplyFilters();
             }
             finally
             {
@@ -283,10 +307,15 @@ else
             schema.SchemaName = schemaName;
             schema.Items = schemaGroup.ToList();
 
-            // Preserve existing expansion state or default to true
-            schema.IsExpanded = existingSchema?.IsExpanded ?? true;
+            // Separate schema-level items
+            schema.SchemaItems = schema.Items
+                .Where(i => string.IsNullOrEmpty(i.Name))
+                .ToList();
 
-            // Similar preservation for table states
+            // Preserve existing expansion state or default to false
+            schema.IsExpanded = existingSchema?.IsExpanded ?? false;
+
+            // Process tables
             var existingTables = schema.Tables.ToDictionary(t => t.TableName);
             schema.Tables.Clear();
 
@@ -295,8 +324,8 @@ else
                 .ToList();
 
             foreach (var tableGroup in tableItems
-                .GroupBy(i => i.Name)
-                .OrderBy(g => g.Key))
+                         .GroupBy(i => i.Name)
+                         .OrderBy(g => g.Key))
             {
                 var tableName = tableGroup.Key!;
                 var existingTable = existingTables.GetValueOrDefault(tableName);
@@ -315,6 +344,77 @@ else
         }
 
         _schemaGroups = newSchemaGroups;
+    }
+
+    private void ApplyFilters()
+    {
+        _filteredSchemaGroups = _schemaGroups;
+
+        // Filter by schema
+        if (_selectedSchemaFilter != "all")
+        {
+            _filteredSchemaGroups = _schemaGroups
+                .Where(s => s.SchemaName == _selectedSchemaFilter)
+                .ToList();
+        }
+
+        // Apply type filter if selected
+        if (_selectedTypeFilter != "all")
+        {
+            if (Enum.TryParse<BackupItemType>(_selectedTypeFilter, out var typeFilter))
+            {
+                foreach (var schema in _filteredSchemaGroups)
+                {
+                    var filteredTables = schema.Tables
+                        .Where(t => t.Items.Any(i => i.Type == typeFilter))
+                        .ToList();
+
+                    if (!_filteredTables.ContainsKey(schema.SchemaName))
+                    {
+                        _filteredTables[schema.SchemaName] = filteredTables;
+                    }
+                }
+            }
+        }
+        else
+        {
+            _filteredTables.Clear();
+        }
+    }
+
+    private void FilterBySchema(string schemaName)
+    {
+        _selectedSchemaFilter = schemaName;
+        ApplyFilters();
+        StateHasChanged();
+    }
+
+    private void FilterByTypeString(string typeString)
+    {
+        _selectedTypeFilter = typeString;
+        ApplyFilters();
+        StateHasChanged();
+    }
+
+    private void FilterTables(SchemaGroup schema, string searchString)
+    {
+        _tableSearchString = searchString;
+
+        if (string.IsNullOrWhiteSpace(searchString))
+        {
+            if (_filteredTables.ContainsKey(schema.SchemaName))
+            {
+                _filteredTables.Remove(schema.SchemaName);
+            }
+        }
+        else
+        {
+            _filteredTables[schema.SchemaName] = schema.Tables
+                .Where(t => t.TableName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        StateHasChanged();
     }
 
     private void ToggleSchema(SchemaGroup schema)
@@ -389,7 +489,6 @@ else
         }
 
         await NotifyItemsChanged();
-        StateHasChanged();
     }
 
     private async Task SelectItemsByType(BackupItemType type)
@@ -411,25 +510,6 @@ else
             }
         }
 
-        await NotifyItemsChanged();
-    }
-
-    private async Task SelectSchemaItemsByType(SchemaGroup schema, BackupItemType type)
-    {
-        foreach (var item in schema.Items)
-        {
-            if (item.Type == type)
-            {
-                item.IsSelected = true;
-            }
-        }
-
-        foreach (var table in schema.Tables)
-        {
-            UpdateTableSelectionState(table);
-        }
-
-        UpdateSchemaSelectionState(schema);
         await NotifyItemsChanged();
     }
 
