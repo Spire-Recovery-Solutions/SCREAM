@@ -137,18 +137,15 @@ else
                     <MudDivider />
                     @foreach (var option in _quickSelectOptions)
                     {
-                        @if (IsTypeApplicableToSchemaLevel(option.Type))
-                        {
-                            <MudMenuItem OnClick="() => SelectSchemaItemsByType(context, option.Type)">
-                                <div class="d-flex align-center">
-                                    <MudIcon Icon="@GetIconForBackupItemType(option.Type)" 
-                                            Size="Size.Small" 
-                                            Class="mr-2" 
-                                            Color="@option.Color" />
-                                    @option.Label.Replace("Select All ", "")
-                                </div>
-                            </MudMenuItem>
-                        }
+                        <MudMenuItem OnClick="() => SelectSchemaItemsByType(context, option.Type)">
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@GetIconForBackupItemType(option.Type)" 
+                                        Size="Size.Small" 
+                                        Class="mr-2" 
+                                        Color="@option.Color" />
+                                @option.Label.Replace("Select All ", "")
+                            </div>
+                        </MudMenuItem>
                     }
                     <MudDivider />
                     <MudMenuItem OnClick="() => ToggleSchemaSelection(context, false)">Unselect All</MudMenuItem>
@@ -641,17 +638,6 @@ else
             BackupItemType.Event => "Events",
             BackupItemType.FunctionProcedure => "Functions/Procedures",
             _ => type.ToString()
-        };
-    }
-    
-    private bool IsTypeApplicableToSchemaLevel(BackupItemType type)
-    {
-        return type switch
-        {
-            BackupItemType.Trigger => true,
-            BackupItemType.Event => true,
-            BackupItemType.FunctionProcedure => true,
-            _ => false
         };
     }
 
