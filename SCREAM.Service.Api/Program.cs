@@ -158,7 +158,6 @@ async Task<bool> TestStorageTarget(StorageTarget storageTarget)
 
 #endregion
 
-
 #region Connections
 
 // Get a list of all connections
@@ -283,6 +282,80 @@ async Task<bool> TestDatabaseConnection(DatabaseConnection databaseConnection)
         return false;
     }
 }
+
+#endregion
+
+#region Backup Plans
+
+// Get a list of all backup plans
+app.MapGet("/backup-plans", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var backupPlans = await dbContext.BackupPlans
+        .Include(i => i.DatabaseConnection)
+        .Include(i => i.StorageTarget)
+        .ToListAsync();
+    return Results.Ok(backupPlans);
+});
+// Get a backup plan by id
+app.MapGet("/backup-plans/{backupPlanId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+    long backupPlanId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var backupPlan = await dbContext.BackupPlans
+        .Include(i => i.DatabaseConnection)
+        .Include(i => i.StorageTarget)
+        .FirstOrDefaultAsync(x => x.Id == backupPlanId);
+    return backupPlan == null ? Results.NotFound() : Results.Ok(backupPlan);
+});
+// Create or update a backup plan
+app.MapPost("/backup-plans", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+    BackupPlan backupPlan) =>
+{
+    // First test the database connection
+    var isValid = ValidateDatabaseConnection(backupPlan.DatabaseConnection);
+    if (!isValid)
+    {
+        return Results.BadRequest("Invalid database connection configuration.");
+    }
+
+    var testResult = await TestDatabaseConnection(backupPlan.DatabaseConnection);
+    if (!testResult)
+    {
+        return Results.BadRequest("Database connection test failed.");
+    }
+
+    // If test succeeds, save the backup plan
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+
+    if (backupPlan.Id == 0)
+    {
+        // Create new backup plan
+        dbContext.BackupPlans.Add(backupPlan);
+        await dbContext.SaveChangesAsync();
+        return Results.Created($"/backup-plans/{backupPlan.Id}", backupPlan);
+    }
+    else
+    {
+        // Update existing backup plan
+        var existingBackupPlan = await dbContext.BackupPlans
+            .Include(i => i.DatabaseConnection)
+            .Include(i => i.StorageTarget)
+            .FirstOrDefaultAsync(x => x.Id == backupPlan.Id);
+
+        if (existingBackupPlan == null)
+        {
+            return Results.NotFound();
+        }
+
+        // Use EF Update function 
+        dbContext.Entry(existingBackupPlan).CurrentValues.SetValues(backupPlan);
+        await dbContext.SaveChangesAsync();
+
+        return Results.Ok(backupPlan);
+    }
+});
+
 
 #endregion
 
