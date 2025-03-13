@@ -11,7 +11,7 @@ public class TableDataItem : BackupItem
     public override BackupItemType Type
     {
         get => BackupItemType.TableData;
-        set => throw new NotImplementedException();
+        set { }
     }
 
     /// <summary>

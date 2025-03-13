@@ -205,7 +205,7 @@
         _storageTargets = new()
         {
             new LocalStorageTarget { Id = 1, Name = "Local Disk", Path = "/backups", Type = StorageTargetType.Local },
-            new S3StorageTarget { Id = 2, Name = "AWS Backup", BucketName = "scream-backups", AccessKey = "AKIAXXXXXXXX", SecretKey = "******", Type = StorageTargetType.S3 }
+            new S3StorageTarget { Id = 2, Name = "Cloud Backup", BucketName = "scream-backups", AccessKey = "AKIAXXXXXXXX", SecretKey = "******", Type = StorageTargetType.S3 }
         };
     }
 

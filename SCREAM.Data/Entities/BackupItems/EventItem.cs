@@ -11,7 +11,7 @@ public class EventItem : BackupItem
     public override BackupItemType Type
     {
         get => BackupItemType.Event;
-        set => throw new NotImplementedException();
+        set { }
     }
 
     public override void ConfigureArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize)

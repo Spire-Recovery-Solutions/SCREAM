@@ -11,7 +11,7 @@ public class TableStructureItem : BackupItem
     public override BackupItemType Type
     {
         get => BackupItemType.TableStructure;
-        set => throw new NotImplementedException();
+        set {  }
     }
 
     /// <summary>
