@@ -104,10 +104,10 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
         {
             e.ToTable("BackupPlans");
             
-            // One-to-many relationship between BackupPlan and BackupJobs
-            e.HasMany<BackupJob>()
+            e.HasMany(p => p.Jobs)
                 .WithOne(j => j.BackupPlan)
-                .HasForeignKey(k => k.BackupPlanId);
+                .HasForeignKey(j => j.BackupPlanId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             e.Property(p => p.Name).IsRequired();
         });
