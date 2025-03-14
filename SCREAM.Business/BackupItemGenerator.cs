@@ -101,36 +101,33 @@ public class BackupItemGenerator
             });
         }
 
-        // Process triggers - group by schema
-        var triggerSchemas = triggers.Select(t => t.Schema).Distinct();
-        foreach (var schema in triggerSchemas)
+        // Process triggers
+        foreach (var item in triggers)
         {
             backupItems.Add(new TriggerItem
             {
-                Schema = schema,
-                Name = schema
+                Schema = item.Schema,
+                Name = item.Name
             });
         }
 
-        // Process events - group by schema
-        var eventSchemas = events.Select(e => e.Schema).Distinct();
-        foreach (var schema in eventSchemas)
+        // Process events
+        foreach (var item in events)
         {
             backupItems.Add(new EventItem
             {
-                Schema = schema,
-                Name = schema
+                Schema = item.Schema,
+                Name = item.Name
             });
         }
 
-        // Process routines (functions and procedures) - group by schema
-        var routineSchemas = routines.Select(r => r.Schema).Distinct();
-        foreach (var schema in routineSchemas)
+        // Process routines (functions and procedures)
+        foreach (var item in routines)
         {
             backupItems.Add(new FunctionProcedureItem
             {
-                Schema = schema,
-                Name = schema
+                Schema = item.Schema,
+                Name = item.Name
             });
         }
 
