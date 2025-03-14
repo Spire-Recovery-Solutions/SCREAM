@@ -80,42 +80,41 @@
                 </MudItem>
 
                 <MudItem xs="12">
-                    <MudExpansionPanel>
-                        <TitleContent>
-                            <div class="d-flex align-center">
-                                <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2" />
-                                <MudText Typo="Typo.h6">Schedule Settings</MudText>
-                            </div>
-                        </TitleContent>
-                        <ChildContent>
-                            <MudGrid Class="mt-2">
-                                <MudItem xs="12" md="6">
-                                    <MudSelect T="ScheduleType"
-                                               @bind-Value="_backupPlan.ScheduleType"
-                                               Label="Schedule Type"
-                                               Variant="Variant.Outlined"
-                                               HelperText="How often should this backup run?">
-                                        @foreach (ScheduleType type in Enum.GetValues(typeof(ScheduleType)))
-                                        {
-                                            <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
-                                        }
-                                    </MudSelect>
-                                </MudItem>
-
-                                @if (_backupPlan.ScheduleType != ScheduleType.OneTime)
+                    <MudGrid Class="mt-2">
+                        <MudItem xs="12" md="6">
+                            <MudSelect T="ScheduleType"
+                                       @bind-Value="_backupPlan.ScheduleType"
+                                       Label="Schedule Type"
+                                       Variant="Variant.Outlined"
+                                       HelperText="How often should this backup run?">
+                                @foreach (ScheduleType type in Enum.GetValues(typeof(ScheduleType)))
                                 {
-                                    <MudItem xs="12" md="6">
-                                        <MudTextField @bind-Value="_backupPlan.ScheduleCron"
-                                                      Label="Cron Expression"
-                                                      Variant="Variant.Outlined"
-                                                      Required="true"
-                                                      HelperText="e.g., '0 0 * * *' for daily at midnight" />
-                                    </MudItem>
+                                    <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
                                 }
-                            </MudGrid>
-                        </ChildContent>
-                    </MudExpansionPanel>
+                            </MudSelect>
+                        </MudItem>
+
+                        @if (_backupPlan.ScheduleType != ScheduleType.OneTime)
+                        {
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_backupPlan.ScheduleCron"
+                                              Label="Cron Expression"
+                                              Variant="Variant.Outlined"
+                                              Required="true"
+                                              HelperText="e.g., '0 0 * * *' for daily at midnight" />
+                            </MudItem>
+                        }
+                    </MudGrid>
                 </MudItem>
+
+                @if (Id.HasValue)
+                {
+                    <MudItem xs="12" md="6">
+                        <MudSwitch T="bool" @bind-Value="_backupPlan.IsActive"
+                                   Color="Color.Primary"
+                                   Label="Active" />
+                    </MudItem>
+                }
             </MudGrid>
         </MudForm>
     </MudCardContent>
