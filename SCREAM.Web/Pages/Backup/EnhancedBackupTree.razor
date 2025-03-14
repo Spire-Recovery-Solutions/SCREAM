@@ -92,6 +92,27 @@ else
                 <MudSelectItem Value="@schema.SchemaName">@schema.SchemaName</MudSelectItem>
             }
         </MudSelect>
+
+        <MudSelect T="string" Label="Filter by type"
+                   Value="_selectedTypeFilter"
+                   ValueChanged="FilterByTypeString"
+                   Class="mr-4">
+            <MudSelectItem Value="@("all")">All Types</MudSelectItem>
+            @foreach (var option in _quickSelectOptions)
+            {
+                <MudSelectItem Value="@option.Type.ToString()">@option.Label.Replace("Select All ", "")</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudTextField T="string"
+                      Label="Search"
+                      Value="@_searchString"
+                      ValueChanged="@(s => ApplySearchFilter(s))"
+                      Placeholder="Search items..."
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true"
+                      Class="mr-4"/>
     </div>
 
     <MudTable T="SchemaGroup"
@@ -123,20 +144,20 @@ else
             <MudTd>
                 <MudMenu Icon="@Icons.Material.Filled.MoreVert" Dense="true" AnchorOrigin="Origin.BottomRight">
                     <MudMenuItem OnClick="() => ToggleSchemaSelection(context, true)">Select All</MudMenuItem>
-                    <MudDivider />
+                    <MudDivider/>
                     @foreach (var option in _quickSelectOptions)
                     {
                         <MudMenuItem OnClick="() => SelectSchemaItemsByType(context, option.Type)">
                             <div class="d-flex align-center">
-                                <MudIcon Icon="@GetIconForBackupItemType(option.Type)" 
-                                        Size="Size.Small" 
-                                        Class="mr-2" 
-                                        Color="@option.Color" />
+                                <MudIcon Icon="@GetIconForBackupItemType(option.Type)"
+                                         Size="Size.Small"
+                                         Class="mr-2"
+                                         Color="@option.Color"/>
                                 @option.Label.Replace("Select All ", "")
                             </div>
                         </MudMenuItem>
                     }
-                    <MudDivider />
+                    <MudDivider/>
                     <MudMenuItem OnClick="() => ToggleSchemaSelection(context, false)">Unselect All</MudMenuItem>
                 </MudMenu>
             </MudTd>
@@ -152,17 +173,19 @@ else
                                       Style="border: 1px solid var(--mud-palette-lines-default); border-radius: 4px;">
                                 <div class="d-flex align-center justify-space-between mb-2">
                                     <MudText Typo="Typo.subtitle2">Schema-Level Objects</MudText>
-                                    <MudMenu Icon="@Icons.Material.Filled.MoreVert" Dense="true" AnchorOrigin="Origin.BottomRight">
+                                    <MudMenu Icon="@Icons.Material.Filled.MoreVert" Dense="true"
+                                             AnchorOrigin="Origin.BottomRight">
                                         @foreach (var option in _quickSelectOptions)
                                         {
                                             @if (context.SchemaItems.Any(i => i.Type == option.Type))
                                             {
-                                                <MudMenuItem OnClick="() => SelectSchemaLevelItemsByType(context, option.Type)">
+                                                <MudMenuItem
+                                                    OnClick="() => SelectSchemaLevelItemsByType(context, option.Type)">
                                                     <div class="d-flex align-center">
-                                                        <MudIcon Icon="@GetIconForBackupItemType(option.Type)" 
-                                                                Size="Size.Small" 
-                                                                Class="mr-2" 
-                                                                Color="@option.Color" />
+                                                        <MudIcon Icon="@GetIconForBackupItemType(option.Type)"
+                                                                 Size="Size.Small"
+                                                                 Class="mr-2"
+                                                                 Color="@option.Color"/>
                                                         @option.Label.Replace("Select All ", "")
                                                     </div>
                                                 </MudMenuItem>
@@ -191,86 +214,142 @@ else
                         <MudDivider/>
 
                         <MudContainer Class="pa-2">
-                            <MudText Typo="Typo.subtitle2" Class="mb-2">Tables and Views</MudText>
-
-                            @if (context.Tables.Count > 10)
+                            @foreach (var typeGroup in context.TypeGroups)
                             {
-                                <div class="mb-2">
-                                    <MudTextField T="string"
-                                                  Value="@_tableSearchString"
-                                                  ValueChanged="@(s => FilterTables(context, s))"
-                                                  Placeholder="Search tables..."
-                                                  Adornment="Adornment.Start"
-                                                  AdornmentIcon="@Icons.Material.Filled.Search"
-                                                  Immediate="true"
-                                                  Class="mt-0"/>
-                                </div>
-                            }
-
-                            <Virtualize Items="@_filteredTables.GetValueOrDefault(context.SchemaName, context.Tables)"
-                                        Context="table">
-                                <div class="mb-2 pa-2"
-                                     style="border: 1px solid var(--mud-palette-lines-default); border-radius: 4px;">
-                                    <div class="d-flex align-center justify-space-between">
-                                        <div class="d-flex align-center">
-                                            <MudCheckBox T="bool"
-                                                         Value="@table.IsFullySelected"
-                                                         ValueChanged="@(value => ToggleTableSelection(table, context, value))"
-                                                         Color="Color.Primary"/>
-                                            <MudText Typo="Typo.body2" Class="ml-2">@table.TableName</MudText>
-                                        </div>
-                                        <div class="d-flex align-center">
-                                            <MudMenu Icon="@Icons.Material.Filled.MoreVert" Dense="true" AnchorOrigin="Origin.BottomRight">
-                                                <MudMenuItem OnClick="() => ToggleTableSelection(table, context, true)">Select All</MudMenuItem>
-                                                <MudDivider />
-                                                @foreach (var option in _quickSelectOptions)
+                                @if (typeGroup.ItemGroups.Any() && typeGroup.FilteredItemGroups.Any())
+                                {
+                                    <MudExpansionPanel>
+                                        <TitleContent>
+                                            <div class="d-flex align-center">
+                                                @if (typeGroup.Types.Count == 1)
                                                 {
-                                                    @if (table.Items.Any(i => i.Type == option.Type))
-                                                    {
-                                                        <MudMenuItem OnClick="() => SelectTableItemsByType(table, context, option.Type)">
-                                                            <div class="d-flex align-center">
-                                                                <MudIcon Icon="@GetIconForBackupItemType(option.Type)" 
-                                                                        Size="Size.Small" 
-                                                                        Class="mr-2" 
-                                                                        Color="@option.Color" />
-                                                                @option.Label.Replace("Select All ", "")
-                                                            </div>
-                                                        </MudMenuItem>
-                                                    }
-                                                }
-                                                <MudDivider />
-                                                <MudMenuItem OnClick="() => ToggleTableSelection(table, context, false)">Unselect All</MudMenuItem>
-                                            </MudMenu>
-                                            <MudIconButton
-                                                Icon="@(table.IsExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
-                                                Size="Size.Small"
-                                                OnClick="() => ToggleTable(table)"/>
-                                        </div>
-                                    </div>
-
-                                    @if (table.IsExpanded)
-                                    {
-                                        <div class="mt-2 ml-6">
-                                            @foreach (var item in table.Items)
-                                            {
-                                                <div class="d-flex align-center mb-1">
-                                                    <MudCheckBox T="bool"
-                                                                 Value="@item.IsSelected"
-                                                                 ValueChanged="@(value => OnItemSelectionChanged(item, context, table, value))"
-                                                                 Color="Color.Primary"
-                                                                 Size="Size.Small"/>
-                                                    <MudIcon Icon="@GetIconForBackupItemType(item.Type)"
+                                                    <MudIcon Icon="@GetIconForBackupItemType(typeGroup.Types[0])"
                                                              Size="Size.Small"
-                                                             Class="mx-1"
-                                                             Color="@GetColorForBackupItemType(item.Type)"/>
-                                                    <MudText
-                                                        Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
+                                                             Class="mr-2"
+                                                             Color="@GetColorForBackupItemType(typeGroup.Types[0])"/>
+                                                    <MudText Typo="Typo.subtitle2">@typeGroup.DisplayName</MudText>
+                                                }
+                                                else
+                                                {
+                                                    <MudText Typo="Typo.subtitle2">@typeGroup.DisplayName</MudText>
+                                                }
+                                                <MudSpacer/>
+                                                <MudChip T="string" Color="Color.Default" Size="Size.Small" Label="true"
+                                                         Class="ml-2">
+                                                    @typeGroup.ItemGroups.Sum(g => g.Items.Count(i => i.IsSelected))/@typeGroup.ItemGroups.Sum(g => g.Items.Count)
+                                                </MudChip>
+                                            </div>
+                                        </TitleContent>
+                                        <ChildContent>
+                                            <div class="d-flex align-center justify-end mb-2">
+                                                <MudButton Variant="Variant.Text"
+                                                           Color="Color.Primary"
+                                                           Size="Size.Small"
+                                                           OnClick="() => ToggleTypeGroupSelection(context, typeGroup, true)"
+                                                           Class="mr-2">
+                                                    Select All
+                                                </MudButton>
+                                                <MudButton Variant="Variant.Text"
+                                                           Color="Color.Primary"
+                                                           Size="Size.Small"
+                                                           OnClick="() => ToggleTypeGroupSelection(context, typeGroup, false)">
+                                                    Unselect All
+                                                </MudButton>
+                                            </div>
+
+                                            @if (typeGroup.ItemGroups.Count > 10 && typeGroup.SupportsSearch)
+                                            {
+                                                <div class="mb-2">
+                                                    <MudTextField T="string"
+                                                                  Value="@typeGroup.SearchString"
+                                                                  ValueChanged="@(s => FilterTypeGroupItems(context, typeGroup, s))"
+                                                                  Placeholder="Search items..."
+                                                                  Adornment="Adornment.Start"
+                                                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                                                  Immediate="true"
+                                                                  Class="mt-0"/>
                                                 </div>
                                             }
-                                        </div>
-                                    }
-                                </div>
-                            </Virtualize>
+
+                                            <Virtualize Items="@typeGroup.FilteredItemGroups" Context="itemGroup">
+                                                <div class="mb-2 pa-2"
+                                                     style="border: 1px solid var(--mud-palette-lines-default); border-radius: 4px;">
+                                                    <div class="d-flex align-center justify-space-between">
+                                                        <div class="d-flex align-center">
+                                                            <MudCheckBox T="bool"
+                                                                         Value="@itemGroup.IsFullySelected"
+                                                                         ValueChanged="@(value => ToggleItemGroupSelection(itemGroup, context, typeGroup, value))"
+                                                                         Color="Color.Primary"/>
+                                                            <MudText Typo="Typo.body2"
+                                                                     Class="ml-2">@itemGroup.GroupName</MudText>
+                                                        </div>
+                                                        <div class="d-flex align-center">
+                                                            <MudMenu Icon="@Icons.Material.Filled.MoreVert" Dense="true"
+                                                                     AnchorOrigin="Origin.BottomRight">
+                                                                <MudMenuItem
+                                                                    OnClick="() => ToggleItemGroupSelection(itemGroup, context, typeGroup, true)">
+                                                                    Select All
+                                                                </MudMenuItem>
+                                                                @foreach (var type in typeGroup.Types)
+                                                                {
+                                                                    @if (itemGroup.Items.Any(i => i.Type == type))
+                                                                    {
+                                                                        <MudMenuItem
+                                                                            OnClick="() => SelectItemGroupByType(itemGroup, context, typeGroup, type)">
+                                                                            <div class="d-flex align-center">
+                                                                                <MudIcon
+                                                                                    Icon="@GetIconForBackupItemType(type)"
+                                                                                    Size="Size.Small"
+                                                                                    Class="mr-2"
+                                                                                    Color="@GetColorForBackupItemType(type)"/>
+                                                                                @GetBackupItemTypeLabel(type)
+                                                                            </div>
+                                                                        </MudMenuItem>
+                                                                    }
+                                                                }
+                                                                <MudDivider/>
+                                                                <MudMenuItem
+                                                                    OnClick="() => ToggleItemGroupSelection(itemGroup, context, typeGroup, false)">
+                                                                    Unselect All
+                                                                </MudMenuItem>
+                                                            </MudMenu>
+                                                            @if (itemGroup.Items.Count > 1)
+                                                            {
+                                                                <MudIconButton
+                                                                    Icon="@(itemGroup.IsExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                                                    Size="Size.Small"
+                                                                    OnClick="() => ToggleItemGroup(itemGroup)"/>
+                                                            }
+                                                        </div>
+                                                    </div>
+
+                                                    @if (itemGroup.IsExpanded && itemGroup.Items.Count > 1)
+                                                    {
+                                                        <div class="mt-2 ml-6">
+                                                            @foreach (var item in itemGroup.Items)
+                                                            {
+                                                                <div class="d-flex align-center mb-1">
+                                                                    <MudCheckBox T="bool"
+                                                                                 Value="@item.IsSelected"
+                                                                                 ValueChanged="@(value => OnItemSelectionChanged(item, context, null, value, typeGroup, itemGroup))"
+                                                                                 Color="Color.Primary"
+                                                                                 Size="Size.Small"/>
+                                                                    <MudIcon Icon="@GetIconForBackupItemType(item.Type)"
+                                                                             Size="Size.Small"
+                                                                             Class="mx-1"
+                                                                             Color="@GetColorForBackupItemType(item.Type)"/>
+                                                                    <MudText
+                                                                        Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </Virtualize>
+                                        </ChildContent>
+                                    </MudExpansionPanel>
+                                }
+                            }
                         </MudContainer>
                     </td>
                 </MudTr>
@@ -283,16 +362,8 @@ else
 }
 
 @code {
-    [Parameter] public List<BackupItem> Items { get; set; } = new();
-    [Parameter] public EventCallback<List<BackupItem>> ItemsChanged { get; set; }
 
-    private List<SchemaGroup> _schemaGroups = new();
-    private List<SchemaGroup> _filteredSchemaGroups = new();
-    private Dictionary<string, List<TableGroup>> _filteredTables = new();
-    private bool _isLoading = false;
-    private string _selectedSchemaFilter = "all";
-    private string _selectedTypeFilter = "all";
-    private string _tableSearchString = "";
+    // Define the class models for our improved backup selector
 
     private class QuickSelectOption
     {
@@ -310,6 +381,172 @@ else
         new QuickSelectOption { Type = BackupItemType.Event, Label = "Select All Events", Color = Color.Success },
         new QuickSelectOption { Type = BackupItemType.FunctionProcedure, Label = "Select All Functions/Procedures", Color = Color.Warning }
     };
+
+    private class SchemaGroup
+    {
+        public string SchemaName { get; set; } = string.Empty;
+        public List<BackupItem> Items { get; set; } = new();
+        public List<BackupItem> SchemaItems { get; set; } = new();
+        public List<TypeGroup> TypeGroups { get; set; } = new();
+        public List<TableGroup> Tables { get; set; } = new(); // Kept for backward compatibility
+        public bool IsFullySelected { get; set; }
+        public bool IsExpanded { get; set; }
+    }
+
+    private class TypeGroupDefinition
+    {
+        public string DisplayName { get; set; } = string.Empty;
+        public List<BackupItemType> Types { get; set; } = new();
+        public Func<BackupItem, string> GroupingFunc { get; set; }
+        public bool SupportsSearch { get; set; } = false;
+    }
+
+    private class TypeGroup
+    {
+        public string DisplayName { get; set; } = string.Empty;
+        public List<BackupItemType> Types { get; set; } = new();
+        public List<ItemGroup> ItemGroups { get; set; } = new();
+        public List<ItemGroup> FilteredItemGroups { get; set; } = new();
+        public string SearchString { get; set; } = string.Empty;
+        public bool SupportsSearch { get; set; } = false;
+    }
+
+    private class ItemGroup
+    {
+        public string GroupName { get; set; } = string.Empty;
+        public List<BackupItem> Items { get; set; } = new();
+        public bool IsFullySelected { get; set; }
+        public bool IsExpanded { get; set; }
+    }
+
+// Kept for backward compatibility
+    private class TableGroup
+    {
+        public string TableName { get; set; } = string.Empty;
+        public List<BackupItem> Items { get; set; } = new();
+        public bool IsFullySelected { get; set; }
+        public bool IsExpanded { get; set; }
+    }
+
+// Define type group definitions
+    private readonly List<TypeGroupDefinition> _typeGroupDefinitions = new()
+    {
+        new TypeGroupDefinition
+        {
+            DisplayName = "Tables (Structure & Data)",
+            Types = new List<BackupItemType> { BackupItemType.TableStructure, BackupItemType.TableData },
+            GroupingFunc = (item) => item.Name ?? "", // Group by table name
+            SupportsSearch = true
+        },
+        new TypeGroupDefinition
+        {
+            DisplayName = "Views",
+            Types = new List<BackupItemType> { BackupItemType.View },
+            GroupingFunc = (item) => item.Name ?? "", // Group by view name
+            SupportsSearch = true
+        },
+        new TypeGroupDefinition
+        {
+            DisplayName = "Triggers",
+            Types = new List<BackupItemType> { BackupItemType.Trigger },
+            GroupingFunc = (item) => item.Name ?? "", // Group by trigger name
+            SupportsSearch = true
+        },
+        new TypeGroupDefinition
+        {
+            DisplayName = "Events",
+            Types = new List<BackupItemType> { BackupItemType.Event },
+            GroupingFunc = (item) => item.Name ?? "", // Group by event name
+            SupportsSearch = true
+        },
+        new TypeGroupDefinition
+        {
+            DisplayName = "Functions & Procedures",
+            Types = new List<BackupItemType> { BackupItemType.FunctionProcedure },
+            GroupingFunc = (item) => item.Name ?? "", // Group by function/procedure name
+            SupportsSearch = true
+        }
+    };
+
+// Helper methods for updating selection states and getting display info
+
+    private void UpdateItemGroupSelectionState(ItemGroup itemGroup)
+    {
+        itemGroup.IsFullySelected = itemGroup.Items.Any(i => i.IsSelected);
+    }
+
+    private void UpdateSchemaSelectionState(SchemaGroup schema)
+    {
+        schema.IsFullySelected = schema.Items.Any(i => i.IsSelected);
+    }
+
+    private void UpdateTableSelectionState(TableGroup table)
+    {
+        table.IsFullySelected = table.Items.Any(i => i.IsSelected);
+    }
+
+    private string GetBackupItemTypeLabel(BackupItemType type)
+    {
+        return type switch
+        {
+            BackupItemType.TableStructure => "Structure",
+            BackupItemType.TableData => "Data",
+            BackupItemType.View => "View",
+            BackupItemType.Trigger => "Triggers",
+            BackupItemType.Event => "Events",
+            BackupItemType.FunctionProcedure => "Functions/Procedures",
+            _ => type.ToString()
+        };
+    }
+
+    private string GetIconForBackupItemType(BackupItemType type)
+    {
+        return type switch
+        {
+            BackupItemType.TableStructure => Icons.Material.Filled.Schema,
+            BackupItemType.TableData => Icons.Material.Filled.Storage,
+            BackupItemType.View => Icons.Material.Filled.TableView,
+            BackupItemType.Trigger => Icons.Material.Filled.Bolt,
+            BackupItemType.Event => Icons.Material.Filled.Event,
+            BackupItemType.FunctionProcedure => Icons.Material.Filled.Code,
+            _ => Icons.Material.Filled.Backup
+        };
+    }
+
+    private Color GetColorForBackupItemType(BackupItemType type)
+    {
+        return type switch
+        {
+            BackupItemType.TableStructure => Color.Primary,
+            BackupItemType.TableData => Color.Secondary,
+            BackupItemType.View => Color.Tertiary,
+            BackupItemType.Trigger => Color.Info,
+            BackupItemType.Event => Color.Success,
+            BackupItemType.FunctionProcedure => Color.Warning,
+            _ => Color.Default
+        };
+    }
+
+    private void ToggleSchema(SchemaGroup schema)
+    {
+        schema.IsExpanded = !schema.IsExpanded;
+    }
+
+    private void ToggleItemGroup(ItemGroup itemGroup)
+    {
+        itemGroup.IsExpanded = !itemGroup.IsExpanded;
+    }
+// Core logic for grouping and filtering items
+
+    [Parameter] public List<BackupItem> Items { get; set; } = new();
+    [Parameter] public EventCallback<List<BackupItem>> ItemsChanged { get; set; }
+
+    private List<SchemaGroup> _schemaGroups = new();
+    private List<SchemaGroup> _filteredSchemaGroups = new();
+    private bool _isLoading = false;
+    private string _selectedSchemaFilter = "all";
+    private string _selectedTypeFilter = "all";
+    private string _searchString = "";
 
     protected override void OnParametersSet()
     {
@@ -357,29 +594,58 @@ else
             // Preserve existing expansion state or default to false
             schema.IsExpanded = existingSchema?.IsExpanded ?? false;
 
-            // Process tables
-            var existingTables = schema.Tables.ToDictionary(t => t.TableName);
-            schema.Tables.Clear();
+            // Process items by type groups
+            schema.TypeGroups = new List<TypeGroup>();
 
-            var tableItems = schemaGroup
-                .Where(i => !string.IsNullOrEmpty(i.Name))
-                .ToList();
-
-            foreach (var tableGroup in tableItems
-                         .GroupBy(i => i.Name)
-                         .OrderBy(g => g.Key))
+            foreach (var typeGroupDef in _typeGroupDefinitions)
             {
-                var tableName = tableGroup.Key!;
-                var existingTable = existingTables.GetValueOrDefault(tableName);
+                // Get all items that belong to this type group
+                var typeItems = schema.Items
+                    .Where(i => !string.IsNullOrEmpty(i.Name) && typeGroupDef.Types.Contains(i.Type))
+                    .ToList();
 
-                var table = existingTable ?? new TableGroup();
-                table.TableName = tableName;
-                table.Items = tableGroup.ToList();
-                table.IsExpanded = existingTable?.IsExpanded ?? false;
+                if (!typeItems.Any())
+                    continue;
 
-                schema.Tables.Add(table);
-                UpdateTableSelectionState(table);
+                var typeGroup = new TypeGroup
+                {
+                    DisplayName = typeGroupDef.DisplayName,
+                    Types = typeGroupDef.Types,
+                    SupportsSearch = typeGroupDef.SupportsSearch,
+                    ItemGroups = new List<ItemGroup>()
+                };
+
+                // Group items by the grouping function
+                var itemGroups = typeItems
+                    .GroupBy(typeGroupDef.GroupingFunc)
+                    .OrderBy(g => g.Key)
+                    .ToList();
+
+                foreach (var group in itemGroups)
+                {
+                    var itemGroup = new ItemGroup
+                    {
+                        GroupName = group.Key,
+                        Items = group.ToList(),
+                        IsExpanded = false
+                    };
+
+                    // If this group has just one item, don't allow expansion
+                    if (itemGroup.Items.Count == 1)
+                    {
+                        itemGroup.IsExpanded = false;
+                    }
+
+                    UpdateItemGroupSelectionState(itemGroup);
+                    typeGroup.ItemGroups.Add(itemGroup);
+                }
+
+                typeGroup.FilteredItemGroups = typeGroup.ItemGroups;
+                schema.TypeGroups.Add(typeGroup);
             }
+
+            // For backward compatibility, maintain Tables collection but don't use it
+            schema.Tables = new List<TableGroup>();
 
             UpdateSchemaSelectionState(schema);
             newSchemaGroups.Add(schema);
@@ -407,20 +673,39 @@ else
             {
                 foreach (var schema in _filteredSchemaGroups)
                 {
-                    var filteredTables = schema.Tables
-                        .Where(t => t.Items.Any(i => i.Type == typeFilter))
-                        .ToList();
-
-                    if (!_filteredTables.ContainsKey(schema.SchemaName))
+                    foreach (var typeGroup in schema.TypeGroups)
                     {
-                        _filteredTables[schema.SchemaName] = filteredTables;
+                        if (typeGroup.Types.Contains(typeFilter))
+                        {
+                            typeGroup.FilteredItemGroups = typeGroup.ItemGroups
+                                .Where(t => t.Items.Any(i => i.Type == typeFilter))
+                                .ToList();
+                        }
+                        else
+                        {
+                            // If this type group doesn't contain the selected type, clear its items
+                            typeGroup.FilteredItemGroups = new List<ItemGroup>();
+                        }
                     }
                 }
             }
         }
         else
         {
-            _filteredTables.Clear();
+            // Reset filtered items
+            foreach (var schema in _filteredSchemaGroups)
+            {
+                foreach (var typeGroup in schema.TypeGroups)
+                {
+                    typeGroup.FilteredItemGroups = typeGroup.ItemGroups;
+                }
+            }
+        }
+
+        // Apply text search if specified
+        if (!string.IsNullOrWhiteSpace(_searchString))
+        {
+            ApplySearchFilter(_searchString);
         }
     }
 
@@ -438,46 +723,73 @@ else
         StateHasChanged();
     }
 
-    private void FilterTables(SchemaGroup schema, string searchString)
+    private void ApplySearchFilter(string searchString)
     {
-        _tableSearchString = searchString;
+        _searchString = searchString;
 
         if (string.IsNullOrWhiteSpace(searchString))
         {
-            if (_filteredTables.ContainsKey(schema.SchemaName))
+            // Reset all filtered items when search is cleared
+            foreach (var schema in _filteredSchemaGroups)
             {
-                _filteredTables.Remove(schema.SchemaName);
+                foreach (var typeGroup in schema.TypeGroups)
+                {
+                    if (_selectedTypeFilter == "all" ||
+                        (Enum.TryParse<BackupItemType>(_selectedTypeFilter, out var typeFilter) &&
+                         typeGroup.Types.Contains(typeFilter)))
+                    {
+                        typeGroup.FilteredItemGroups = typeGroup.ItemGroups;
+                    }
+                }
             }
         }
         else
         {
-            _filteredTables[schema.SchemaName] = schema.Tables
-                .Where(t => t.TableName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            // Apply search filter to all type groups
+            foreach (var schema in _filteredSchemaGroups)
+            {
+                foreach (var typeGroup in schema.TypeGroups)
+                {
+                    if (typeGroup.SupportsSearch)
+                    {
+                        bool isTypeFilterApplicable =
+                            _selectedTypeFilter == "all" ||
+                            (Enum.TryParse<BackupItemType>(_selectedTypeFilter, out var typeFilter) &&
+                             typeGroup.Types.Contains(typeFilter));
+
+                        if (isTypeFilterApplicable)
+                        {
+                            typeGroup.FilteredItemGroups = typeGroup.ItemGroups
+                                .Where(g => g.GroupName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+                                .ToList();
+                        }
+                    }
+                }
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private void FilterTypeGroupItems(SchemaGroup schema, TypeGroup typeGroup, string searchString)
+    {
+        typeGroup.SearchString = searchString;
+
+        if (string.IsNullOrWhiteSpace(searchString))
+        {
+            typeGroup.FilteredItemGroups = typeGroup.ItemGroups;
+        }
+        else
+        {
+            typeGroup.FilteredItemGroups = typeGroup.ItemGroups
+                .Where(g => g.GroupName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
                 .ToList();
         }
 
         StateHasChanged();
     }
 
-    private void ToggleSchema(SchemaGroup schema)
-    {
-        schema.IsExpanded = !schema.IsExpanded;
-    }
-
-    private void ToggleTable(TableGroup table)
-    {
-        table.IsExpanded = !table.IsExpanded;
-    }
-
-    private void UpdateTableSelectionState(TableGroup table)
-    {
-        table.IsFullySelected = table.Items.Any(i => i.IsSelected);
-    }
-
-    private void UpdateSchemaSelectionState(SchemaGroup schema)
-    {
-        schema.IsFullySelected = schema.Items.Any(i => i.IsSelected);
-    }
+// Selection methods for toggling item selection
 
     private async Task ToggleSchemaSelection(SchemaGroup schema, bool isSelected)
     {
@@ -486,23 +798,47 @@ else
             item.IsSelected = isSelected;
         }
 
-        foreach (var table in schema.Tables)
+        // Update all item groups
+        foreach (var typeGroup in schema.TypeGroups)
         {
-            UpdateTableSelectionState(table);
+            foreach (var itemGroup in typeGroup.ItemGroups)
+            {
+                UpdateItemGroupSelectionState(itemGroup);
+            }
         }
 
         UpdateSchemaSelectionState(schema);
         await NotifyItemsChanged();
     }
 
-    private async Task ToggleTableSelection(TableGroup table, SchemaGroup schema, bool isSelected)
+    private async Task ToggleTypeGroupSelection(SchemaGroup schema, TypeGroup typeGroup, bool isSelected)
     {
-        foreach (var item in table.Items)
+        // Get all items in this type group
+        var items = typeGroup.ItemGroups.SelectMany(g => g.Items).ToList();
+
+        foreach (var item in items)
         {
             item.IsSelected = isSelected;
         }
 
-        UpdateTableSelectionState(table);
+        // Update all item groups
+        foreach (var itemGroup in typeGroup.ItemGroups)
+        {
+            UpdateItemGroupSelectionState(itemGroup);
+        }
+
+        UpdateSchemaSelectionState(schema);
+        await NotifyItemsChanged();
+    }
+
+    private async Task ToggleItemGroupSelection(ItemGroup itemGroup, SchemaGroup schema, TypeGroup typeGroup, bool isSelected)
+    {
+        foreach (var item in itemGroup.Items)
+        {
+            item.IsSelected = isSelected;
+        }
+
+        UpdateItemGroupSelectionState(itemGroup);
         UpdateSchemaSelectionState(schema);
         await NotifyItemsChanged();
     }
@@ -519,6 +855,20 @@ else
         await NotifyItemsChanged();
     }
 
+    private async Task OnItemSelectionChanged(BackupItem item, SchemaGroup schema, TableGroup table, bool isSelected,
+        TypeGroup typeGroup, ItemGroup itemGroup)
+    {
+        item.IsSelected = isSelected;
+
+        if (itemGroup != null)
+        {
+            UpdateItemGroupSelectionState(itemGroup);
+        }
+
+        UpdateSchemaSelectionState(schema);
+        await NotifyItemsChanged();
+    }
+
     private async Task ToggleAllItems(bool isSelected)
     {
         foreach (var item in Items)
@@ -529,9 +879,12 @@ else
         foreach (var schema in _schemaGroups)
         {
             UpdateSchemaSelectionState(schema);
-            foreach (var table in schema.Tables)
+            foreach (var typeGroup in schema.TypeGroups)
             {
-                UpdateTableSelectionState(table);
+                foreach (var itemGroup in typeGroup.ItemGroups)
+                {
+                    UpdateItemGroupSelectionState(itemGroup);
+                }
             }
         }
 
@@ -551,9 +904,12 @@ else
         foreach (var schema in _schemaGroups)
         {
             UpdateSchemaSelectionState(schema);
-            foreach (var table in schema.Tables)
+            foreach (var typeGroup in schema.TypeGroups)
             {
-                UpdateTableSelectionState(table);
+                foreach (var itemGroup in typeGroup.ItemGroups)
+                {
+                    UpdateItemGroupSelectionState(itemGroup);
+                }
             }
         }
 
@@ -570,9 +926,12 @@ else
             }
         }
 
-        foreach (var table in schema.Tables)
+        foreach (var typeGroup in schema.TypeGroups)
         {
-            UpdateTableSelectionState(table);
+            foreach (var itemGroup in typeGroup.ItemGroups)
+            {
+                UpdateItemGroupSelectionState(itemGroup);
+            }
         }
 
         UpdateSchemaSelectionState(schema);
@@ -593,17 +952,17 @@ else
         await NotifyItemsChanged();
     }
 
-    private async Task SelectTableItemsByType(TableGroup table, SchemaGroup schema, BackupItemType type)
+    private async Task SelectItemGroupByType(ItemGroup itemGroup, SchemaGroup schema, TypeGroup typeGroup, BackupItemType type)
     {
-        foreach (var item in table.Items)
+        foreach (var item in itemGroup.Items)
         {
             if (item.Type == type)
             {
                 item.IsSelected = true;
             }
         }
-        
-        UpdateTableSelectionState(table);
+
+        UpdateItemGroupSelectionState(itemGroup);
         UpdateSchemaSelectionState(schema);
         await NotifyItemsChanged();
     }
@@ -616,63 +975,4 @@ else
         }
     }
 
-    private string GetBackupItemTypeLabel(BackupItemType type)
-    {
-        return type switch
-        {
-            BackupItemType.TableStructure => "Structure",
-            BackupItemType.TableData => "Data",
-            BackupItemType.View => "View",
-            BackupItemType.Trigger => "Triggers",
-            BackupItemType.Event => "Events",
-            BackupItemType.FunctionProcedure => "Functions/Procedures",
-            _ => type.ToString()
-        };
-    }
-
-    private string GetIconForBackupItemType(BackupItemType type)
-    {
-        return type switch
-        {
-            BackupItemType.TableStructure => Icons.Material.Filled.Schema,
-            BackupItemType.TableData => Icons.Material.Filled.Storage,
-            BackupItemType.View => Icons.Material.Filled.TableView,
-            BackupItemType.Trigger => Icons.Material.Filled.Bolt,
-            BackupItemType.Event => Icons.Material.Filled.Event,
-            BackupItemType.FunctionProcedure => Icons.Material.Filled.Code,
-            _ => Icons.Material.Filled.Backup
-        };
-    }
-
-    private Color GetColorForBackupItemType(BackupItemType type)
-    {
-        return type switch
-        {
-            BackupItemType.TableStructure => Color.Primary,
-            BackupItemType.TableData => Color.Secondary,
-            BackupItemType.View => Color.Tertiary,
-            BackupItemType.Trigger => Color.Info,
-            BackupItemType.Event => Color.Success,
-            BackupItemType.FunctionProcedure => Color.Warning,
-            _ => Color.Default
-        };
-    }
-
-    private class SchemaGroup
-    {
-        public string SchemaName { get; set; } = string.Empty;
-        public List<BackupItem> Items { get; set; } = new();
-        public List<BackupItem> SchemaItems { get; set; } = new();
-        public List<TableGroup> Tables { get; set; } = new();
-        public bool IsFullySelected { get; set; }
-        public bool IsExpanded { get; set; }
-    }
-
-    private class TableGroup
-    {
-        public string TableName { get; set; } = string.Empty;
-        public List<BackupItem> Items { get; set; } = new();
-        public bool IsFullySelected { get; set; }
-        public bool IsExpanded { get; set; }
-    }
 }
