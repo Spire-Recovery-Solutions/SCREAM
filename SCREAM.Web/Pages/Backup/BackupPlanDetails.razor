@@ -33,13 +33,17 @@
                 </MudItem>
 
                 <MudItem xs="12" md="6">
-                    @if (_databaseConnections != null && _databaseConnections.Count > 0)
-                    {
-                        <MudSelect T="long" @bind-Value="_backupPlan.DatabaseConnectionId"
-                                   Label="Database Connection"
-                                   Variant="Variant.Outlined"
-                                   Required="true"
-                                   HelperText="Select the database you want to back up">
+                    <MudSelect T="long" @bind-Value="_backupPlan.DatabaseConnectionId"
+                               Label="Database Connection"
+                               Variant="Variant.Outlined"
+                               Required="true"
+                               HelperText="Select the database you want to back up">
+                        @if (_databaseConnections == null || _databaseConnections.Count == 0)
+                        {
+                            <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
+                        }
+                        else
+                        {
                             <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
                             @foreach (var conn in _databaseConnections)
                             {
@@ -47,18 +51,23 @@
                                     @conn.HostName (@conn.Type)
                                 </MudSelectItem>
                             }
-                        </MudSelect>
-                    }
+                        }
+                    </MudSelect>
                 </MudItem>
 
+
                 <MudItem xs="12" md="6">
-                    @if (_storageTargets != null && _storageTargets.Count > 0)
-                    {
-                        <MudSelect T="long" @bind-Value="_backupPlan.StorageTargetId"
-                                   Label="Storage Target"
-                                   Variant="Variant.Outlined"
-                                   Required="true"
-                                   HelperText="Select where to store your backups">
+                    <MudSelect T="long" @bind-Value="_backupPlan.StorageTargetId"
+                               Label="Storage Target"
+                               Variant="Variant.Outlined"
+                               Required="true"
+                               HelperText="Select where to store your backups">
+                        @if (_storageTargets == null || _storageTargets.Count == 0)
+                        {
+                            <MudSelectItem T="long" Value="0">Select Storage Target</MudSelectItem>
+                        }
+                        else
+                        {
                             <MudSelectItem T="long" Value="0">Select Storage Target</MudSelectItem>
                             @foreach (var target in _storageTargets)
                             {
@@ -66,8 +75,8 @@
                                     @target.Name (@target.Type)
                                 </MudSelectItem>
                             }
-                        </MudSelect>
-                    }
+                        }
+                    </MudSelect>
                 </MudItem>
 
                 <MudItem xs="12">
