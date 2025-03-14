@@ -1,13 +1,13 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
+using MySqlConnector;
 using SCREAM.Business;
 using SCREAM.Data;
 using SCREAM.Data.Entities;
 using SCREAM.Data.Entities.StorageTargets;
 using SCREAM.Data.Enums;
 using SCREAM.Service.Api.Validators;
-using MySqlConnector;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -338,23 +338,54 @@ app.MapPost("/backup-plans", async (IDbContextFactory<ScreamDbContext> dbContext
     }
     else
     {
-        // Update existing backup plan
-        var existingBackupPlan = await dbContext.BackupPlans
-            .Include(i => i.DatabaseConnection)
-            .Include(i => i.StorageTarget)
-            .FirstOrDefaultAsync(x => x.Id == backupPlan.Id);
+        var existingPlan = await dbContext.BackupPlans
+            .Include(bp => bp.Items)
+            .FirstOrDefaultAsync(bp => bp.Id == backupPlan.Id);
 
-        if (existingBackupPlan == null)
-        {
+        if (existingPlan == null)
             return Results.NotFound();
+
+        dbContext.Entry(existingPlan).CurrentValues.SetValues(backupPlan);
+
+        var existingItemsDict = existingPlan.Items.Where(i => i.Id != 0)
+            .ToDictionary(i => i.Id);
+        var newItemsDict = backupPlan.Items.Where(i => i.Id != 0)
+            .ToDictionary(i => i.Id);
+
+        foreach (var itemId in existingItemsDict.Keys.Except(newItemsDict.Keys))
+            dbContext.Remove(existingItemsDict[itemId]);
+
+        foreach (var newItem in backupPlan.Items)
+        {
+            if (newItem.Id != 0 && existingItemsDict.TryGetValue(newItem.Id, out var existingItem))
+                dbContext.Entry(existingItem).CurrentValues.SetValues(newItem);
+            else
+                existingPlan.Items.Add(newItem);
         }
 
-        // Use EF Update function 
-        dbContext.Entry(existingBackupPlan).CurrentValues.SetValues(backupPlan);
         await dbContext.SaveChangesAsync();
-
-        return Results.Ok(backupPlan);
+        return Results.Ok(existingPlan);
     }
+});
+
+// Delete a backup plan
+app.MapDelete("/backup-plans/{backupPlanId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+    long backupPlanId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var backupPlan = await dbContext.BackupPlans
+        .Include(p => p.Items)
+        .FirstOrDefaultAsync(x => x.Id == backupPlanId);
+
+    if (backupPlan == null)
+    {
+        return Results.NotFound();
+    }
+
+    dbContext.BackupPlans.Remove(backupPlan);
+    await dbContext.SaveChangesAsync();
+
+    return Results.NoContent();
 });
 
 
