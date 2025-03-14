@@ -313,18 +313,18 @@ app.MapGet("/backup-plans/{backupPlanId:long}", async (IDbContextFactory<ScreamD
 app.MapPost("/backup-plans", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
     BackupPlan backupPlan) =>
 {
-    // First test the database connection
-    var isValid = ValidateDatabaseConnection(backupPlan.DatabaseConnection);
-    if (!isValid)
-    {
-        return Results.BadRequest("Invalid database connection configuration.");
-    }
-
-    var testResult = await TestDatabaseConnection(backupPlan.DatabaseConnection);
-    if (!testResult)
-    {
-        return Results.BadRequest("Database connection test failed.");
-    }
+    // // First test the database connection
+    // var isValid = ValidateDatabaseConnection(backupPlan.DatabaseConnection);
+    // if (!isValid)
+    // {
+    //     return Results.BadRequest("Invalid database connection configuration.");
+    // }
+    //
+    // var testResult = await TestDatabaseConnection(backupPlan.DatabaseConnection);
+    // if (!testResult)
+    // {
+    //     return Results.BadRequest("Database connection test failed.");
+    // }
 
     // If test succeeds, save the backup plan
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();

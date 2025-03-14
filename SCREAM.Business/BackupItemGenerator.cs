@@ -107,7 +107,8 @@ public class BackupItemGenerator
         {
             backupItems.Add(new TriggerItem
             {
-                Schema = schema
+                Schema = schema,
+                Name = schema
             });
         }
 
@@ -117,7 +118,8 @@ public class BackupItemGenerator
         {
             backupItems.Add(new EventItem
             {
-                Schema = schema
+                Schema = schema,
+                Name = schema
             });
         }
 
@@ -127,7 +129,8 @@ public class BackupItemGenerator
         {
             backupItems.Add(new FunctionProcedureItem
             {
-                Schema = schema
+                Schema = schema,
+                Name = schema
             });
         }
 
