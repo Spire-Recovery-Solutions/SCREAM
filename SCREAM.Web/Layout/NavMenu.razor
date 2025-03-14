@@ -1,38 +1,21 @@
 <MudNavMenu>
     <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
 
-    <MudNavLink Href="/backupplans" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.BackupTable">Backup Plans</MudNavLink>
-
-    <MudNavLink Href="/restore" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Restore">Restore</MudNavLink>
-
-    <MudNavLink Href="/migration" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.SwapHoriz">Migration</MudNavLink>
-
-    <MudNavGroup Title="Database Management" Expanded="false" Icon="@Icons.Material.Filled.Storage">
-        <MudNavLink Href="/databasemanagement/connections" Match="NavLinkMatch.Prefix">Connections</MudNavLink>
-        <MudNavLink Href="/databasemanagement/databases" Match="NavLinkMatch.Prefix">Databases</MudNavLink>
+    <MudNavGroup Title="Backup" Expanded="false" Icon="@Icons.Material.Filled.BackupTable">
+        <MudNavLink Href="/backupplans" Match="NavLinkMatch.Prefix">Backup Plans</MudNavLink>
+        <MudNavLink Href="/backupjobs" Match="NavLinkMatch.Prefix">Backup Jobs</MudNavLink>
     </MudNavGroup>
 
-    <MudNavGroup Title="Components" Expanded="false" Icon="@Icons.Material.Filled.Extension">
-        <MudNavLink Href="/components/schema" Match="NavLinkMatch.Prefix">Schema</MudNavLink>
-        <MudNavLink Href="/components/data" Match="NavLinkMatch.Prefix">Data</MudNavLink>
-        <MudNavLink Href="/components/functionsp" Match="NavLinkMatch.Prefix">Functions & SP</MudNavLink>
-        <MudNavLink Href="/components/views" Match="NavLinkMatch.Prefix">Views</MudNavLink>
-        <MudNavLink Href="/components/triggers" Match="NavLinkMatch.Prefix">Triggers</MudNavLink>
-        <MudNavLink Href="/components/events" Match="NavLinkMatch.Prefix">Events</MudNavLink>
+    <MudNavGroup Title="Restore" Expanded="false" Icon="@Icons.Material.Filled.Restore">
+        <MudNavLink Href="/restore" Match="NavLinkMatch.Prefix">Restore Plans</MudNavLink>
+        <MudNavLink Href="/restorejobs" Match="NavLinkMatch.Prefix">Restore Jobs</MudNavLink>
     </MudNavGroup>
 
-    <MudNavGroup Title="Storage" Expanded="false" Icon="@Icons.Material.Filled.CloudQueue">
-        <MudNavLink Href="/storage/storage-targets" Match="NavLinkMatch.Prefix">Storage Targets</MudNavLink>
-    </MudNavGroup>
-
-    <MudNavGroup Title="Settings" Expanded="false" Icon="@Icons.Material.Filled.Settings">
-        <MudNavLink Href="/settings/general" Match="NavLinkMatch.Prefix">General</MudNavLink>
-        <MudNavLink Href="/settings/encryption" Match="NavLinkMatch.Prefix">Encryption</MudNavLink>
-        <MudNavLink Href="/settings/compression" Match="NavLinkMatch.Prefix">Compression</MudNavLink>
-        <MudNavLink Href="/settings/performance" Match="NavLinkMatch.Prefix">Performance</MudNavLink>
+    <MudNavGroup Title="Targets" Expanded="false" Icon="@Icons.Material.Filled.Storage">
+        <MudNavLink Href="/connections" Match="NavLinkMatch.Prefix">Connections</MudNavLink>
+        <MudNavLink Href="/storage-targets" Match="NavLinkMatch.Prefix">Storage</MudNavLink>
     </MudNavGroup>
 
     <MudNavLink Href="/logs" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Assignment">Logs</MudNavLink>
-
     <MudNavLink Href="/about" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Info">About</MudNavLink>
 </MudNavMenu>
