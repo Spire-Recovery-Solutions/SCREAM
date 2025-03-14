@@ -1,4 +1,4 @@
-@page "/backupplans"
+@page "/backup-plans"
 @using SCREAM.Data.Entities
 @using SCREAM.Data.Enums
 @using System.Text.Json
@@ -48,18 +48,18 @@
         <MudTd>@(context.StorageTarget?.Name)</MudTd>
         <MudTd>@context.ScheduleType</MudTd>
         <MudTd>
-            <MudChip T="bool" Color="@(context.IsActive ? Color.Success : Color.Error)" 
-                    Size="Size.Small">
+            <MudChip T="bool" Color="@(context.IsActive ? Color.Success : Color.Error)"
+                     Size="Size.Small">
                 @(context.IsActive ? "Active" : "Inactive")
             </MudChip>
         </MudTd>
         <MudTd>
             <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                          Color="Color.Primary"
-                          OnClick="@(() => EditBackupPlan(context))" />
+                           Color="Color.Primary"
+                           OnClick="@(() => EditBackupPlan(context))" />
             <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                          Color="Color.Error"
-                          OnClick="@(() => DeleteBackupPlan(context))" />
+                           Color="Color.Error"
+                           OnClick="@(() => DeleteBackupPlan(context))" />
         </MudTd>
     </RowTemplate>
 </MudTable>
@@ -74,11 +74,11 @@
     {
         _httpClient = ClientFactory.CreateClient("SCREAM");
         _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-        };
+            {
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            };
         await RefreshBackupPlans();
     }
 

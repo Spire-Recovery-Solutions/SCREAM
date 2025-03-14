@@ -8,24 +8,28 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
-<MudText Align="Align.Center" Typo="Typo.h6" Class="mb-4">Manage Storage Targets</MudText>
+<MudText Align="Align.Center" Typo="Typo.h6" Class="mb-4">
+    Manage Storage Targets
+</MudText>
 
-<MudStack Row Style="width:100%;" Class="mb-4" Justify="Justify.SpaceBetween">
-    <MudButton StartIcon="@Icons.Material.Filled.Add"
-               Variant="Variant.Filled"
-               Color="Color.Primary"
-               OnClick="AddNewTarget">
-        Add Storage Target
-    </MudButton>
-    <MudButton StartIcon="@Icons.Material.Filled.Refresh"
-               Variant="Variant.Outlined"
-               Color="Color.Default"
-               OnClick="RefreshTargets">
-        Refresh
-    </MudButton>
-</MudStack>
-
-<MudTable Items="@_storageTargets" Dense="true" Hover="true" Striped="true">
+<MudTable Items="@_storageTargets" Dense="true" Hover="true" Striped="true"
+          Loading="@_isLoading" LoadingProgressColor="Color.Primary">
+    <ToolBarContent>
+        <MudStack Row Style="width:100%;" Class="mb-4" Justify="Justify.SpaceBetween">
+            <MudButton StartIcon="@Icons.Material.Filled.Add"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       OnClick="AddNewTarget">
+                Add Storage Target
+            </MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.Refresh"
+                       Variant="Variant.Outlined"
+                       Color="Color.Default"
+                       OnClick="RefreshTargets">
+                Refresh
+            </MudButton>
+        </MudStack>
+    </ToolBarContent>
     <HeaderContent>
         <MudTh>Name</MudTh>
         <MudTh>Type</MudTh>
@@ -51,6 +55,7 @@
     private List<StorageTarget> _storageTargets = new();
     private HttpClient _httpClient;
     private JsonSerializerOptions _jsonOptions;
+    private bool _isLoading = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -68,12 +73,17 @@
     {
         try
         {
+            _isLoading = true;
             _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("storage", _jsonOptions)
                                ?? new List<StorageTarget>();
         }
         catch (Exception ex)
         {
             Snackbar.Add("Error loading storage targets: " + ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
         }
     }
 

@@ -12,12 +12,8 @@
     Manage Database Connections
 </MudText>
 
-<MudTable Items="@_connections"
-          Dense="true"
-          Hover="true"
-          Striped="true"
-          Loading="@_isLoading"
-          LoadingProgressColor="Color.Primary">
+<MudTable Items="@_connections" Dense="true" Hover="true" Striped="true"
+          Loading="@_isLoading" LoadingProgressColor="Color.Primary">
     <ToolBarContent>
         <MudStack Row Style="width:100%;" Class="mb-4" Justify="Justify.SpaceBetween">
             <MudButton StartIcon="@Icons.Material.Filled.Add"
