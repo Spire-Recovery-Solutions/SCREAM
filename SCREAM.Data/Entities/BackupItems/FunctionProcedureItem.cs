@@ -11,7 +11,7 @@ public class FunctionProcedureItem : BackupItem
     public override BackupItemType Type
     {
         get => BackupItemType.FunctionProcedure;
-        set => throw new NotImplementedException();
+        set { }
     }
 
     public override void ConfigureArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize)

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SCREAM.Data;
 
@@ -10,9 +11,11 @@ using SCREAM.Data;
 namespace SCREAM.Data.Migrations
 {
     [DbContext(typeof(ScreamDbContext))]
-    partial class ScreamDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250313151322_BackupJobsEtc")]
+    partial class BackupJobsEtc
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.13");
@@ -61,7 +64,7 @@ namespace SCREAM.Data.Migrations
 
                     b.HasIndex("BackupPlanId");
 
-                    b.ToTable("BackupItems", (string)null);
+                    b.ToTable("BackupItem");
 
                     b.HasDiscriminator<string>("Type");
 
@@ -171,6 +174,9 @@ namespace SCREAM.Data.Migrations
                     b.Property<long>("BackupPlanId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("BackupPlanId1")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("TEXT");
 
@@ -195,6 +201,8 @@ namespace SCREAM.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BackupPlanId");
+
+                    b.HasIndex("BackupPlanId1");
 
                     b.ToTable("BackupJobs", (string)null);
                 });
@@ -301,6 +309,47 @@ namespace SCREAM.Data.Migrations
                     b.HasIndex("StorageTargetId");
 
                     b.ToTable("BackupPlans", (string)null);
+                });
+
+            modelBuilder.Entity("SCREAM.Data.Entities.BackupSchedule", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("BackupPlanId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("CronExpression")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastRun")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("NextRun")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ScheduledType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BackupPlanId");
+
+                    b.ToTable("BackupSchedules", (string)null);
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.DatabaseConnection", b =>
@@ -500,8 +549,7 @@ namespace SCREAM.Data.Migrations
                 {
                     b.HasOne("SCREAM.Data.Entities.BackupPlan", null)
                         .WithMany("Items")
-                        .HasForeignKey("BackupPlanId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .HasForeignKey("BackupPlanId");
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.BackupItems.BackupItemStatus", b =>
@@ -512,22 +560,28 @@ namespace SCREAM.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("SCREAM.Data.Entities.BackupJob", null)
+                    b.HasOne("SCREAM.Data.Entities.BackupJob", "BackupJob")
                         .WithMany()
                         .HasForeignKey("BackupJobId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("BackupItem");
+
+                    b.Navigation("BackupJob");
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.BackupJob", b =>
                 {
                     b.HasOne("SCREAM.Data.Entities.BackupPlan", "BackupPlan")
-                        .WithMany("Jobs")
+                        .WithMany()
                         .HasForeignKey("BackupPlanId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("SCREAM.Data.Entities.BackupPlan", null)
+                        .WithMany("Jobs")
+                        .HasForeignKey("BackupPlanId1");
 
                     b.Navigation("BackupPlan");
                 });
@@ -539,13 +593,15 @@ namespace SCREAM.Data.Migrations
                         .HasForeignKey("BackupItemStatusId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("SCREAM.Data.Entities.BackupJob", null)
+                    b.HasOne("SCREAM.Data.Entities.BackupJob", "BackupJob")
                         .WithMany()
                         .HasForeignKey("BackupJobId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("BackupItemStatus");
+
+                    b.Navigation("BackupJob");
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.BackupPlan", b =>
@@ -553,18 +609,29 @@ namespace SCREAM.Data.Migrations
                     b.HasOne("SCREAM.Data.Entities.DatabaseConnection", "DatabaseConnection")
                         .WithMany()
                         .HasForeignKey("DatabaseConnectionId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("SCREAM.Data.Entities.StorageTargets.StorageTarget", "StorageTarget")
                         .WithMany()
                         .HasForeignKey("StorageTargetId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("DatabaseConnection");
 
                     b.Navigation("StorageTarget");
+                });
+
+            modelBuilder.Entity("SCREAM.Data.Entities.BackupSchedule", b =>
+                {
+                    b.HasOne("SCREAM.Data.Entities.BackupPlan", "BackupPlan")
+                        .WithMany()
+                        .HasForeignKey("BackupPlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BackupPlan");
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.BackupPlan", b =>

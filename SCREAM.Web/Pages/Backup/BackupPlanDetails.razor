@@ -1,0 +1,299 @@
+﻿@page "/backupplan/{Id:long?}"
+@using SCREAM.Data.Entities
+@using SCREAM.Data.Entities.StorageTargets
+@using SCREAM.Data.Entities.BackupItems
+@using SCREAM.Data.Enums
+@inject ISnackbar Snackbar
+@inject IHttpClientFactory ClientFactory
+@inject IDialogService DialogService
+@inject NavigationManager NavigationManager
+
+<MudCard Elevation="3" Class="mb-4">
+    <MudCardHeader>
+        <CardHeaderContent>
+            <MudText Typo="Typo.h5">@(Id.HasValue ? "Edit" : "Create") Backup Plan</MudText>
+        </CardHeaderContent>
+    </MudCardHeader>
+
+    <MudCardContent>
+        <MudForm @ref="_form" Model="_backupPlan">
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_backupPlan.Name"
+                                  Label="Plan Name"
+                                  Variant="Variant.Outlined"
+                                  Required="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_backupPlan.Description"
+                                  Label="Description"
+                                  Variant="Variant.Outlined"
+                                  Required="true" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudSelect T="long" @bind-Value="_backupPlan.DatabaseConnectionId"
+                               Label="Database Connection"
+                               Variant="Variant.Outlined"
+                               Required="true"
+                               HelperText="Select the database you want to back up">
+                        @if (_databaseConnections == null || _databaseConnections.Count == 0)
+                        {
+                            <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
+                        }
+                        else
+                        {
+                            <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
+                            @foreach (var conn in _databaseConnections)
+                            {
+                                <MudSelectItem Value="@conn.Id">
+                                    @conn.HostName (@conn.Type)
+                                </MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+
+
+                <MudItem xs="12" md="6">
+                    <MudSelect T="long" @bind-Value="_backupPlan.StorageTargetId"
+                               Label="Storage Target"
+                               Variant="Variant.Outlined"
+                               Required="true"
+                               HelperText="Select where to store your backups">
+                        @if (_storageTargets == null || _storageTargets.Count == 0)
+                        {
+                            <MudSelectItem T="long" Value="0">Select Storage Target</MudSelectItem>
+                        }
+                        else
+                        {
+                            <MudSelectItem T="long" Value="0">Select Storage Target</MudSelectItem>
+                            @foreach (var target in _storageTargets)
+                            {
+                                <MudSelectItem Value="@target.Id">
+                                    @target.Name (@target.Type)
+                                </MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudGrid Class="mt-2">
+                        <MudItem xs="12" md="6">
+                            <MudSelect T="ScheduleType"
+                                       @bind-Value="_backupPlan.ScheduleType"
+                                       Label="Schedule Type"
+                                       Variant="Variant.Outlined"
+                                       HelperText="How often should this backup run?">
+                                @foreach (ScheduleType type in Enum.GetValues(typeof(ScheduleType)))
+                                {
+                                    <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+
+                        @if (_backupPlan.ScheduleType != ScheduleType.OneTime)
+                        {
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_backupPlan.ScheduleCron"
+                                              Label="Cron Expression"
+                                              Variant="Variant.Outlined"
+                                              Required="true"
+                                              HelperText="e.g., '0 0 * * *' for daily at midnight" />
+                            </MudItem>
+                        }
+                        @if (Id.HasValue)
+                        {
+                            <MudItem xs="12" md="6">
+                                <MudSwitch T="bool" @bind-Value="_backupPlan.IsActive"
+                                           Color="Color.Primary"
+                                           Label="Active" />
+                            </MudItem>
+                        }
+                    </MudGrid>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </MudCardContent>
+
+    <MudCardActions>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Search"
+                   OnClick="ScanDatabase"
+                   Disabled="@(_backupPlan.DatabaseConnectionId == 0 || _isScanning)"
+                   Class="ml-auto">
+            @if (_isScanning)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Scanning...</span>
+            }
+            else
+            {
+                <span>@(_backupPlan.Items.Count > 0 ? "Re-Scan" : "Scan") Database</span>
+            }
+        </MudButton>
+    </MudCardActions>
+</MudCard>
+
+@if (_backupPlan.DatabaseConnectionId != 0 && _backupPlan.Items?.Count > 0)
+{
+    <MudCard Elevation="3" Class="mt-4 mb-4">
+        <MudCardContent>
+            <EnhancedBackupTree @bind-Items="_backupPlan.Items" />
+        </MudCardContent>
+    </MudCard>
+}
+
+<MudPaper Class="d-flex justify-center pa-4" Elevation="3">
+    <MudButton OnClick="@(() => NavigationManager.NavigateTo("/backupplans"))">Back</MudButton>
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Success"
+               StartIcon="@Icons.Material.Filled.Save"
+               OnClick="SavePlan"
+               Disabled="@(_backupPlan.DatabaseConnectionId == 0 || _backupPlan.StorageTargetId == 0 || string.IsNullOrWhiteSpace(_backupPlan.Name))">
+        Save Backup Plan
+    </MudButton>
+</MudPaper>
+
+@code {
+    [Parameter] public long? Id { get; set; }
+
+    private MudForm _form;
+    private BackupPlan _backupPlan = new()
+        {
+            Name = string.Empty,
+            Description = string.Empty,
+            ScheduleCron = "0 0 * * *",
+            ScheduleType = ScheduleType.OneTime,
+            Items = new List<BackupItem>(),
+            IsActive = false
+        };
+
+    private bool _isScanning;
+    private HttpClient _httpClient;
+    private List<DatabaseConnection> _databaseConnections = new();
+    private List<StorageTarget> _storageTargets = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _httpClient = ClientFactory.CreateClient("SCREAM");
+
+        try
+        {
+            _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/connections") ?? new();
+            _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("/storage") ?? new();
+
+            if (Id.HasValue)
+            {
+                var plan = await _httpClient.GetFromJsonAsync<BackupPlan>($"/backup-plans/{Id.Value}");
+                if (plan != null)
+                {
+                    _backupPlan = plan;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading data: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ScanDatabase()
+    {
+        if (_backupPlan.DatabaseConnectionId == 0) return;
+
+        HashSet<string> selectedKeys = new();
+        if (_backupPlan.Items.Count > 0)
+        {
+            var parameters = new DialogParameters
+            {
+                { "ContentText", "Re-scanning will refresh all database items. Your selections will be preserved where possible. Continue?" },
+                { "ButtonText", "Re-Scan" },
+                { "Color", Color.Warning }
+            };
+
+            var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirm Re-Scan", parameters);
+            var result = await dialog.Result;
+            if (result.Canceled) return;
+
+            selectedKeys = _backupPlan.Items
+                .Where(i => i.IsSelected)
+                .Select(i => $"{i.Type}:{i.Schema}:{i.Name}")
+                .ToHashSet();
+        }
+
+        _isScanning = true;
+        StateHasChanged();
+
+        try
+        {
+            var response = await _httpClient.PostAsync($"connections/{_backupPlan.DatabaseConnectionId}/scan", null);
+            response.EnsureSuccessStatusCode();
+
+            var newItems = await response.Content.ReadFromJsonAsync<List<BackupItem>>();
+            if (newItems != null)
+            {
+                foreach (var item in newItems)
+                {
+                    string key = $"{item.Type}:{item.Schema}:{item.Name}";
+                    item.IsSelected = _backupPlan.Items.Count == 0 || selectedKeys.Contains(key);
+                }
+
+                _backupPlan.Items = newItems;
+                Snackbar.Add("Database scanned successfully", Severity.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error scanning database: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isScanning = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SavePlan()
+    {
+        await _form.Validate();
+        if (!_form.IsValid)
+            return;
+
+        var planToSave = new BackupPlan
+            {
+                Id = _backupPlan.Id,
+                Name = _backupPlan.Name,
+                Description = _backupPlan.Description,
+                DatabaseConnectionId = _backupPlan.DatabaseConnectionId,
+                StorageTargetId = _backupPlan.StorageTargetId,
+                ScheduleType = _backupPlan.ScheduleType,
+                ScheduleCron = _backupPlan.ScheduleCron,
+                IsActive = _backupPlan.IsActive,
+                Items = _backupPlan.Items?.Where(i => i.IsSelected).ToList() ?? new List<BackupItem>()
+            };
+
+        try
+        {
+            HttpResponseMessage response = await _httpClient.PostAsJsonAsync("/backup-plans", planToSave);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add($"Backup plan {(Id.HasValue ? "updated" : "created")} successfully", Severity.Success);
+                NavigationManager.NavigateTo("/backupplans");
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Error: {error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

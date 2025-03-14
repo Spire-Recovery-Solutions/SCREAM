@@ -9,9 +9,7 @@ namespace SCREAM.Data.Entities.BackupItems
         /// The backup job this status belongs to
         /// </summary>
         public long BackupJobId { get; set; }
-
-        public BackupJob BackupJob { get; set; } = null!;
-
+        
         /// <summary>
         /// The backup item this status is tracking
         /// </summary>

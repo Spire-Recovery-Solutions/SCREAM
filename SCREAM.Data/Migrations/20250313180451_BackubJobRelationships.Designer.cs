@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SCREAM.Data;
 
@@ -10,9 +11,11 @@ using SCREAM.Data;
 namespace SCREAM.Data.Migrations
 {
     [DbContext(typeof(ScreamDbContext))]
-    partial class ScreamDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250313180451_BackubJobRelationships")]
+    partial class BackubJobRelationships
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.13");
@@ -24,6 +27,9 @@ namespace SCREAM.Data.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<long?>("BackupPlanId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("BackupPlanId1")
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("CreatedAt")
@@ -61,7 +67,9 @@ namespace SCREAM.Data.Migrations
 
                     b.HasIndex("BackupPlanId");
 
-                    b.ToTable("BackupItems", (string)null);
+                    b.HasIndex("BackupPlanId1");
+
+                    b.ToTable("BackupItem");
 
                     b.HasDiscriminator<string>("Type");
 
@@ -261,6 +269,9 @@ namespace SCREAM.Data.Migrations
                     b.Property<long>("DatabaseConnectionId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("DatabaseConnectionId1")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -288,6 +299,9 @@ namespace SCREAM.Data.Migrations
                     b.Property<long>("StorageTargetId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("StorageTargetId1")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("UpdatedAt")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -298,7 +312,11 @@ namespace SCREAM.Data.Migrations
 
                     b.HasIndex("DatabaseConnectionId");
 
+                    b.HasIndex("DatabaseConnectionId1");
+
                     b.HasIndex("StorageTargetId");
+
+                    b.HasIndex("StorageTargetId1");
 
                     b.ToTable("BackupPlans", (string)null);
                 });
@@ -499,9 +517,15 @@ namespace SCREAM.Data.Migrations
             modelBuilder.Entity("SCREAM.Data.Entities.BackupItems.BackupItem", b =>
                 {
                     b.HasOne("SCREAM.Data.Entities.BackupPlan", null)
-                        .WithMany("Items")
+                        .WithMany()
                         .HasForeignKey("BackupPlanId")
                         .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("SCREAM.Data.Entities.BackupPlan", "BackupPlan")
+                        .WithMany("Items")
+                        .HasForeignKey("BackupPlanId1");
+
+                    b.Navigation("BackupPlan");
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.BackupItems.BackupItemStatus", b =>
@@ -512,13 +536,15 @@ namespace SCREAM.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("SCREAM.Data.Entities.BackupJob", null)
+                    b.HasOne("SCREAM.Data.Entities.BackupJob", "BackupJob")
                         .WithMany()
                         .HasForeignKey("BackupJobId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("BackupItem");
+
+                    b.Navigation("BackupJob");
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.BackupJob", b =>
@@ -539,27 +565,41 @@ namespace SCREAM.Data.Migrations
                         .HasForeignKey("BackupItemStatusId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("SCREAM.Data.Entities.BackupJob", null)
+                    b.HasOne("SCREAM.Data.Entities.BackupJob", "BackupJob")
                         .WithMany()
                         .HasForeignKey("BackupJobId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("BackupItemStatus");
+
+                    b.Navigation("BackupJob");
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.BackupPlan", b =>
                 {
-                    b.HasOne("SCREAM.Data.Entities.DatabaseConnection", "DatabaseConnection")
+                    b.HasOne("SCREAM.Data.Entities.DatabaseConnection", null)
                         .WithMany()
                         .HasForeignKey("DatabaseConnectionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("SCREAM.Data.Entities.StorageTargets.StorageTarget", "StorageTarget")
+                    b.HasOne("SCREAM.Data.Entities.DatabaseConnection", "DatabaseConnection")
+                        .WithMany()
+                        .HasForeignKey("DatabaseConnectionId1")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SCREAM.Data.Entities.StorageTargets.StorageTarget", null)
                         .WithMany()
                         .HasForeignKey("StorageTargetId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SCREAM.Data.Entities.StorageTargets.StorageTarget", "StorageTarget")
+                        .WithMany()
+                        .HasForeignKey("StorageTargetId1")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("DatabaseConnection");

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SCREAM.Data;
 
@@ -10,9 +11,11 @@ using SCREAM.Data;
 namespace SCREAM.Data.Migrations
 {
     [DbContext(typeof(ScreamDbContext))]
-    partial class ScreamDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250313180710_BackubJobShadowFix")]
+    partial class BackubJobShadowFix
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.13");
@@ -498,10 +501,12 @@ namespace SCREAM.Data.Migrations
 
             modelBuilder.Entity("SCREAM.Data.Entities.BackupItems.BackupItem", b =>
                 {
-                    b.HasOne("SCREAM.Data.Entities.BackupPlan", null)
+                    b.HasOne("SCREAM.Data.Entities.BackupPlan", "BackupPlan")
                         .WithMany("Items")
                         .HasForeignKey("BackupPlanId")
                         .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("BackupPlan");
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.BackupItems.BackupItemStatus", b =>
@@ -512,13 +517,15 @@ namespace SCREAM.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("SCREAM.Data.Entities.BackupJob", null)
+                    b.HasOne("SCREAM.Data.Entities.BackupJob", "BackupJob")
                         .WithMany()
                         .HasForeignKey("BackupJobId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("BackupItem");
+
+                    b.Navigation("BackupJob");
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.BackupJob", b =>
@@ -539,13 +546,15 @@ namespace SCREAM.Data.Migrations
                         .HasForeignKey("BackupItemStatusId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("SCREAM.Data.Entities.BackupJob", null)
+                    b.HasOne("SCREAM.Data.Entities.BackupJob", "BackupJob")
                         .WithMany()
                         .HasForeignKey("BackupJobId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("BackupItemStatus");
+
+                    b.Navigation("BackupJob");
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.BackupPlan", b =>

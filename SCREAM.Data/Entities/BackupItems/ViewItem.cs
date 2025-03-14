@@ -11,7 +11,7 @@ public class ViewItem : BackupItem
     public override BackupItemType Type
     {
         get => BackupItemType.View;
-        set => throw new NotImplementedException();
+        set { }
     }
 
     public override void ConfigureArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize)

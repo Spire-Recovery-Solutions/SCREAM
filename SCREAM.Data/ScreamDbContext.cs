@@ -9,12 +9,11 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
 {
     public DbSet<BackupPlan> BackupPlans { get; set; }
     public DbSet<DatabaseConnection> DatabaseConnections { get; set; }
-    public DbSet<BackupSchedule> BackupSchedules { get; set; }
     public DbSet<BackupJob> BackupJobs { get; set; }
     public DbSet<BackupItemStatus> BackupItemStatuses { get; set; }
     public DbSet<BackupJobLog> BackupJobLogs { get; set; }
     public DbSet<BackupSettings> BackupSettings { get; set; }
-    
+    public DbSet<BackupItem> BackupItems { get; set; }
     public DbSet<StorageTarget> StorageTargets { get; set; }
 
     protected override void OnModelCreating(ModelBuilder mb)
@@ -36,16 +35,39 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             });
         }
 
-        // DatabaseConnection configuration
-        mb.Entity<DatabaseConnection>(e =>
+        // BackupPlan configuration
+        mb.Entity<BackupPlan>(e =>
         {
-            e.ToTable("DatabaseConnections");
-            e.Property(p => p.Type).HasConversion<string>();
-        });
+            e.ToTable("BackupPlans");
+            
+            e.HasMany(p => p.Jobs)
+                .WithOne(j => j.BackupPlan)
+                .HasForeignKey(j => j.BackupPlanId)
+                .OnDelete(DeleteBehavior.Cascade);
+            
+            e.HasOne(p => p.DatabaseConnection)
+                .WithMany()
+                .HasForeignKey(p => p.DatabaseConnectionId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            e.HasOne(p => p.StorageTarget)
+                .WithMany()
+                .HasForeignKey(p => p.StorageTargetId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            e.HasMany(p => p.Items)
+                .WithOne()
+                .HasForeignKey(i => i.BackupPlanId)
+                .OnDelete(DeleteBehavior.Cascade);
 
+            e.Property(p => p.Name).IsRequired();
+        });
+        
         // BackupItem configuration
         mb.Entity<BackupItem>(e =>
         {
+            e.ToTable("BackupItems");
+            
             e.HasDiscriminator<BackupItemType>("Type")
                 .HasValue<TableStructureItem>(BackupItemType.TableStructure)
                 .HasValue<TableDataItem>(BackupItemType.TableData)
@@ -59,10 +81,17 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             e.Property(p => p.IsSelected).HasDefaultValue(true);
             e.Property(p => p.Type).HasConversion<string>().HasMaxLength(50);
         });
-
+        
         mb.Entity<TableStructureItem>().Property(e => e.Engine).HasMaxLength(50);
         mb.Entity<TableDataItem>().Property(e => e.RowCount);
-
+        
+        // DatabaseConnection configuration
+        mb.Entity<DatabaseConnection>(e =>
+        {
+            e.ToTable("DatabaseConnections");
+            e.Property(p => p.Type).HasConversion<string>();
+        });
+        
         // StorageTarget configuration
         mb.Entity<StorageTarget>(e =>
         {
@@ -98,27 +127,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
         });
 
         mb.Entity<LocalStorageTarget>().Property(e => e.Path).IsRequired();
-
-        // BackupPlan configuration
-        mb.Entity<BackupPlan>(e =>
-        {
-            e.ToTable("BackupPlans");
-            
-            // One-to-many relationship between BackupPlan and BackupJobs
-            e.HasMany<BackupJob>()
-                .WithOne(j => j.BackupPlan)
-                .HasForeignKey(k => k.BackupPlanId);
-
-            e.Property(p => p.Name).IsRequired();
-        });
-
-        // BackupSchedule configuration
-        mb.Entity<BackupSchedule>(e =>
-        {
-            e.ToTable("BackupSchedules");
-            e.Property(p => p.ScheduledType).HasConversion<string>();
-        });
-
+        
         // BackupJob configuration
         mb.Entity<BackupJob>(e =>
         {
@@ -127,13 +136,13 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             
             // One-to-many relationship between BackupJob and BackupItemStatuses
             e.HasMany<BackupItemStatus>()
-                .WithOne(s => s.BackupJob)
+                .WithOne()
                 .HasForeignKey(k => k.BackupJobId)
                 .OnDelete(DeleteBehavior.Cascade);
                 
             // One-to-many relationship between BackupJob and BackupJobLogs
             e.HasMany<BackupJobLog>()
-                .WithOne(l => l.BackupJob)
+                .WithOne()
                 .HasForeignKey(k => k.BackupJobId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
