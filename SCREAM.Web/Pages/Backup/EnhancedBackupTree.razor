@@ -221,18 +221,11 @@ else
                                     <MudExpansionPanel>
                                         <TitleContent>
                                             <div class="d-flex align-center">
-                                                @if (typeGroup.Types.Count == 1)
-                                                {
-                                                    <MudIcon Icon="@GetIconForBackupItemType(typeGroup.Types[0])"
-                                                             Size="Size.Small"
-                                                             Class="mr-2"
-                                                             Color="@GetColorForBackupItemType(typeGroup.Types[0])"/>
-                                                    <MudText Typo="Typo.subtitle2">@typeGroup.DisplayName</MudText>
-                                                }
-                                                else
-                                                {
-                                                    <MudText Typo="Typo.subtitle2">@typeGroup.DisplayName</MudText>
-                                                }
+                                                <MudIcon Icon="@GetIconForBackupItemType(typeGroup.Types[0])"
+                                                         Size="Size.Small"
+                                                         Class="mr-2"
+                                                         Color="@GetColorForBackupItemType(typeGroup.Types[0])"/>
+                                                <MudText Typo="Typo.subtitle2">@typeGroup.DisplayName</MudText>
                                                 <MudSpacer/>
                                                 <MudChip T="string" Color="Color.Default" Size="Size.Small" Label="true"
                                                          Class="ml-2">
@@ -284,35 +277,6 @@ else
                                                                      Class="ml-2">@itemGroup.GroupName</MudText>
                                                         </div>
                                                         <div class="d-flex align-center">
-                                                            <MudMenu Icon="@Icons.Material.Filled.MoreVert" Dense="true"
-                                                                     AnchorOrigin="Origin.BottomRight">
-                                                                <MudMenuItem
-                                                                    OnClick="() => ToggleItemGroupSelection(itemGroup, context, typeGroup, true)">
-                                                                    Select All
-                                                                </MudMenuItem>
-                                                                @foreach (var type in typeGroup.Types)
-                                                                {
-                                                                    @if (itemGroup.Items.Any(i => i.Type == type))
-                                                                    {
-                                                                        <MudMenuItem
-                                                                            OnClick="() => SelectItemGroupByType(itemGroup, context, typeGroup, type)">
-                                                                            <div class="d-flex align-center">
-                                                                                <MudIcon
-                                                                                    Icon="@GetIconForBackupItemType(type)"
-                                                                                    Size="Size.Small"
-                                                                                    Class="mr-2"
-                                                                                    Color="@GetColorForBackupItemType(type)"/>
-                                                                                @GetBackupItemTypeLabel(type)
-                                                                            </div>
-                                                                        </MudMenuItem>
-                                                                    }
-                                                                }
-                                                                <MudDivider/>
-                                                                <MudMenuItem
-                                                                    OnClick="() => ToggleItemGroupSelection(itemGroup, context, typeGroup, false)">
-                                                                    Unselect All
-                                                                </MudMenuItem>
-                                                            </MudMenu>
                                                             @if (itemGroup.Items.Count > 1)
                                                             {
                                                                 <MudIconButton
@@ -323,7 +287,7 @@ else
                                                         </div>
                                                     </div>
 
-                                                    @if (itemGroup.IsExpanded && itemGroup.Items.Count > 1)
+                                                    @if (itemGroup is { IsExpanded: true, Items.Count: > 1 })
                                                     {
                                                         <div class="mt-2 ml-6">
                                                             @foreach (var item in itemGroup.Items)
