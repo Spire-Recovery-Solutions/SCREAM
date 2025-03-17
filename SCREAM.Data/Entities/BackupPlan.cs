@@ -19,15 +19,16 @@ public class BackupPlan : ScreamDbBaseEntity
     public bool IsActive { get; set; }
 
     // Related collections
-    public ICollection<BackupJob> Jobs { get; set; } = new List<BackupJob>();
-    public List<BackupItem> Items { get; set; } = new List<BackupItem>();
+    public ICollection<BackupJob> Jobs { get; set; }
+    public ICollection<BackupItem> Items { get; set; }
     
     // Schedule properties
     public string ScheduleCron { get; set; } = string.Empty;
     public ScheduleType ScheduleType { get; set; }
     public DateTime? LastRun { get; set; }
     public DateTime? NextRun { get; set; }
-
+    
+    
     public DateTime? GetNextRun(DateTime utcNow)
     {
         switch (ScheduleType)

@@ -1,8 +1,5 @@
-namespace SCREAM.Data.Entities.BackupItems
+namespace SCREAM.Data.Entities
 {
-    /// <summary>
-    /// Global backup settings
-    /// </summary>
     public class BackupSettings : ScreamDbBaseEntity
     {
         /// <summary>

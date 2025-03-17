@@ -502,8 +502,8 @@ else
     }
 // Core logic for grouping and filtering items
 
-    [Parameter] public List<BackupItem> Items { get; set; } = new();
-    [Parameter] public EventCallback<List<BackupItem>> ItemsChanged { get; set; }
+    [Parameter] public ICollection<BackupItem> Items { get; set; }  
+    [Parameter] public EventCallback<ICollection<BackupItem>> ItemsChanged { get; set; }
 
     private List<SchemaGroup> _schemaGroups = new();
     private List<SchemaGroup> _filteredSchemaGroups = new();
@@ -514,20 +514,19 @@ else
 
     protected override void OnParametersSet()
     {
-        if (Items.Any())
+        if (!Items.Any()) return;
+        
+        _isLoading = true;
+        StateHasChanged();
+        try
         {
-            _isLoading = true;
+            GroupItemsBySchema();
+            ApplyFilters();
+        }
+        finally
+        {
+            _isLoading = false;
             StateHasChanged();
-            try
-            {
-                GroupItemsBySchema();
-                ApplyFilters();
-            }
-            finally
-            {
-                _isLoading = false;
-                StateHasChanged();
-            }
         }
     }
 
@@ -559,7 +558,7 @@ else
             schema.IsExpanded = existingSchema?.IsExpanded ?? false;
 
             // Process items by type groups
-            schema.TypeGroups = new List<TypeGroup>();
+            schema.TypeGroups = [];
 
             foreach (var typeGroupDef in _typeGroupDefinitions)
             {
@@ -585,15 +584,13 @@ else
                     .OrderBy(g => g.Key)
                     .ToList();
 
-                foreach (var group in itemGroups)
+                foreach (var itemGroup in itemGroups.Select(group => new ItemGroup
+                         {
+                             GroupName = group.Key,
+                             Items = group.ToList(),
+                             IsExpanded = false
+                         }))
                 {
-                    var itemGroup = new ItemGroup
-                    {
-                        GroupName = group.Key,
-                        Items = group.ToList(),
-                        IsExpanded = false
-                    };
-
                     // If this group has just one item, don't allow expansion
                     if (itemGroup.Items.Count == 1)
                     {
@@ -635,21 +632,18 @@ else
         {
             if (Enum.TryParse<BackupItemType>(_selectedTypeFilter, out var typeFilter))
             {
-                foreach (var schema in _filteredSchemaGroups)
+                foreach (var typeGroup in _filteredSchemaGroups.SelectMany(schema => schema.TypeGroups))
                 {
-                    foreach (var typeGroup in schema.TypeGroups)
+                    if (typeGroup.Types.Contains(typeFilter))
                     {
-                        if (typeGroup.Types.Contains(typeFilter))
-                        {
-                            typeGroup.FilteredItemGroups = typeGroup.ItemGroups
-                                .Where(t => t.Items.Any(i => i.Type == typeFilter))
-                                .ToList();
-                        }
-                        else
-                        {
-                            // If this type group doesn't contain the selected type, clear its items
-                            typeGroup.FilteredItemGroups = new List<ItemGroup>();
-                        }
+                        typeGroup.FilteredItemGroups = typeGroup.ItemGroups
+                            .Where(t => t.Items.Any(i => i.Type == typeFilter))
+                            .ToList();
+                    }
+                    else
+                    {
+                        // If this type group doesn't contain the selected type, clear its items
+                        typeGroup.FilteredItemGroups = new List<ItemGroup>();
                     }
                 }
             }
@@ -657,12 +651,9 @@ else
         else
         {
             // Reset filtered items
-            foreach (var schema in _filteredSchemaGroups)
+            foreach (var typeGroup in _filteredSchemaGroups.SelectMany(schema => schema.TypeGroups))
             {
-                foreach (var typeGroup in schema.TypeGroups)
-                {
-                    typeGroup.FilteredItemGroups = typeGroup.ItemGroups;
-                }
+                typeGroup.FilteredItemGroups = typeGroup.ItemGroups;
             }
         }
 
@@ -694,40 +685,34 @@ else
         if (string.IsNullOrWhiteSpace(searchString))
         {
             // Reset all filtered items when search is cleared
-            foreach (var schema in _filteredSchemaGroups)
+            foreach (var typeGroup in _filteredSchemaGroups
+                         .SelectMany(schema => schema.TypeGroups))
             {
-                foreach (var typeGroup in schema.TypeGroups)
+                if (_selectedTypeFilter == "all" ||
+                    (Enum.TryParse<BackupItemType>(_selectedTypeFilter, out var typeFilter) &&
+                     typeGroup.Types.Contains(typeFilter)))
                 {
-                    if (_selectedTypeFilter == "all" ||
-                        (Enum.TryParse<BackupItemType>(_selectedTypeFilter, out var typeFilter) &&
-                         typeGroup.Types.Contains(typeFilter)))
-                    {
-                        typeGroup.FilteredItemGroups = typeGroup.ItemGroups;
-                    }
+                    typeGroup.FilteredItemGroups = typeGroup.ItemGroups;
                 }
             }
         }
         else
         {
             // Apply search filter to all type groups
-            foreach (var schema in _filteredSchemaGroups)
+            foreach (var typeGroup in _filteredSchemaGroups
+                         .SelectMany(schema => schema.TypeGroups
+                             .Where(typeGroup => typeGroup.SupportsSearch)))
             {
-                foreach (var typeGroup in schema.TypeGroups)
-                {
-                    if (typeGroup.SupportsSearch)
-                    {
-                        bool isTypeFilterApplicable =
-                            _selectedTypeFilter == "all" ||
-                            (Enum.TryParse<BackupItemType>(_selectedTypeFilter, out var typeFilter) &&
-                             typeGroup.Types.Contains(typeFilter));
+                var isTypeFilterApplicable =
+                    _selectedTypeFilter == "all" ||
+                    (Enum.TryParse<BackupItemType>(_selectedTypeFilter, out var typeFilter) &&
+                     typeGroup.Types.Contains(typeFilter));
 
-                        if (isTypeFilterApplicable)
-                        {
-                            typeGroup.FilteredItemGroups = typeGroup.ItemGroups
-                                .Where(g => g.GroupName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
-                                .ToList();
-                        }
-                    }
+                if (isTypeFilterApplicable)
+                {
+                    typeGroup.FilteredItemGroups = typeGroup.ItemGroups
+                        .Where(g => g.GroupName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
                 }
             }
         }
@@ -763,12 +748,9 @@ else
         }
 
         // Update all item groups
-        foreach (var typeGroup in schema.TypeGroups)
+        foreach (var itemGroup in schema.TypeGroups.SelectMany(typeGroup => typeGroup.ItemGroups))
         {
-            foreach (var itemGroup in typeGroup.ItemGroups)
-            {
-                UpdateItemGroupSelectionState(itemGroup);
-            }
+            UpdateItemGroupSelectionState(itemGroup);
         }
 
         UpdateSchemaSelectionState(schema);
@@ -810,10 +792,8 @@ else
     private async Task OnItemSelectionChanged(BackupItem item, SchemaGroup schema, TableGroup table, bool isSelected)
     {
         item.IsSelected = isSelected;
-        if (table != null)
-        {
-            UpdateTableSelectionState(table);
-        }
+
+        UpdateTableSelectionState(table);
 
         UpdateSchemaSelectionState(schema);
         await NotifyItemsChanged();
@@ -824,10 +804,7 @@ else
     {
         item.IsSelected = isSelected;
 
-        if (itemGroup != null)
-        {
-            UpdateItemGroupSelectionState(itemGroup);
-        }
+        UpdateItemGroupSelectionState(itemGroup);
 
         UpdateSchemaSelectionState(schema);
         await NotifyItemsChanged();
@@ -843,12 +820,9 @@ else
         foreach (var schema in _schemaGroups)
         {
             UpdateSchemaSelectionState(schema);
-            foreach (var typeGroup in schema.TypeGroups)
+            foreach (var itemGroup in schema.TypeGroups.SelectMany(typeGroup => typeGroup.ItemGroups))
             {
-                foreach (var itemGroup in typeGroup.ItemGroups)
-                {
-                    UpdateItemGroupSelectionState(itemGroup);
-                }
+                UpdateItemGroupSelectionState(itemGroup);
             }
         }
 
@@ -857,23 +831,17 @@ else
 
     private async Task SelectItemsByType(BackupItemType type)
     {
-        foreach (var item in Items)
+        foreach (var item in Items.Where(item => item.Type == type))
         {
-            if (item.Type == type)
-            {
-                item.IsSelected = true;
-            }
+            item.IsSelected = true;
         }
 
         foreach (var schema in _schemaGroups)
         {
             UpdateSchemaSelectionState(schema);
-            foreach (var typeGroup in schema.TypeGroups)
+            foreach (var itemGroup in schema.TypeGroups.SelectMany(typeGroup => typeGroup.ItemGroups))
             {
-                foreach (var itemGroup in typeGroup.ItemGroups)
-                {
-                    UpdateItemGroupSelectionState(itemGroup);
-                }
+                UpdateItemGroupSelectionState(itemGroup);
             }
         }
 
@@ -882,20 +850,14 @@ else
 
     private async Task SelectSchemaItemsByType(SchemaGroup schema, BackupItemType type)
     {
-        foreach (var item in schema.Items)
+        foreach (var item in schema.Items.Where(item => item.Type == type))
         {
-            if (item.Type == type)
-            {
-                item.IsSelected = true;
-            }
+            item.IsSelected = true;
         }
 
-        foreach (var typeGroup in schema.TypeGroups)
+        foreach (var itemGroup in schema.TypeGroups.SelectMany(typeGroup => typeGroup.ItemGroups))
         {
-            foreach (var itemGroup in typeGroup.ItemGroups)
-            {
-                UpdateItemGroupSelectionState(itemGroup);
-            }
+            UpdateItemGroupSelectionState(itemGroup);
         }
 
         UpdateSchemaSelectionState(schema);
@@ -904,12 +866,9 @@ else
 
     private async Task SelectSchemaLevelItemsByType(SchemaGroup schema, BackupItemType type)
     {
-        foreach (var item in schema.SchemaItems)
+        foreach (var item in schema.SchemaItems.Where(item => item.Type == type))
         {
-            if (item.Type == type)
-            {
-                item.IsSelected = true;
-            }
+            item.IsSelected = true;
         }
 
         UpdateSchemaSelectionState(schema);
@@ -918,12 +877,9 @@ else
 
     private async Task SelectItemGroupByType(ItemGroup itemGroup, SchemaGroup schema, TypeGroup typeGroup, BackupItemType type)
     {
-        foreach (var item in itemGroup.Items)
+        foreach (var item in itemGroup.Items.Where(item => item.Type == type))
         {
-            if (item.Type == type)
-            {
-                item.IsSelected = true;
-            }
+            item.IsSelected = true;
         }
 
         UpdateItemGroupSelectionState(itemGroup);

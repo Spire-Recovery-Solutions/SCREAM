@@ -39,35 +39,36 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
         mb.Entity<BackupPlan>(e =>
         {
             e.ToTable("BackupPlans");
-            
+
+            e.Property(p => p.Name).IsRequired();
+
             e.HasMany(p => p.Jobs)
                 .WithOne(j => j.BackupPlan)
                 .HasForeignKey(j => j.BackupPlanId)
                 .OnDelete(DeleteBehavior.Cascade);
-            
+
             e.HasOne(p => p.DatabaseConnection)
                 .WithMany()
                 .HasForeignKey(p => p.DatabaseConnectionId)
                 .OnDelete(DeleteBehavior.Restrict);
-            
+
             e.HasOne(p => p.StorageTarget)
                 .WithMany()
                 .HasForeignKey(p => p.StorageTargetId)
                 .OnDelete(DeleteBehavior.Restrict);
-            
+
             e.HasMany(p => p.Items)
                 .WithOne()
                 .HasForeignKey(i => i.BackupPlanId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            e.Property(p => p.Name).IsRequired();
         });
-        
+
         // BackupItem configuration
         mb.Entity<BackupItem>(e =>
         {
             e.ToTable("BackupItems");
-            
+
             e.HasDiscriminator<BackupItemType>("Type")
                 .HasValue<TableStructureItem>(BackupItemType.TableStructure)
                 .HasValue<TableDataItem>(BackupItemType.TableData)
@@ -81,17 +82,17 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             e.Property(p => p.IsSelected).HasDefaultValue(true);
             e.Property(p => p.Type).HasConversion<string>().HasMaxLength(50);
         });
-        
+
         mb.Entity<TableStructureItem>().Property(e => e.Engine).HasMaxLength(50);
         mb.Entity<TableDataItem>().Property(e => e.RowCount);
-        
+
         // DatabaseConnection configuration
         mb.Entity<DatabaseConnection>(e =>
         {
             e.ToTable("DatabaseConnections");
             e.Property(p => p.Type).HasConversion<string>();
         });
-        
+
         // StorageTarget configuration
         mb.Entity<StorageTarget>(e =>
         {
@@ -127,40 +128,40 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
         });
 
         mb.Entity<LocalStorageTarget>().Property(e => e.Path).IsRequired();
-        
+
         // BackupJob configuration
         mb.Entity<BackupJob>(e =>
         {
             e.ToTable("BackupJobs");
             e.Property(p => p.Status).HasConversion<string>();
-            
+
             // One-to-many relationship between BackupJob and BackupItemStatuses
-            e.HasMany<BackupItemStatus>()
+            e.HasMany(h => h.BackupItemStatuses)
                 .WithOne()
                 .HasForeignKey(k => k.BackupJobId)
                 .OnDelete(DeleteBehavior.Cascade);
-                
+
             // One-to-many relationship between BackupJob and BackupJobLogs
             e.HasMany<BackupJobLog>()
                 .WithOne()
                 .HasForeignKey(k => k.BackupJobId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
-        
+
         // BackupItemStatus configuration
         mb.Entity<BackupItemStatus>(e =>
         {
             e.ToTable("BackupItemStatuses");
             e.Property(p => p.Status).HasConversion<string>();
             e.Property(p => p.ErrorMessage).IsRequired(false);
-            
+
             // Many-to-one relationship between BackupItemStatus and BackupItem
             e.HasOne(s => s.BackupItem)
                 .WithMany()
                 .HasForeignKey(k => k.BackupItemId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
-        
+
         // BackupJobLog configuration
         mb.Entity<BackupJobLog>(e =>
         {
@@ -168,7 +169,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             e.Property(p => p.Severity).HasConversion<string>();
             e.Property(p => p.Title).IsRequired().HasMaxLength(100);
             e.Property(p => p.Message).IsRequired();
-            
+
             // Optional relationship to BackupItemStatus
             e.HasOne(l => l.BackupItemStatus)
                 .WithMany()
@@ -176,7 +177,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
         });
-        
+
         // BackupSettings configuration
         mb.Entity<BackupSettings>(e =>
         {

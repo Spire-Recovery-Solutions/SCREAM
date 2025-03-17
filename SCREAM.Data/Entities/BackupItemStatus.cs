@@ -1,4 +1,6 @@
-namespace SCREAM.Data.Entities.BackupItems
+using SCREAM.Data.Entities.BackupItems;
+
+namespace SCREAM.Data.Entities
 {
     /// <summary>
     /// Tracks the status of individual backup items within a backup job
