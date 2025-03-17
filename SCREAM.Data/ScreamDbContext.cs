@@ -200,34 +200,36 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             e.Property(p => p.NotificationEmail).IsRequired(false);
         });
 
-      mb.Entity<RestoreItem>(e =>
-        {
-            e.ToTable("RestoreItems");
+        mb.Entity<RestoreItem>(e =>
+          {
+              e.ToTable("RestoreItems");
 
-            e.HasDiscriminator<DatabaseItemType>("Type")
-                .HasValue<TableStructureItem>(DatabaseItemType.TableStructure)
-                .HasValue<TableDataItem>(DatabaseItemType.TableData)
-                .HasValue<ViewItem>(DatabaseItemType.View)
-                .HasValue<TriggerItem>(DatabaseItemType.Trigger)
-                .HasValue<EventItem>(DatabaseItemType.Event)
-                .HasValue<FunctionProcedureItem>(DatabaseItemType.FunctionProcedure);
+              e.HasDiscriminator<DatabaseItemType>("Type")
+                  .HasValue<TableStructureItem>(DatabaseItemType.TableStructure)
+                  .HasValue<TableDataItem>(DatabaseItemType.TableData)
+                  .HasValue<ViewItem>(DatabaseItemType.View)
+                  .HasValue<TriggerItem>(DatabaseItemType.Trigger)
+                  .HasValue<EventItem>(DatabaseItemType.Event)
+                  .HasValue<FunctionProcedureItem>(DatabaseItemType.FunctionProcedure);
 
-            e.Property(p => p.Schema).IsRequired().HasMaxLength(100);
-            e.Property(p => p.Name).HasMaxLength(100);
-            e.Property(p => p.IsSelected).HasDefaultValue(true);
-            e.Property(p => p.Type).HasConversion<string>().HasMaxLength(50);
-            
-            e.HasOne(i => i.BackupItem)
-                .WithMany()
-                .HasForeignKey(i => i.BackupItemId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
+              e.Property(p => p.Schema).IsRequired().HasMaxLength(100);
+              e.Property(p => p.Name).HasMaxLength(100);
+              e.Property(p => p.IsSelected).HasDefaultValue(true);
+              e.Property(p => p.Type).HasConversion<string>().HasMaxLength(50);
+              e.Property(p => p.Order).HasDefaultValue(0);
+
+              e.HasOne(i => i.BackupItem)
+                  .WithMany()
+                  .HasForeignKey(i => i.BackupItemId)
+                  .OnDelete(DeleteBehavior.Restrict);
+          });
 
         mb.Entity<RestoreItemStatus>(e =>
         {
             e.ToTable("RestoreItemStatuses");
             e.Property(p => p.Status).HasConversion<string>();
             e.Property(p => p.ErrorMessage).IsRequired(false);
+            e.Property(p => p.RetryCount).HasDefaultValue(0);
 
             e.HasOne(s => s.RestoreItem)
                 .WithMany()
@@ -255,7 +257,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .WithMany()
                 .HasForeignKey(p => p.StorageTargetId)
                 .OnDelete(DeleteBehavior.Restrict);
-                
+
             e.HasOne(p => p.SourceBackupJob)
                 .WithMany()
                 .HasForeignKey(p => p.SourceBackupJobId)
@@ -267,22 +269,24 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-         mb.Entity<RestoreJob>(e =>
-        {
-            e.ToTable("RestoreJobs");
-            e.Property(p => p.Status).HasConversion<string>();
+        mb.Entity<RestoreJob>(e =>
+       {
+           e.ToTable("RestoreJobs");
+           e.Property(p => p.Status).HasConversion<string>();
+           e.Property(p => p.IsCompressed).HasDefaultValue(false);
+           e.Property(p => p.IsEncrypted).HasDefaultValue(false);
 
-            e.HasMany(h => h.RestoreItemStatuses)
-                .WithOne()
-                .HasForeignKey(k => k.RestoreJobId)
-                .OnDelete(DeleteBehavior.Cascade);
+           e.HasMany(h => h.RestoreItemStatuses)
+               .WithOne()
+               .HasForeignKey(k => k.RestoreJobId)
+               .OnDelete(DeleteBehavior.Cascade);
 
-            // One-to-many relationship between RestoreJob and RestoreJobLogs
-            e.HasMany<RestoreJobLog>()
-                .WithOne()
-                .HasForeignKey(k => k.RestoreJobId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
+           // One-to-many relationship between RestoreJob and RestoreJobLogs
+           e.HasMany<RestoreJobLog>()
+               .WithOne()
+               .HasForeignKey(k => k.RestoreJobId)
+               .OnDelete(DeleteBehavior.Cascade);
+       });
 
         // RestoreJobLog configuration
         mb.Entity<RestoreJobLog>(e =>
@@ -299,16 +303,17 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
         });
-        
+
         // RestoreSettings configuration
         mb.Entity<RestoreSettings>(e =>
         {
             e.ToTable("RestoreSettings");
             e.HasKey(k => k.Id);
-            e.Property(p => p.MaxAutoRetries).HasDefaultValue(3);
             e.Property(p => p.OverwriteExistingByDefault).HasDefaultValue(false);
+            e.Property(p => p.UseParallelExecution).HasDefaultValue(true);
             e.Property(p => p.SendEmailNotifications).HasDefaultValue(false);
             e.Property(p => p.NotificationEmail).IsRequired(false);
+            e.Property(p => p.ImportTimeout).HasDefaultValue(3600);
         });
 
         base.OnModelCreating(mb);

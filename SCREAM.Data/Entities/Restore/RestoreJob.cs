@@ -22,6 +22,9 @@
         /// </summary>
         public required DateTime StartedAt { get; set; }
 
+        public bool IsCompressed { get; set; }
+        public bool IsEncrypted { get; set; }
+
         /// <summary>
         /// The timestamp when the restore job was completed.
         /// Nullable since a job may still be in progress.

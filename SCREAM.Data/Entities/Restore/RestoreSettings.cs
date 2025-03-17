@@ -15,6 +15,11 @@
         /// </summary>
         public bool OverwriteExistingByDefault { get; set; } = false;
 
+        public bool UseParallelExecution { get; set; } = true;
+
+        
+        public int ImportTimeout { get; set; } = 3600;
+
         /// <summary>
         /// Whether to send email notifications on restore job completion/failure
         /// </summary>

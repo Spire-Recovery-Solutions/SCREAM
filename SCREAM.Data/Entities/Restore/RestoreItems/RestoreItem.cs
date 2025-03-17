@@ -42,6 +42,8 @@ namespace SCREAM.Data.Entities.Restore.RestoreItems
         /// </summary>
         public bool IsSelected { get; set; } = true;
 
+        public int Order { get; set; }
+
         /// <summary>
         /// The type of restore item.
         /// </summary>
