@@ -1,6 +1,4 @@
-﻿using SCREAM.Data.Entities.BackupItems;
-
-namespace SCREAM.Data.Entities
+﻿namespace SCREAM.Data.Entities.Backup
 {
     /// <summary>
     /// Represents a backup job that tracks the execution of a backup plan.
@@ -28,9 +26,9 @@ namespace SCREAM.Data.Entities
         /// Nullable since a job may still be in progress.
         /// </summary>
         public DateTime? CompletedAt { get; set; }
-        
-        
+
+
         public ICollection<BackupItemStatus> BackupItemStatuses { get; set; }
-        
+
     }
 }
