@@ -1,6 +1,7 @@
 @page "/backup-jobs/{JobId:long}"
 @using SCREAM.Data.Entities
-@using SCREAM.Data.Entities.BackupItems
+@using SCREAM.Data.Entities.Backup
+@using SCREAM.Data.Entities.Backup.BackupItems
 @using SCREAM.Data.Entities.StorageTargets
 @using SCREAM.Data.Enums
 @inject NavigationManager NavigationManager
@@ -625,16 +626,16 @@ else
         };
     }
 
-    private Color GetItemTypeColor(BackupItemType type)
+    private Color GetItemTypeColor(DatabaseItemType type)
     {
         return type switch
         {
-            BackupItemType.TableStructure => Color.Primary,
-            BackupItemType.TableData => Color.Info,
-            BackupItemType.View => Color.Secondary,
-            BackupItemType.Trigger => Color.Tertiary,
-            BackupItemType.Event => Color.Warning,
-            BackupItemType.FunctionProcedure => Color.Success,
+            DatabaseItemType.TableStructure => Color.Primary,
+            DatabaseItemType.TableData => Color.Info,
+            DatabaseItemType.View => Color.Secondary,
+            DatabaseItemType.Trigger => Color.Tertiary,
+            DatabaseItemType.Event => Color.Warning,
+            DatabaseItemType.FunctionProcedure => Color.Success,
             _ => Color.Default
         };
     }
@@ -663,7 +664,7 @@ else
         public long Id { get; set; }
         public long ItemId { get; set; }
         public string ItemName { get; set; } = string.Empty;
-        public BackupItemType ItemType { get; set; }
+        public DatabaseItemType ItemType { get; set; }
         public TaskStatus Status { get; set; }
         public int RetryCount { get; set; }
         public DateTime? StartedAt { get; set; }

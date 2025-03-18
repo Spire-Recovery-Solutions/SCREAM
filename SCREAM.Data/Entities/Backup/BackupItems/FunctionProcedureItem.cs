@@ -1,16 +1,16 @@
 using CliWrap.Builders;
 using System.Text.Json.Serialization;
 
-namespace SCREAM.Data.Entities.BackupItems;
+namespace SCREAM.Data.Entities.Backup.BackupItems;
 
 /// <summary>
-/// Represents database events for an entire schema
+/// Represents database functions and procedures for an entire schema
 /// </summary>
-public class EventItem : BackupItem
+public class FunctionProcedureItem : BackupItem
 {
-    public override BackupItemType Type
+    public override DatabaseItemType Type
     {
-        get => BackupItemType.Event;
+        get => DatabaseItemType.FunctionProcedure;
         set { }
     }
 
@@ -22,10 +22,9 @@ public class EventItem : BackupItem
             .Add("--no-data")
             .Add("--no-create-db")
             .Add("--no-create-info")
-            .Add("--skip-routines")
-            .Add("--events")
+            .Add("--routines")
+            .Add("--skip-events")
             .Add("--skip-triggers")
-            .Add("--dump-date")
             .Add("--single-transaction")
             .Add("--skip-add-locks")
             .Add("--quote-names")
@@ -36,6 +35,6 @@ public class EventItem : BackupItem
 
     public override string GetOutputFileName()
     {
-        return $"{Schema}-events.sql.xz.enc";
+        return $"{Schema}-funcs.sql.xz.enc";
     }
 }

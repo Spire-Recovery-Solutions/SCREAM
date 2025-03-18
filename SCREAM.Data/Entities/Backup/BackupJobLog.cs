@@ -1,6 +1,4 @@
-using SCREAM.Data.Entities.BackupItems;
-
-namespace SCREAM.Data.Entities
+namespace SCREAM.Data.Entities.Backup
 {
     /// <summary>
     /// Represents a log entry for a backup job
@@ -11,7 +9,7 @@ namespace SCREAM.Data.Entities
         /// The backup job this log belongs to
         /// </summary>
         public long BackupJobId { get; set; }
-        
+
         /// <summary>
         /// The related backup item status if applicable
         /// </summary>

@@ -1,17 +1,17 @@
 using System.Text.Json.Serialization;
 using CliWrap.Builders;
 
-namespace SCREAM.Data.Entities.BackupItems;
+namespace SCREAM.Data.Entities.Backup.BackupItems;
 
 /// <summary>
 /// Base class for all database objects that can be backed up
 /// </summary>
-[JsonDerivedType(typeof(TableStructureItem), typeDiscriminator: (int)BackupItemType.TableStructure)]
-[JsonDerivedType(typeof(TableDataItem), typeDiscriminator: (int)BackupItemType.TableData)]
-[JsonDerivedType(typeof(ViewItem), typeDiscriminator: (int)BackupItemType.View)]
-[JsonDerivedType(typeof(TriggerItem), typeDiscriminator: (int)BackupItemType.Trigger)]
-[JsonDerivedType(typeof(EventItem), typeDiscriminator: (int)BackupItemType.Event)]
-[JsonDerivedType(typeof(FunctionProcedureItem), typeDiscriminator: (int)BackupItemType.FunctionProcedure)]
+[JsonDerivedType(typeof(TableStructureItem), typeDiscriminator: (int)DatabaseItemType.TableStructure)]
+[JsonDerivedType(typeof(TableDataItem), typeDiscriminator: (int)DatabaseItemType.TableData)]
+[JsonDerivedType(typeof(ViewItem), typeDiscriminator: (int)DatabaseItemType.View)]
+[JsonDerivedType(typeof(TriggerItem), typeDiscriminator: (int)DatabaseItemType.Trigger)]
+[JsonDerivedType(typeof(EventItem), typeDiscriminator: (int)DatabaseItemType.Event)]
+[JsonDerivedType(typeof(FunctionProcedureItem), typeDiscriminator: (int)DatabaseItemType.FunctionProcedure)]
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "objType")]
 public abstract class BackupItem : ScreamDbBaseEntity
 {
@@ -38,7 +38,7 @@ public abstract class BackupItem : ScreamDbBaseEntity
     /// <summary>
     /// The type of backup item.
     /// </summary>
-    public abstract BackupItemType Type { get; set; }
+    public abstract DatabaseItemType Type { get; set; }
 
 
     /// <summary>

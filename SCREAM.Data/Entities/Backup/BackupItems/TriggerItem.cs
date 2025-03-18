@@ -1,16 +1,16 @@
 using CliWrap.Builders;
 using System.Text.Json.Serialization;
 
-namespace SCREAM.Data.Entities.BackupItems;
+namespace SCREAM.Data.Entities.Backup.BackupItems;
 
 /// <summary>
-/// Represents a database view
+/// Represents database triggers for an entire schema
 /// </summary>
-public class ViewItem : BackupItem
+public class TriggerItem : BackupItem
 {
-    public override BackupItemType Type
+    public override DatabaseItemType Type
     {
-        get => BackupItemType.View;
+        get => DatabaseItemType.Trigger;
         set { }
     }
 
@@ -19,23 +19,24 @@ public class ViewItem : BackupItem
         args.Add($"--host={host}")
             .Add($"--user={user}")
             .Add($"--password={password}")
-            .Add("--add-drop-table")
+            .Add("--add-drop-trigger")
             .Add("--dump-date")
             .Add("--single-transaction")
             .Add("--skip-add-locks")
             .Add("--quote-names")
             .Add("--no-data")
+            .Add("--no-create-db")
+            .Add("--no-create-info")
             .Add("--skip-routines")
             .Add("--skip-events")
-            .Add("--skip-triggers")
+            .Add("--triggers")
             .Add($"--max-allowed-packet={maxPacketSize}")
             .Add("--column-statistics=0")
-            .Add(Schema)
-            .Add(Name);
+            .Add(Schema);
     }
 
     public override string GetOutputFileName()
     {
-        return $"{Schema}.{Name}-view.sql.xz.enc";
+        return $"{Schema}-triggers.sql.xz.enc";
     }
 }

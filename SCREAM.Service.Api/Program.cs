@@ -3,6 +3,7 @@ using MySqlConnector;
 using SCREAM.Business;
 using SCREAM.Data;
 using SCREAM.Data.Entities;
+using SCREAM.Data.Entities.Backup;
 using SCREAM.Data.Entities.StorageTargets;
 using SCREAM.Data.Enums;
 using SCREAM.Service.Api.Validators;
