@@ -1,23 +1,18 @@
 using CliWrap.Builders;
 using System.Text.Json.Serialization;
 
-namespace SCREAM.Data.Entities.BackupItems;
+namespace SCREAM.Data.Entities.Backup.BackupItems;
 
 /// <summary>
-/// Represents a table structure (CREATE TABLE statement)
+/// Represents a database view
 /// </summary>
-public class TableStructureItem : BackupItem
+public class ViewItem : BackupItem
 {
-    public override BackupItemType Type
+    public override DatabaseItemType Type
     {
-        get => BackupItemType.TableStructure;
-        set {  }
+        get => DatabaseItemType.View;
+        set { }
     }
-
-    /// <summary>
-    /// The storage engine of the table (e.g., InnoDB, MyISAM).
-    /// </summary>
-    public string Engine { get; set; } = string.Empty;
 
     public override void ConfigureArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize)
     {
@@ -41,6 +36,6 @@ public class TableStructureItem : BackupItem
 
     public override string GetOutputFileName()
     {
-        return $"{Schema}.{Name}-schema.sql.xz.enc";
+        return $"{Schema}.{Name}-view.sql.xz.enc";
     }
 }

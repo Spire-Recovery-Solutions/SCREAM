@@ -1,7 +1,7 @@
 ﻿using Dapper;
 using MySqlConnector;
 using SCREAM.Data.Entities;
-using SCREAM.Data.Entities.BackupItems;
+using SCREAM.Data.Entities.Backup.BackupItems;
 
 namespace SCREAM.Business;
 

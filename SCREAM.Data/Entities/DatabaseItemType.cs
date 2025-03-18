@@ -1,9 +1,9 @@
-namespace SCREAM.Data.Entities.BackupItems;
+namespace SCREAM.Data.Entities;
 
 /// <summary>
 /// Types of database objects that can be backed up
 /// </summary>
-public enum BackupItemType
+public enum DatabaseItemType
 {
     TableStructure, // The schema definition of a table
     TableData,      // The data (rows) of a table

@@ -1,16 +1,16 @@
 using CliWrap.Builders;
 using System.Text.Json.Serialization;
 
-namespace SCREAM.Data.Entities.BackupItems;
+namespace SCREAM.Data.Entities.Backup.BackupItems;
 
 /// <summary>
 /// Represents table data (INSERT statements)
 /// </summary>
 public class TableDataItem : BackupItem
 {
-    public override BackupItemType Type
+    public override DatabaseItemType Type
     {
-        get => BackupItemType.TableData;
+        get => DatabaseItemType.TableData;
         set { }
     }
 

@@ -1,42 +1,46 @@
 using CliWrap.Builders;
 using System.Text.Json.Serialization;
 
-namespace SCREAM.Data.Entities.BackupItems;
+namespace SCREAM.Data.Entities.Backup.BackupItems;
 
 /// <summary>
-/// Represents database triggers for an entire schema
+/// Represents a table structure (CREATE TABLE statement)
 /// </summary>
-public class TriggerItem : BackupItem
+public class TableStructureItem : BackupItem
 {
-    public override BackupItemType Type
+    public override DatabaseItemType Type
     {
-        get => BackupItemType.Trigger;
+        get => DatabaseItemType.TableStructure;
         set { }
     }
+
+    /// <summary>
+    /// The storage engine of the table (e.g., InnoDB, MyISAM).
+    /// </summary>
+    public string Engine { get; set; } = string.Empty;
 
     public override void ConfigureArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize)
     {
         args.Add($"--host={host}")
             .Add($"--user={user}")
             .Add($"--password={password}")
-            .Add("--add-drop-trigger")
+            .Add("--add-drop-table")
             .Add("--dump-date")
             .Add("--single-transaction")
             .Add("--skip-add-locks")
             .Add("--quote-names")
             .Add("--no-data")
-            .Add("--no-create-db")
-            .Add("--no-create-info")
             .Add("--skip-routines")
             .Add("--skip-events")
-            .Add("--triggers")
+            .Add("--skip-triggers")
             .Add($"--max-allowed-packet={maxPacketSize}")
             .Add("--column-statistics=0")
-            .Add(Schema);
+            .Add(Schema)
+            .Add(Name);
     }
 
     public override string GetOutputFileName()
     {
-        return $"{Schema}-triggers.sql.xz.enc";
+        return $"{Schema}.{Name}-schema.sql.xz.enc";
     }
 }
