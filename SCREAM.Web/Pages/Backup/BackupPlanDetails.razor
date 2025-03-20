@@ -221,9 +221,9 @@
             if (result.Canceled) return;
 
             selectedKeys = _backupPlan.Items
-                .Where(i => i.IsSelected)
-                .Select(i => $"{i.Type}:{i.Schema}:{i.Name}")
-                .ToHashSet();
+            .Where(i => i.IsSelected)
+            .Select(i => $"{i.DatabaseItem.Type}:{i.DatabaseItem.Schema}:{i.DatabaseItem.Name}")
+            .ToHashSet();
         }
 
         _isScanning = true;
@@ -239,7 +239,7 @@
             {
                 foreach (var item in newItems)
                 {
-                    string key = $"{item.Type}:{item.Schema}:{item.Name}";
+                    string key = $"{item.DatabaseItem.Type}:{item.DatabaseItem.Schema}:{item.DatabaseItem.Name}";
                     item.IsSelected = _backupPlan.Items.Count == 0 || selectedKeys.Contains(key);
                 }
 

@@ -1,12 +1,12 @@
 using CliWrap.Builders;
-using System.Text.Json.Serialization;
+using SCREAM.Data.Entities.Database.DatabaseItems;
 
-namespace SCREAM.Data.Entities.Backup.BackupItems;
+namespace SCREAM.Data.Entities.Database;
 
 /// <summary>
 /// Represents a database view
 /// </summary>
-public class ViewItem : BackupItem
+public class DatabaseViewItems : DatabaseItem
 {
     public override DatabaseItemType Type
     {
@@ -14,7 +14,7 @@ public class ViewItem : BackupItem
         set { }
     }
 
-    public override void ConfigureArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize)
+    public override void ConfigureBackupArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize)
     {
         args.Add($"--host={host}")
             .Add($"--user={user}")
@@ -34,7 +34,16 @@ public class ViewItem : BackupItem
             .Add(Name);
     }
 
-    public override string GetOutputFileName()
+    public override void ConfigureRestoreArguments(ArgumentsBuilder args, string host, string user, string password)
+    {
+        args.Add($"--host={host}")
+            .Add($"--user={user}")
+            .Add($"--password={password}")
+            .Add(Schema)
+            .Add(Name);
+    }
+
+    public override string GetBackupFileName()
     {
         return $"{Schema}.{Name}-view.sql.xz.enc";
     }

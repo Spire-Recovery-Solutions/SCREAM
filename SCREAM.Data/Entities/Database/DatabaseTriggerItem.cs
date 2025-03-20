@@ -1,12 +1,12 @@
 using CliWrap.Builders;
-using System.Text.Json.Serialization;
+using SCREAM.Data.Entities.Database.DatabaseItems;
 
-namespace SCREAM.Data.Entities.Backup.BackupItems;
+namespace SCREAM.Data.Entities.Database;
 
 /// <summary>
 /// Represents database triggers for an entire schema
 /// </summary>
-public class TriggerItem : BackupItem
+public class DatabaseTriggerItems : DatabaseItem
 {
     public override DatabaseItemType Type
     {
@@ -14,7 +14,7 @@ public class TriggerItem : BackupItem
         set { }
     }
 
-    public override void ConfigureArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize)
+    public override void ConfigureBackupArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize)
     {
         args.Add($"--host={host}")
             .Add($"--user={user}")
@@ -35,7 +35,16 @@ public class TriggerItem : BackupItem
             .Add(Schema);
     }
 
-    public override string GetOutputFileName()
+    public override void ConfigureRestoreArguments(ArgumentsBuilder args, string host, string user, string password)
+    {
+        args.Add($"--host={host}")
+            .Add($"--user={user}")
+            .Add($"--password={password}")
+            .Add("--triggers")
+            .Add(Schema);
+    }
+
+    public override string GetBackupFileName()
     {
         return $"{Schema}-triggers.sql.xz.enc";
     }

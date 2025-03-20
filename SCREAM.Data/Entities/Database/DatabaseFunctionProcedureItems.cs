@@ -1,12 +1,13 @@
 using CliWrap.Builders;
+using SCREAM.Data.Entities.Database.DatabaseItems;
 using System.Text.Json.Serialization;
 
-namespace SCREAM.Data.Entities.Backup.BackupItems;
+namespace SCREAM.Data.Entities.Database;
 
 /// <summary>
 /// Represents database functions and procedures for an entire schema
 /// </summary>
-public class FunctionProcedureItem : BackupItem
+public class DatabaseFunctionProcedureItems : DatabaseItem
 {
     public override DatabaseItemType Type
     {
@@ -14,9 +15,9 @@ public class FunctionProcedureItem : BackupItem
         set { }
     }
 
-    public override void ConfigureArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize)
+    public override void ConfigureBackupArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize)
     {
-        args.Add($"--host={host}")
+         args.Add($"--host={host}")
             .Add($"--user={user}")
             .Add($"--password={password}")
             .Add("--no-data")
@@ -33,8 +34,13 @@ public class FunctionProcedureItem : BackupItem
             .Add(Schema);
     }
 
-    public override string GetOutputFileName()
+    public override void ConfigureRestoreArguments(ArgumentsBuilder args, 
+        string host, string user, string password)
     {
-        return $"{Schema}-funcs.sql.xz.enc";
+        args.Add($"--host={host}")
+            .Add($"--user={user}")
+            .Add($"--password={password}")
+            .Add("--routines");
     }
+     public override string GetBackupFileName() => $"{Schema}-funcs.sql.xz.enc";
 }

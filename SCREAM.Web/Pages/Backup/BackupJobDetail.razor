@@ -2,6 +2,7 @@
 @using SCREAM.Data.Entities
 @using SCREAM.Data.Entities.Backup
 @using SCREAM.Data.Entities.Backup.BackupItems
+@using SCREAM.Data.Entities.Database
 @using SCREAM.Data.Entities.StorageTargets
 @using SCREAM.Data.Enums
 @inject NavigationManager NavigationManager
@@ -24,11 +25,11 @@ else
                     </MudStack>
                     <MudStack Row>
                         <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack"
-                                   OnClick="GoBack">Back
+                        OnClick="GoBack">Back
                         </MudButton>
                         <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                                   StartIcon="@Icons.Material.Filled.Refresh"
-                                   OnClick="RefreshData">Refresh
+                        StartIcon="@Icons.Material.Filled.Refresh"
+                        OnClick="RefreshData">Refresh
                         </MudButton>
                     </MudStack>
                 </MudStack>
@@ -85,16 +86,16 @@ else
                 <MudDivider Class="my-4"/>
                 <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Overall Progress</MudText>
                 <MudProgressLinear Color="@GetProgressColor(_job.Status)"
-                                   Value="@_overallProgress"
-                                   Striped="@(_job.Status == TaskStatus.Running)"
-                                   Indeterminate="@(_job.Status == TaskStatus.Running && _overallProgress < 5)"/>
+                Value="@_overallProgress"
+                Striped="@(_job.Status == TaskStatus.Running)"
+                Indeterminate="@(_job.Status == TaskStatus.Running && _overallProgress < 5)"/>
                 <MudText Typo="Typo.body2" Align="Align.Center">@_overallProgress.ToString("0.#")%</MudText>
 
                 @if (_job.Status == TaskStatus.Faulted)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Warning"
-                               StartIcon="@Icons.Material.Filled.Replay" FullWidth
-                               OnClick="RetryFullJob" Class="mt-3">
+                    StartIcon="@Icons.Material.Filled.Replay" FullWidth
+                    OnClick="RetryFullJob" Class="mt-3">
                         Retry Job
                     </MudButton>
                 }
@@ -105,12 +106,12 @@ else
             <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
                 <MudTabPanel Text="Backup Items" Icon="@Icons.Material.Filled.List">
                     <MudTable Items="@_itemStatuses" Loading="@_loading" Dense="true" Hover="true"
-                              Filter="new Func<BackupItemStatusViewModel, bool>(FilterItems)">
+                    Filter="new Func<BackupItemStatusViewModel, bool>(FilterItems)">
                         <ToolBarContent>
                             <MudTextField @bind-Value="_searchString" Placeholder="Search"
-                                          Adornment="Adornment.Start"
-                                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
-                                          Class="mt-0 mb-3"></MudTextField>
+                            Adornment="Adornment.Start"
+                            AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                            Class="mt-0 mb-3"></MudTextField>
                         </ToolBarContent>
                         <HeaderContent>
                             <MudTh>Type</MudTh>
@@ -139,8 +140,8 @@ else
                             </MudTd>
                             <MudTd>
                                 <MudProgressLinear Color="@GetExecutionStatusColor(context.Status)"
-                                                   Value="@GetItemProgressValue(context.Status)"
-                                                   Striped="@(context.Status == TaskStatus.Running)"/>
+                                Value="@GetItemProgressValue(context.Status)"
+                                Striped="@(context.Status == TaskStatus.Running)"/>
                             </MudTd>
                             <MudTd>
                                 @GetItemDuration(context)
@@ -152,14 +153,14 @@ else
                                 @if (context.Status == TaskStatus.Faulted)
                                 {
                                     <MudIconButton Icon="@Icons.Material.Filled.Replay"
-                                                   Color="Color.Warning"
-                                                   OnClick="@(() => RetryItem(context.Id))"/>
+                                    Color="Color.Warning"
+                                    OnClick="@(() => RetryItem(context.Id))"/>
                                 }
                                 @if (!string.IsNullOrEmpty(context.ErrorMessage))
                                 {
                                     <MudIconButton Icon="@Icons.Material.Filled.Error"
-                                                   Color="Color.Error"
-                                                   OnClick="@(() => ShowErrorDetails(context))"/>
+                                    Color="Color.Error"
+                                    OnClick="@(() => ShowErrorDetails(context))"/>
                                 }
                             </MudTd>
                         </RowTemplate>
@@ -283,32 +284,37 @@ else
 
         var mockStatuses = new List<BackupItemStatus>
         {
-            new()
+             new()
+        {
+            Id = 1,
+            BackupJobId = JobId,
+            BackupItem = new BackupItem
             {
-                Id = 1,
-                BackupJobId = JobId,
-                BackupItemId = 101,
-                BackupItem = new TableStructureItem
+                DatabaseItem = new DatabaseTableStructureItems
                 {
                     Schema = "dbo",
                     Name = "Users",
                     Engine = "InnoDB"
-                },
-                Status = TaskStatus.RanToCompletion,
-                RetryCount = 0,
-                StartedAt = DateTime.Now.AddMinutes(-30),
-                CompletedAt = DateTime.Now.AddMinutes(-25)
+                }
             },
+            Status = TaskStatus.RanToCompletion,
+            RetryCount = 0,
+            StartedAt = DateTime.Now.AddMinutes(-30),
+            CompletedAt = DateTime.Now.AddMinutes(-25)
+        },
             new()
             {
                 Id = 2,
                 BackupJobId = JobId,
                 BackupItemId = 102,
-                BackupItem = new TableDataItem
+                BackupItem =  new BackupItem
+                {
+                   DatabaseItem=new DatabaseTableDataItems
                 {
                     Schema = "dbo",
                     Name = "Users",
                     RowCount = 100
+                }
                 },
                 Status = TaskStatus.RanToCompletion,
                 RetryCount = 0,
@@ -320,10 +326,13 @@ else
                 Id = 6,
                 BackupJobId = JobId,
                 BackupItemId = 106,
-                BackupItem = new ViewItem
+                BackupItem = new BackupItem
                 {
-                    Schema = "dbo",
-                    Name = "UserOrderView"
+                    DatabaseItem = new DatabaseViewItems
+                    {
+                        Schema = "dbo",
+                        Name = "UserOrderView"
+                    }
                 },
                 Status = TaskStatus.Faulted,
                 RetryCount = 2,
@@ -336,10 +345,13 @@ else
                 Id = 7,
                 BackupJobId = JobId,
                 BackupItemId = 107,
-                BackupItem = new TriggerItem
+                BackupItem = new BackupItem
                 {
-                    Schema = "app",
-                    Name = "OrderUpdatedTrigger"
+                    DatabaseItem = new DatabaseTriggerItems
+                    {
+                        Schema = "app",
+                        Name = "OrderUpdatedTrigger"
+                    }
                 },
                 Status = TaskStatus.WaitingToRun,
                 RetryCount = 1,
@@ -353,7 +365,7 @@ else
             Id = s.Id,
             ItemId = s.BackupItemId,
             ItemName = GetItemName(s.BackupItem),
-            ItemType = s.BackupItem.Type,
+                ItemType = s.BackupItem.DatabaseItem.Type,
             Status = s.Status,
             RetryCount = s.RetryCount,
             StartedAt = s.StartedAt,
@@ -553,12 +565,12 @@ else
 
         return false;
     }
-
     private string GetItemName(BackupItem item)
     {
-        return string.IsNullOrEmpty(item.Name)
-            ? $"{item.Schema} ({item.Type})"
-            : $"{item.Schema}.{item.Name}";
+        var databaseItem = item.DatabaseItem;
+        return string.IsNullOrEmpty(databaseItem.Name)
+            ? $"{databaseItem.Schema} ({databaseItem.Type})"
+            : $"{databaseItem.Schema}.{databaseItem.Name}";
     }
 
     private string GetTooltipForItem(BackupItemStatusViewModel item)

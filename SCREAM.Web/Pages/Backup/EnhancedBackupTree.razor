@@ -177,7 +177,7 @@ else
                                              AnchorOrigin="Origin.BottomRight">
                                         @foreach (var option in _quickSelectOptions)
                                         {
-                                            @if (context.SchemaItems.Any(i => i.Type == option.Type))
+                                            @if (context.SchemaItems.Any(i => i.DatabaseItem.Type == option.Type))
                                             {
                                                 <MudMenuItem
                                                     OnClick="() => SelectSchemaLevelItemsByType(context, option.Type)">
@@ -201,11 +201,11 @@ else
                                                          Value="@item.IsSelected"
                                                          ValueChanged="@(value => OnItemSelectionChanged(item, context, null, value))"
                                                          Color="Color.Primary"/>
-                                            <MudIcon Icon="@GetIconForBackupItemType(item.Type)"
+                                            <MudIcon Icon="@GetIconForBackupItemType(item.DatabaseItem.Type)"
                                                      Size="Size.Small"
                                                      Class="mx-1"
-                                                     Color="@GetColorForBackupItemType(item.Type)"/>
-                                            <MudText Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
+                                                     Color="@GetColorForBackupItemType(item.DatabaseItem.Type)"/>
+                                            <MudText Typo="Typo.body2">@GetBackupItemTypeLabel(item.DatabaseItem.Type)</MudText>
                                         </div>
                                     }
                                 </div>
@@ -298,12 +298,12 @@ else
                                                                                  ValueChanged="@(value => OnItemSelectionChanged(item, context, null, value, typeGroup, itemGroup))"
                                                                                  Color="Color.Primary"
                                                                                  Size="Size.Small"/>
-                                                                    <MudIcon Icon="@GetIconForBackupItemType(item.Type)"
+                                                                    <MudIcon Icon="@GetIconForBackupItemType(item.DatabaseItem.Type)"
                                                                              Size="Size.Small"
                                                                              Class="mx-1"
-                                                                             Color="@GetColorForBackupItemType(item.Type)"/>
+                                                                             Color="@GetColorForBackupItemType(item.DatabaseItem.Type)"/>
                                                                     <MudText
-                                                                        Typo="Typo.body2">@GetBackupItemTypeLabel(item.Type)</MudText>
+                                                                        Typo="Typo.body2">@GetBackupItemTypeLabel(item.DatabaseItem.Type)</MudText>
                                                                 </div>
                                                             }
                                                         </div>
@@ -399,35 +399,35 @@ else
         {
             DisplayName = "Tables (Structure & Data)",
             Types = new List<DatabaseItemType> { DatabaseItemType.TableStructure, DatabaseItemType.TableData },
-            GroupingFunc = (item) => item.Name ?? "", // Group by table name
+            GroupingFunc = (item) => item.DatabaseItem.Name ?? "", // Group by table name
             SupportsSearch = true
         },
         new TypeGroupDefinition
         {
             DisplayName = "Views",
             Types = new List<DatabaseItemType> { DatabaseItemType.View },
-            GroupingFunc = (item) => item.Name ?? "", // Group by view name
+            GroupingFunc = (item) => item.DatabaseItem.Name ?? "", // Group by view name
             SupportsSearch = true
         },
         new TypeGroupDefinition
         {
             DisplayName = "Triggers",
             Types = new List<DatabaseItemType> { DatabaseItemType.Trigger },
-            GroupingFunc = (item) => item.Name ?? "", // Group by trigger name
+            GroupingFunc = (item) => item.DatabaseItem.Name ?? "", // Group by trigger name
             SupportsSearch = true
         },
         new TypeGroupDefinition
         {
             DisplayName = "Events",
             Types = new List<DatabaseItemType> { DatabaseItemType.Event },
-            GroupingFunc = (item) => item.Name ?? "", // Group by event name
+            GroupingFunc = (item) => item.DatabaseItem.Name ?? "", // Group by event name
             SupportsSearch = true
         },
         new TypeGroupDefinition
         {
             DisplayName = "Functions & Procedures",
             Types = new List<DatabaseItemType> { DatabaseItemType.FunctionProcedure },
-            GroupingFunc = (item) => item.Name ?? "", // Group by function/procedure name
+            GroupingFunc = (item) => item.DatabaseItem.Name ?? "", // Group by function/procedure name
             SupportsSearch = true
         }
     };
@@ -536,7 +536,7 @@ else
         var newSchemaGroups = new List<SchemaGroup>();
 
         var schemaGroups = Items
-            .GroupBy(i => i.Schema)
+            .GroupBy(i => i.DatabaseItem.Schema)
             .OrderBy(g => g.Key)
             .ToList();
 
@@ -551,7 +551,7 @@ else
 
             // Separate schema-level items
             schema.SchemaItems = schema.Items
-                .Where(i => string.IsNullOrEmpty(i.Name))
+                .Where(i => string.IsNullOrEmpty(i.DatabaseItem.Name))
                 .ToList();
 
             // Preserve existing expansion state or default to false
@@ -564,7 +564,7 @@ else
             {
                 // Get all items that belong to this type group
                 var typeItems = schema.Items
-                    .Where(i => !string.IsNullOrEmpty(i.Name) && typeGroupDef.Types.Contains(i.Type))
+                    .Where(i => !string.IsNullOrEmpty(i.DatabaseItem.Name) && typeGroupDef.Types.Contains(i.DatabaseItem.Type))
                     .ToList();
 
                 if (!typeItems.Any())
@@ -637,7 +637,7 @@ else
                     if (typeGroup.Types.Contains(typeFilter))
                     {
                         typeGroup.FilteredItemGroups = typeGroup.ItemGroups
-                            .Where(t => t.Items.Any(i => i.Type == typeFilter))
+                            .Where(t => t.Items.Any(i => i.DatabaseItem.Type == typeFilter))
                             .ToList();
                     }
                     else
@@ -831,7 +831,7 @@ else
 
     private async Task SelectItemsByType(DatabaseItemType type)
     {
-        foreach (var item in Items.Where(item => item.Type == type))
+        foreach (var item in Items.Where(item => item.DatabaseItem.Type == type))
         {
             item.IsSelected = true;
         }
@@ -850,7 +850,7 @@ else
 
     private async Task SelectSchemaItemsByType(SchemaGroup schema, DatabaseItemType type)
     {
-        foreach (var item in schema.Items.Where(item => item.Type == type))
+        foreach (var item in schema.Items.Where(item => item.DatabaseItem.Type == type))
         {
             item.IsSelected = true;
         }
@@ -866,7 +866,7 @@ else
 
     private async Task SelectSchemaLevelItemsByType(SchemaGroup schema, DatabaseItemType type)
     {
-        foreach (var item in schema.SchemaItems.Where(item => item.Type == type))
+        foreach (var item in schema.SchemaItems.Where(item => item.DatabaseItem.Type == type))
         {
             item.IsSelected = true;
         }
@@ -877,7 +877,7 @@ else
 
     private async Task SelectItemGroupByType(ItemGroup itemGroup, SchemaGroup schema, TypeGroup typeGroup, DatabaseItemType type)
     {
-        foreach (var item in itemGroup.Items.Where(item => item.Type == type))
+        foreach (var item in itemGroup.Items.Where(item => item.DatabaseItem.Type == type))
         {
             item.IsSelected = true;
         }

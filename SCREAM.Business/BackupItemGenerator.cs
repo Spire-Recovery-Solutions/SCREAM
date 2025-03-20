@@ -2,147 +2,159 @@
 using MySqlConnector;
 using SCREAM.Data.Entities;
 using SCREAM.Data.Entities.Backup.BackupItems;
+using SCREAM.Data.Entities.Database;
 
-namespace SCREAM.Business;
-
-/// <summary>
-/// Generator for database objects metadata to be used with mysqldump via CliWrap
-/// </summary>
-public class BackupItemGenerator
+namespace SCREAM.Business
 {
     /// <summary>
-    /// Gets all database objects that can be backed up using mysqldump via CliWrap
+    /// Generator for database objects metadata to be used with mysqldump via CliWrap.
     /// </summary>
-    public async Task<List<BackupItem>> GetBackupItems(DatabaseConnection dbConnection)
+    public class BackupItemGenerator
     {
-        await using var connection = new MySqlConnection(dbConnection.ConnectionString);
-
-        var backupItems = new List<BackupItem>();
-
-        // Query to get tables and views
-        string tablesQuery = @"
-        SELECT 
-            TABLE_SCHEMA as `Schema`,
-            TABLE_NAME as `Name`,
-            TABLE_TYPE as `TypeValue`,
-            ENGINE as `Engine`,
-            COALESCE(TABLE_ROWS, 0) as `TableRows`
-        FROM 
-            information_schema.TABLES
-        WHERE 
-            TABLE_SCHEMA NOT IN ('mysql', 'performance_schema', 'information_schema', 'sys')";
-
-        // Query to get triggers
-        string triggersQuery = @"
-        SELECT 
-            TRIGGER_SCHEMA as `Schema`,
-            TRIGGER_NAME as `Name`,
-            'TRIGGER' as `TypeValue`
-        FROM 
-            information_schema.TRIGGERS
-        WHERE 
-            TRIGGER_SCHEMA NOT IN ('mysql', 'performance_schema', 'information_schema', 'sys')";
-
-        // Query to get events
-        string eventsQuery = @"
-        SELECT 
-            EVENT_SCHEMA as `Schema`,
-            EVENT_NAME as `Name`,
-            'EVENT' as `TypeValue`
-        FROM 
-            information_schema.EVENTS
-        WHERE 
-            EVENT_SCHEMA NOT IN ('mysql', 'performance_schema', 'information_schema', 'sys')";
-
-        // Query to get routines (functions and procedures)
-        string routinesQuery = @"
-        SELECT 
-            ROUTINE_SCHEMA as `Schema`,
-            ROUTINE_NAME as `Name`,
-            ROUTINE_TYPE as `TypeValue`
-        FROM 
-            information_schema.ROUTINES
-        WHERE 
-            ROUTINE_SCHEMA NOT IN ('mysql', 'performance_schema', 'information_schema', 'sys')";
-
-        // Execute all queries to get metadata
-        var tables = connection.Query<BackupItemMetadata>(tablesQuery).ToList();
-        var triggers = connection.Query<BackupItemMetadata>(triggersQuery).ToList();
-        var events = connection.Query<BackupItemMetadata>(eventsQuery).ToList();
-        var routines = connection.Query<BackupItemMetadata>(routinesQuery).ToList();
-
-        // Process tables
-        foreach (var item in tables.Where(t => t.TypeValue == "BASE TABLE"))
+        /// <summary>
+        /// Gets all database objects that can be backed up using mysqldump via CliWrap.
+        /// </summary>
+        public async Task<List<BackupItem>> GetBackupItems(DatabaseConnection dbConnection)
         {
-            // Add table structure item
-            backupItems.Add(new TableStructureItem
-            {
-                Schema = item.Schema,
-                Name = item.Name,
-                Engine = item.Engine
-            });
+            await using var connection = new MySqlConnection(dbConnection.ConnectionString);
 
-            // Add table data item
-            backupItems.Add(new TableDataItem
+            var backupItems = new List<BackupItem>();
+
+            // Query to get tables and views.
+            string tablesQuery = @"
+                SELECT 
+                    TABLE_SCHEMA as `Schema`,
+                    TABLE_NAME as `Name`,
+                    TABLE_TYPE as `TypeValue`,
+                    ENGINE as `Engine`,
+                    COALESCE(TABLE_ROWS, 0) as `TableRows`
+                FROM 
+                    information_schema.TABLES
+                WHERE 
+                    TABLE_SCHEMA NOT IN ('mysql', 'performance_schema', 'information_schema', 'sys')";
+
+            // Query to get triggers.
+            string triggersQuery = @"
+                SELECT 
+                    TRIGGER_SCHEMA as `Schema`,
+                    TRIGGER_NAME as `Name`,
+                    'TRIGGER' as `TypeValue`
+                FROM 
+                    information_schema.TRIGGERS
+                WHERE 
+                    TRIGGER_SCHEMA NOT IN ('mysql', 'performance_schema', 'information_schema', 'sys')";
+
+            // Query to get events.
+            string eventsQuery = @"
+                SELECT 
+                    EVENT_SCHEMA as `Schema`,
+                    EVENT_NAME as `Name`,
+                    'EVENT' as `TypeValue`
+                FROM 
+                    information_schema.EVENTS
+                WHERE 
+                    EVENT_SCHEMA NOT IN ('mysql', 'performance_schema', 'information_schema', 'sys')";
+
+            // Query to get routines (functions and procedures).
+            string routinesQuery = @"
+                SELECT 
+                    ROUTINE_SCHEMA as `Schema`,
+                    ROUTINE_NAME as `Name`,
+                    ROUTINE_TYPE as `TypeValue`
+                FROM 
+                    information_schema.ROUTINES
+                WHERE 
+                    ROUTINE_SCHEMA NOT IN ('mysql', 'performance_schema', 'information_schema', 'sys')";
+
+            // Execute all queries to get metadata.
+            var tables = connection.Query<BackupItemMetadata>(tablesQuery).ToList();
+            var triggers = connection.Query<BackupItemMetadata>(triggersQuery).ToList();
+            var events = connection.Query<BackupItemMetadata>(eventsQuery).ToList();
+            var routines = connection.Query<BackupItemMetadata>(routinesQuery).ToList();
+
+            // Process tables (base tables and views).
+            foreach (var item in tables.Where(t => t.TypeValue == "BASE TABLE"))
             {
-                Schema = item.Schema,
-                Name = item.Name,
-                RowCount = item.TableRows
+                // Table structure
+                backupItems.Add(new BackupItem
+                {
+                    DatabaseItem = new DatabaseTableStructureItems
+                    {
+                        Schema = item.Schema,
+                        Name = item.Name,
+                        Engine = item.Engine
+                    }
+                });
+
+                // Table data
+                backupItems.Add(new BackupItem
+                {
+                    DatabaseItem = new DatabaseTableDataItems
+                    {
+                        Schema = item.Schema,
+                        Name = item.Name,
+                        RowCount = item.TableRows
+                    }
+                });
+            }
+
+            // Process views.
+            foreach (var item in tables.Where(t => t.TypeValue == "VIEW"))
+        {
+            backupItems.Add(new BackupItem {
+                DatabaseItem = new DatabaseViewItems {
+                    Schema = item.Schema,
+                    Name = item.Name
+                }
             });
         }
 
-        // Process views
-        foreach (var item in tables.Where(t => t.TypeValue == "VIEW"))
+            // Process triggers.
+            foreach (var item in triggers)
         {
-            backupItems.Add(new ViewItem
-            {
-                Schema = item.Schema,
-                Name = item.Name
+            backupItems.Add(new BackupItem {
+                DatabaseItem = new DatabaseTriggerItems {
+                    Schema = item.Schema,
+                    Name = item.Name
+                }
+            });
+        }
+            // Process events.
+            foreach (var item in events)
+        {
+                backupItems.Add(new BackupItem {
+                DatabaseItem = new DatabaseEventItems {
+                    Schema = item.Schema,
+                    Name = item.Name
+                }
             });
         }
 
-        // Process triggers
-        foreach (var item in triggers)
-        {
-            backupItems.Add(new TriggerItem
-            {
-                Schema = item.Schema,
-                Name = item.Name
-            });
-        }
-
-        // Process events
-        foreach (var item in events)
-        {
-            backupItems.Add(new EventItem
-            {
-                Schema = item.Schema,
-                Name = item.Name
-            });
-        }
-
-        // Process routines (functions and procedures)
+        // Process routines
         foreach (var item in routines)
         {
-            backupItems.Add(new FunctionProcedureItem
-            {
-                Schema = item.Schema,
-                Name = item.Name
+            backupItems.Add(new BackupItem {
+                DatabaseItem = new DatabaseFunctionProcedureItems {
+                    Schema = item.Schema,
+                    Name = item.Name
+                }
             });
         }
 
-        return backupItems;
-    }
-}
 
-/// <summary>
-/// Metadata for database objects retrieved from information_schema
-/// </summary>
-public class BackupItemMetadata
-{
-    public string Schema { get; set; } = string.Empty;
-    public string Name { get; set; } = string.Empty;
-    public string TypeValue { get; set; } = string.Empty;
-    public string Engine { get; set; } = string.Empty;
-    public long TableRows { get; set; }
+            return backupItems;
+        }
+    }
+
+    /// <summary>
+    /// Metadata for database objects retrieved from information_schema.
+    /// </summary>
+    public class BackupItemMetadata
+    {
+        public string Schema { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string TypeValue { get; set; } = string.Empty;
+        public string Engine { get; set; } = string.Empty;
+        public long TableRows { get; set; }
+    }
 }
