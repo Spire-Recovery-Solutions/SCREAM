@@ -17,6 +17,8 @@
         /// </summary>
         public required TaskStatus Status { get; set; }
 
+        public bool HasTriggeredRestore { get; set; } = false;
+
         /// <summary>
         /// The timestamp when the backup job started.
         /// </summary>
