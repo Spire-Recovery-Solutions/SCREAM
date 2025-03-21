@@ -96,31 +96,45 @@ public class Worker(ILogger<Worker> logger, IDbContextFactory<ScreamDbContext> d
 
         var completedJobs = await dbContext.BackupJobs
             .Include(j => j.BackupPlan)
+            .ThenInclude(p => p.Items)
             .Where(j => j.Status == TaskStatus.RanToCompletion && !j.HasTriggeredRestore)
             .ToListAsync();
 
-        foreach (var job in completedJobs)
+        foreach (var backupJob in completedJobs)
         {
-            var triggeredRestorePlans = await dbContext.RestorePlans
-                .Where(r => r.SourceBackupPlanId == job.BackupPlan.Id && r.ScheduleType == ScheduleType.Triggered)
+            var restorePlans = await dbContext.RestorePlans
+                .Include(r => r.Items)
+                .Where(r => r.SourceBackupPlanId == backupJob.BackupPlan.Id &&
+                          r.ScheduleType == ScheduleType.Triggered)
                 .ToListAsync();
 
-            foreach (var plan in triggeredRestorePlans)
+            foreach (var restorePlan in restorePlans)
             {
                 var restoreJob = new RestoreJob
                 {
-                    RestorePlan = plan,
+                    RestorePlanId = restorePlan.Id,
                     Status = TaskStatus.Created,
                     StartedAt = default,
-                    CompletedAt = null
+                    RestoreItems = new List<RestoreItem>()
                 };
+
+                foreach (var backupItem in restorePlan.Items)
+                {
+                    restoreJob.RestoreItems.Add(new RestoreItem
+                    {
+                        DatabaseItemId = backupItem.DatabaseItemId,
+                        Status = TaskStatus.Created,
+                        RetryCount = 0
+                    });
+                }
+
                 dbContext.RestoreJobs.Add(restoreJob);
             }
 
-            job.HasTriggeredRestore = true;
-            dbContext.BackupJobs.Update(job);
-            await dbContext.SaveChangesAsync();
+            backupJob.HasTriggeredRestore = true;
         }
+
+        await dbContext.SaveChangesAsync();
     }
     private async Task GenerateRestoreJobs()
     {
