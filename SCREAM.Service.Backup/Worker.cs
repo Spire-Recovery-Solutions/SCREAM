@@ -90,7 +90,6 @@ public class Worker(ILogger<Worker> logger, IDbContextFactory<ScreamDbContext> d
             await dbContext.SaveChangesAsync();
         }
     }
-    // Add this to the Worker's main loop
     private async Task ProcessCompletedBackupJobs()
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync();
@@ -123,12 +122,10 @@ public class Worker(ILogger<Worker> logger, IDbContextFactory<ScreamDbContext> d
             await dbContext.SaveChangesAsync();
         }
     }
-    // Inside the Worker class
     private async Task GenerateRestoreJobs()
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync();
 
-        // Get active RestorePlans with schedules (Repeating/OneTime) where NextRun hasn't been set
         var restorePlans = await dbContext.RestorePlans
             .Include(r => r.Jobs)
             .Where(r =>
@@ -165,7 +162,6 @@ public class Worker(ILogger<Worker> logger, IDbContextFactory<ScreamDbContext> d
             //     }
             // }
 
-            // Calculate next scheduled run time
             var nextRun = restorePlan.GetNextRun(DateTime.UtcNow);
             if (nextRun != null)
             {
@@ -174,7 +170,6 @@ public class Worker(ILogger<Worker> logger, IDbContextFactory<ScreamDbContext> d
                 await dbContext.SaveChangesAsync();
             }
 
-            // Create new restore job
             var restoreJob = new RestoreJob
             {
                 RestorePlan = restorePlan,
