@@ -307,6 +307,7 @@ app.MapGet("/backup-plans/{backupPlanId:long}", async (IDbContextFactory<ScreamD
         .Include(i => i.DatabaseConnection)
         .Include(i => i.StorageTarget)
         .Include(i => i.Items)
+        .ThenInclude(item => item.DatabaseItem)
         .FirstOrDefaultAsync(x => x.Id == backupPlanId);
     return backupPlan == null ? Results.NotFound() : Results.Ok(backupPlan);
 });

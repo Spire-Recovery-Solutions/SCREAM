@@ -1,0 +1,265 @@
+﻿@page "/restoreplan/{Id:long?}"
+@using SCREAM.Data.Entities
+@using SCREAM.Data.Entities.Database
+@using SCREAM.Data.Entities.Restore
+@using SCREAM.Data.Entities.Backup
+@using SCREAM.Data.Entities.Backup.BackupItems
+@using SCREAM.Data.Entities.StorageTargets
+@using SCREAM.Data.Enums
+@using SCREAM.Web.Pages.Backup
+@inject ISnackbar Snackbar
+@inject IHttpClientFactory ClientFactory
+@inject IDialogService DialogService
+@inject NavigationManager NavigationManager
+
+
+<MudCard Elevation="3" Class="mb-4">
+    <MudCardHeader>
+        <CardHeaderContent>
+            <MudText Typo="Typo.h5">@(Id.HasValue ? "Edit" : "Create") Restore Plan</MudText>
+        </CardHeaderContent>
+    </MudCardHeader>
+
+    <MudCardContent>
+        <MudForm @ref="_form" Model="_restorePlan">
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_restorePlan.Name"
+                    Label="Plan Name"
+                    Variant="Variant.Outlined"
+                    Required="true" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_restorePlan.Description"
+                    Label="Description"
+                    Variant="Variant.Outlined"
+                    Required="true" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect T="long" @bind-Value="_restorePlan.DatabaseConnectionId"
+                    Label="Database Connection"
+                    Variant="Variant.Outlined"
+                    Required="true"
+                    HelperText="Select the target database for restoration">
+                        @if (_databaseConnections == null || _databaseConnections.Count == 0)
+                        {
+                            <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
+                        }
+                        else
+                        {
+                            <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
+                            @foreach (var conn in _databaseConnections)
+                            {
+                                <MudSelectItem Value="@conn.Id">
+                                    @conn.HostName (@conn.Type)
+                                </MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect T="long" @bind-Value="_restorePlan.SourceBackupPlanId"
+                    Label="Source Backup Plan"
+                    Variant="Variant.Outlined"
+                    Required="true"
+                    HelperText="Select the backup plan to restore from">
+                        @if (_backupPlans == null || _backupPlans.Count == 0)
+                        {
+                            <MudSelectItem T="long" Value="0">Select Backup Plan</MudSelectItem>
+                        }
+                        else
+                        {
+                            <MudSelectItem T="long" Value="0">Select Backup Plan</MudSelectItem>
+                            @foreach (var plan in _backupPlans)
+                            {
+                                <MudSelectItem Value="@plan.Id">
+                                    @plan.Name
+                                </MudSelectItem>
+                            }
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudGrid Class="mt-2">
+                        <MudItem xs="12" md="6">
+                            <MudSelect T="ScheduleType"
+                            @bind-Value="_restorePlan.ScheduleType"
+                            Label="Schedule Type"
+                            Variant="Variant.Outlined"
+                            HelperText="How should this restore be triggered?">
+                                @foreach (ScheduleType type in Enum.GetValues(typeof(ScheduleType)))
+                                {
+                                    <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        @if (_restorePlan.ScheduleType != ScheduleType.OneTime)
+                        {
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_restorePlan.ScheduleCron"
+                                Label="Cron Expression"
+                                Variant="Variant.Outlined"
+                                Required="true"
+                                HelperText="e.g., '0 0 * * *' for daily at midnight" />
+                            </MudItem>
+                        }
+                        @if (Id.HasValue)
+                        {
+                            <MudItem xs="12" md="6">
+                                <MudSwitch T="bool" @bind-Value="_restorePlan.IsActive"
+                                Color="Color.Primary"
+                                Label="Active" />
+                            </MudItem>
+                        }
+                    </MudGrid>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </MudCardContent>
+
+    <!-- Section for selecting backup items to restore -->
+    <MudCard Elevation="3" Class="mt-4 mb-4">
+        <MudCardContent>
+            <MudButton Variant="Variant.Filled"
+            Color="Color.Primary"
+            OnClick="ScanBackupItems">
+                @if (_restorePlan.Items.Count > 0)
+                {
+                    <span>Re-Scan Backup Items</span>
+                }
+                else
+                {
+                    <span>Scan Backup Items</span>
+                }
+            </MudButton>
+            @if (_restorePlan.Items.Count > 0)
+            {
+                <EnhancedBackupTree @bind-Items="_restorePlan.Items" />
+            }
+        </MudCardContent>
+    </MudCard>
+
+    <MudCardActions>
+        <MudButton Variant="Variant.Filled"
+        Color="Color.Success"
+        StartIcon="@Icons.Material.Filled.Save"
+        OnClick="SavePlan"
+        Disabled="@(_restorePlan.DatabaseConnectionId == 0 || _restorePlan.SourceBackupPlanId == 0 || string.IsNullOrWhiteSpace(_restorePlan.Name))">
+            Save Restore Plan
+        </MudButton>
+        <MudButton OnClick="@(() => NavigationManager.NavigateTo("/restore-plans"))">Back</MudButton>
+    </MudCardActions>
+</MudCard>
+
+@code {
+    [Parameter] public long? Id { get; set; }
+
+    private MudForm _form;
+    private RestorePlan _restorePlan = new()
+        {
+            Name = string.Empty,
+            Description = string.Empty,
+            ScheduleCron = "0 0 * * *",
+            ScheduleType = ScheduleType.OneTime,
+            IsActive = false,
+            OverwriteExisting = false,
+            Items = new List<BackupItem>()
+        };
+
+    private HttpClient _httpClient;
+    private List<DatabaseConnection> _databaseConnections = new();
+    private List<BackupPlan> _backupPlans = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _httpClient = ClientFactory.CreateClient("SCREAM");
+
+        // Load database connections and backup plans from API endpoints.
+        _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/connections") ?? new();
+        _backupPlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("/backup-plans") ?? new();
+
+        // If editing an existing restore plan, load it (using fake data if API is not available)
+        if (Id.HasValue)
+        {
+            // Here you can later call an API endpoint to get the full restore plan with its backup items.
+            _restorePlan = new RestorePlan
+                {
+                    Id = Id.Value,
+                    Name = "Sample Restore Plan",
+                    Description = "Restores production DB daily",
+                    DatabaseConnectionId = _databaseConnections.FirstOrDefault()?.Id ?? 0,
+                    DatabaseConnection = _databaseConnections.FirstOrDefault(),
+                    SourceBackupPlanId = _backupPlans.FirstOrDefault()?.Id ?? 0,
+                    SourceBackupPlan = _backupPlans.FirstOrDefault(),
+                    ScheduleCron = "0 0 * * *",
+                    ScheduleType = ScheduleType.Repeating,
+                    LastRun = DateTime.UtcNow.AddDays(-1),
+                    NextRun = DateTime.UtcNow.AddHours(5),
+                    IsActive = true,
+                    OverwriteExisting = false,
+                    Items = new List<BackupItem>
+        {
+            new BackupItem
+            {
+                IsSelected = true,
+                DatabaseItemId = 1,
+                DatabaseItem = new DatabaseTableStructureItems
+                {
+                    Schema = "dbo",
+                    Name = "Customers",
+                    Type = DatabaseItemType.TableStructure
+                }
+            },
+            new BackupItem
+            {
+                IsSelected = false,
+                DatabaseItemId = 2,
+                DatabaseItem = new DatabaseTableDataItems
+                {
+                    Schema = "dbo",
+                    Name = "Orders",
+                    Type = DatabaseItemType.TableData
+                }
+            }
+                    }
+                };
+        }
+    }
+
+    private async Task ScanBackupItems()
+    {
+        if (_restorePlan.DatabaseConnectionId == 0 || _restorePlan.SourceBackupPlanId == 0)
+        {
+            Snackbar.Add("Please select a Database Connection and Source Backup Plan first.", Severity.Warning);
+            return;
+        }
+
+        var response = await _httpClient.GetAsync($"backup-plans/{_restorePlan.SourceBackupPlanId}");
+        if (response.IsSuccessStatusCode)
+        {
+            var backupPlan = await response.Content.ReadFromJsonAsync<BackupPlan>();
+            if (backupPlan?.Items != null)
+            {
+                _restorePlan.Items = backupPlan.Items;
+                Snackbar.Add("Backup items loaded successfully from API.", Severity.Success);
+            }
+        }
+        else
+        {
+            Snackbar.Add("Error scanning backup items from API.", Severity.Error);
+        }
+        StateHasChanged();
+    }
+
+
+    private async Task SavePlan()
+    {
+        await _form.Validate();
+        if (!_form.IsValid)
+            return;
+
+        Snackbar.Add($"Restore plan {(Id.HasValue ? "updated" : "created")} successfully", Severity.Success);
+        NavigationManager.NavigateTo("/restore-plans");
+    }
+}

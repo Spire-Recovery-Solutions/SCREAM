@@ -1,6 +1,7 @@
 ﻿using SCREAM.Data.Entities.Backup;
 using SCREAM.Data.Entities.Backup.BackupItems;
 using SCREAM.Data.Entities.StorageTargets;
+using SCREAM.Data.Enums;
 
 namespace SCREAM.Data.Entities.Restore
 {
@@ -16,8 +17,13 @@ namespace SCREAM.Data.Entities.Restore
         public long DatabaseConnectionId { get; set; }
         public DatabaseConnection DatabaseConnection { get; set; } = null!;
 
-        public long SourceBackupJobId { get; set; }
-        public BackupJob SourceBackupJob { get; set; } = null!;
+        public long SourceBackupPlanId { get; set; }
+        public BackupPlan SourceBackupPlan { get; set; } = null!;
+
+        public string ScheduleCron { get; set; } = string.Empty;
+        public ScheduleType ScheduleType { get; set; }
+        public DateTime? LastRun { get; set; }
+        public DateTime? NextRun { get; set; }
 
         public bool IsActive { get; set; }
         public bool OverwriteExisting { get; set; }

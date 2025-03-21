@@ -1,6 +1,7 @@
 ﻿@page "/restore-plans"
 @using System.Text.Json
 @using SCREAM.Data.Entities
+@using SCREAM.Data.Entities.Backup
 @using SCREAM.Data.Entities.Restore
 @using System.Text.Json.Serialization
 @using SCREAM.Data.Entities.Backup.BackupItems
@@ -41,18 +42,18 @@
     <HeaderContent>
         <MudTh>Name</MudTh>
         <MudTh>Database</MudTh>
-        <MudTh>Storage Target</MudTh>
-        <MudTh>Source Backup</MudTh>
+        <MudTh>Source Backup Plan</MudTh>
         <MudTh>Overwrite</MudTh>
         <MudTh>Status</MudTh>
+        <MudTh>Schedule Type</MudTh>
+        <MudTh>Next Run</MudTh>
         <MudTh>Description</MudTh>
         <MudTh>Actions</MudTh>
     </HeaderContent>
     <RowTemplate>
         <MudTd>@context.Name</MudTd>
         <MudTd>@(context.DatabaseConnection?.HostName)</MudTd>
-        <MudTd>@(context.StorageTarget?.Name)</MudTd>
-        <MudTd>@context.SourceBackupJobId</MudTd>
+        <MudTd>@context.SourceBackupPlan?.Name</MudTd>
         <MudTd>
             <MudChip T="bool" Color="@(context.OverwriteExisting ? Color.Warning : Color.Info)"
                      Size="Size.Small">
@@ -65,6 +66,8 @@
                 @(context.IsActive ? "Active" : "Inactive")
             </MudChip>
         </MudTd>
+        <MudTd>@context.ScheduleType</MudTd>
+        <MudTd>@(context.NextRun.HasValue ? context.NextRun.Value.ToString("g") : "-")</MudTd>
         <MudTd>
             <MudTooltip Text="@context.Description">
                 <span style="display: block; white-space: normal; word-break: break-word;">
@@ -91,7 +94,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Initialize with fake data
         _httpClient = ClientFactory.CreateClient("SCREAM");
         _jsonOptions = new JsonSerializerOptions
             {
@@ -116,12 +118,17 @@
     {
         return new List<RestorePlan>
         {
-            new RestorePlan
+            new()
             {
                 Id = 1,
                 Name = "Production DB Restore",
                 Description = "Daily production database restore",
-                DatabaseConnection = new DatabaseConnection
+                SourceBackupPlan = new() 
+                {
+                    Name = "Test Backup",
+                    Description = "Test Description"
+                },
+                DatabaseConnection = new()
                 {
                     HostName = "prod-db.example.com",
                     Type = DatabaseType.MySQL,
@@ -129,22 +136,25 @@
                     Password = "password123",
                     Port = 3306
                 },
-                StorageTarget = new LocalStorageTarget
-                {
-                    Name = "Local Backup Storage",
-                    Path = "/backups"
-                },
-                SourceBackupJobId = 1001,
+                ScheduleType = ScheduleType.Repeating,
+                ScheduleCron = "0 0 * * *",
+                LastRun = DateTime.UtcNow.AddDays(-1),
+                NextRun = DateTime.UtcNow.AddHours(2),
                 IsActive = true,
                 OverwriteExisting = true,
                 Items = new List<BackupItem>()
             },
-            new RestorePlan
+            new()
             {
                 Id = 2,
                 Name = "Test Environment Restore",
                 Description = "Weekly test environment restoration",
-                DatabaseConnection = new DatabaseConnection
+                 SourceBackupPlan = new()
+                {
+                    Name = "Test2 Backup",
+                    Description = "Test Description"
+                },
+                DatabaseConnection = new()
                 {
                     HostName = "test-db.example.com",
                     Type = DatabaseType.MySQL,
@@ -152,14 +162,10 @@
                     Password = "test_pass",
                     Port = 3306
                 },
-                StorageTarget = new S3StorageTarget
-                {
-                    Name = "AWS S3 Backup",
-                    BucketName = "backup-bucket",
-                    AccessKey = "AKIAXXXXXXXXXXXXXXXX",
-                    SecretKey = "secret_key_value_here"
-                },
-                SourceBackupJobId = 1002,
+                ScheduleType = ScheduleType.OneTime,
+                ScheduleCron = "",
+                LastRun = null,
+                NextRun = DateTime.UtcNow.AddDays(1),
                 IsActive = false,
                 OverwriteExisting = false,
                 Items = new List<BackupItem>()
@@ -181,7 +187,6 @@
 
         if (result is { Canceled: false } && result.Data is bool confirmed && confirmed)
         {
-            // Fake delete operation
             _restorePlans.RemoveAll(p => p.Id == restorePlan.Id);
             Snackbar.Add("Restore plan deleted successfully.", Severity.Success);
             StateHasChanged();
@@ -193,7 +198,6 @@
         _isLoading = true;
         StateHasChanged();
 
-        // Use fake data
         _restorePlans = GetSampleRestorePlans();
         Snackbar.Add("Using sample restore plans data.", Severity.Info);
         _isLoading = false;

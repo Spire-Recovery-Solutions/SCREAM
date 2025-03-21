@@ -3,6 +3,7 @@
     public enum ScheduleType
     {
         OneTime,
-        Repeating
+        Repeating,
+        Triggered
     }
 }

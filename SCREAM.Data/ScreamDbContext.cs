@@ -234,9 +234,9 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .HasForeignKey(p => p.DatabaseConnectionId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            e.HasOne(p => p.SourceBackupJob)
+            e.HasOne(p => p.SourceBackupPlan)
                 .WithMany()
-                .HasForeignKey(p => p.SourceBackupJobId)
+                .HasForeignKey(p => p.SourceBackupPlanId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             e.HasMany(p => p.Items)
