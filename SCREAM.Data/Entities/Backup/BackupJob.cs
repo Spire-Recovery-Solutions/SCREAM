@@ -13,6 +13,7 @@
 
         /// <summary>
         /// The status of the backup job (e.g., Pending, Running, Completed, Failed).
+        /// TODO: THIS IS WRONG AI SLOP 
         /// </summary>
         public required TaskStatus Status { get; set; }
 

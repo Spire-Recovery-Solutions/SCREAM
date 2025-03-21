@@ -23,7 +23,6 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
     //Restore
     public DbSet<RestorePlan> RestorePlans { get; set; }
     public DbSet<RestoreJob> RestoreJobs { get; set; }
-    public DbSet<RestoreItemStatus> RestoreItemStatuses { get; set; }
     public DbSet<RestoreJobLog> RestoreJobLogs { get; set; }
     public DbSet<RestoreSettings> RestoreSettings { get; set; }
 
@@ -152,7 +151,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             e.Property(p => p.Status).HasConversion<string>();
 
             // One-to-many relationship between BackupJob and BackupItemStatuses
-            e.HasMany<BackupItemStatus>()
+            e.HasMany(m => m.BackupItemStatuses)
                 .WithOne()
                 .HasForeignKey(k => k.BackupJobId)
                 .OnDelete(DeleteBehavior.Cascade);
@@ -206,16 +205,16 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             e.Property(p => p.NotificationEmail).IsRequired(false);
         });
 
-        mb.Entity<RestoreItemStatus>(e =>
+        mb.Entity<RestoreItem>(e =>
         {
-            e.ToTable("RestoreItemStatuses");
+            e.ToTable("RestoreItems");
             e.Property(p => p.Status).HasConversion<string>();
             e.Property(p => p.ErrorMessage).IsRequired(false);
             e.Property(p => p.RetryCount).HasDefaultValue(0);
 
-            e.HasOne(s => s.RestoreItem)
+            e.HasOne(s => s.DatabaseItem)
                 .WithMany()
-                .HasForeignKey(k => k.RestoreItemId)
+                .HasForeignKey(k => k.DatabaseItemId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -255,10 +254,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
            e.Property(p => p.IsCompressed).HasDefaultValue(false);
            e.Property(p => p.IsEncrypted).HasDefaultValue(false);
 
-           e.HasMany(h => h.RestoreItemStatuses)
-               .WithOne()
-               .HasForeignKey(k => k.RestoreJobId)
-               .OnDelete(DeleteBehavior.Cascade);
+           e.HasMany(h => h.RestoreItems);
 
            // One-to-many relationship between RestoreJob and RestoreJobLogs
            e.HasMany<RestoreJobLog>()
@@ -276,9 +272,9 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             e.Property(p => p.Message).IsRequired();
 
             // Optional relationship to RestoreItemStatus
-            e.HasOne(l => l.RestoreItemStatus)
+            e.HasOne(l => l.RestoreItem)
                 .WithMany()
-                .HasForeignKey(k => k.RestoreItemStatusId)
+                .HasForeignKey(k => k.RestoreItemId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
         });

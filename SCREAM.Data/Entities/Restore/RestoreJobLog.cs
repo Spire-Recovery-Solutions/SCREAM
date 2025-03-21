@@ -15,9 +15,9 @@ namespace SCREAM.Data.Entities.Restore
         /// <summary>
         /// The related restore item status if applicable
         /// </summary>
-        public long? RestoreItemStatusId { get; set; }
+        public long? RestoreItemId { get; set; }
 
-        public RestoreItemStatus? RestoreItemStatus { get; set; }
+        public RestoreItem? RestoreItem{ get; set; }
 
         /// <summary>
         /// When the log entry was created
