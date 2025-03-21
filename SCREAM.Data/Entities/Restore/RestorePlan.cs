@@ -1,6 +1,6 @@
-﻿using SCREAM.Data.Entities.Backup;
+﻿using Cronos;
+using SCREAM.Data.Entities.Backup;
 using SCREAM.Data.Entities.Backup.BackupItems;
-using SCREAM.Data.Entities.StorageTargets;
 using SCREAM.Data.Enums;
 
 namespace SCREAM.Data.Entities.Restore
@@ -28,6 +28,23 @@ namespace SCREAM.Data.Entities.Restore
         public bool IsActive { get; set; }
         public bool OverwriteExisting { get; set; }
 
+        public DateTime? GetNextRun(DateTime utcNow)
+        {
+            switch (ScheduleType)
+            {
+                case ScheduleType.Repeating:
+                    {
+                        var expression = CronExpression.Parse(ScheduleCron);
+                        return expression.GetNextOccurrence(utcNow);
+                    }
+                case ScheduleType.OneTime when LastRun == null:
+                    return CreatedAt.AddMinutes(5);
+                case ScheduleType.Triggered:
+                    return null;
+                default:
+                    return null;
+            }
+        }
 
         // Related collections
         public ICollection<RestoreJob> Jobs { get; set; } = new List<RestoreJob>();
