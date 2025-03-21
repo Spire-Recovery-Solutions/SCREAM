@@ -1,5 +1,4 @@
-using SCREAM.Data.Entities.Database.DatabaseItems;
-using System.Text.Json.Serialization;
+using SCREAM.Data.Entities.Database;
 
 namespace SCREAM.Data.Entities.Backup.BackupItems;
 
@@ -12,7 +11,6 @@ public class BackupItem : ScreamDbBaseEntity
     /// The ID of the backup plan this item belongs to.
     /// </summary>
     public long? BackupPlanId { get; set; }
-
 
     /// <summary>
     /// Indicates whether the item is selected for backup.

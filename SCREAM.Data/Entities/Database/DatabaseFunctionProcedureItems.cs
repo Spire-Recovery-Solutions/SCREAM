@@ -1,6 +1,4 @@
 using CliWrap.Builders;
-using SCREAM.Data.Entities.Database.DatabaseItems;
-using System.Text.Json.Serialization;
 
 namespace SCREAM.Data.Entities.Database;
 
@@ -33,14 +31,4 @@ public class DatabaseFunctionProcedureItems : DatabaseItem
             .Add("--column-statistics=0")
             .Add(Schema);
     }
-
-    public override void ConfigureRestoreArguments(ArgumentsBuilder args, 
-        string host, string user, string password)
-    {
-        args.Add($"--host={host}")
-            .Add($"--user={user}")
-            .Add($"--password={password}")
-            .Add("--routines");
-    }
-     public override string GetBackupFileName() => $"{Schema}-funcs.sql.xz.enc";
 }

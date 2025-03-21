@@ -1,4 +1,4 @@
-﻿using SCREAM.Data.Entities.Restore.RestoreItems;
+﻿using SCREAM.Data.Entities.Backup.BackupItems;
 
 namespace SCREAM.Data.Entities.Restore
 {
@@ -16,7 +16,7 @@ namespace SCREAM.Data.Entities.Restore
         /// The restore item this status is tracking
         /// </summary>
         public long RestoreItemId { get; set; }
-        public RestoreItem RestoreItem { get; set; } = null!;
+        public BackupItem RestoreItem { get; set; } = null!;
 
         /// <summary>
         /// Current execution status

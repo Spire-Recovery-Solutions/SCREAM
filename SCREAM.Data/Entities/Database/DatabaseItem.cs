@@ -1,8 +1,7 @@
-﻿using CliWrap.Builders;
-using SCREAM.Data.Entities.Backup.BackupItems;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
+using CliWrap.Builders;
 
-namespace SCREAM.Data.Entities.Database.DatabaseItems
+namespace SCREAM.Data.Entities.Database
 {
     [JsonDerivedType(typeof(DatabaseTableStructureItems), typeDiscriminator: (int)DatabaseItemType.TableStructure)]
     [JsonDerivedType(typeof(DatabaseTableDataItems), typeDiscriminator: (int)DatabaseItemType.TableData)]
@@ -19,10 +18,5 @@ namespace SCREAM.Data.Entities.Database.DatabaseItems
 
         public abstract void ConfigureBackupArguments(ArgumentsBuilder args,
             string host, string user, string password, string maxPacketSize);
-
-        public abstract void ConfigureRestoreArguments(ArgumentsBuilder args,
-            string host, string user, string password);
-
-        public abstract string GetBackupFileName();
     }
 }

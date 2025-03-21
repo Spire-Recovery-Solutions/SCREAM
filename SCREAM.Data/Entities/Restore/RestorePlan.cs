@@ -1,5 +1,5 @@
 ﻿using SCREAM.Data.Entities.Backup;
-using SCREAM.Data.Entities.Restore.RestoreItems;
+using SCREAM.Data.Entities.Backup.BackupItems;
 using SCREAM.Data.Entities.StorageTargets;
 
 namespace SCREAM.Data.Entities.Restore
@@ -28,6 +28,6 @@ namespace SCREAM.Data.Entities.Restore
 
         // Related collections
         public ICollection<RestoreJob> Jobs { get; set; } = new List<RestoreJob>();
-        public ICollection<RestoreItem> Items { get; set; } = new List<RestoreItem>();
+        public ICollection<BackupItem> Items { get; set; } = new List<BackupItem>();
     }
 }

@@ -3,7 +3,7 @@
 @using SCREAM.Data.Entities
 @using SCREAM.Data.Entities.Restore
 @using System.Text.Json.Serialization
-@using SCREAM.Data.Entities.Restore.RestoreItems
+@using SCREAM.Data.Entities.Backup.BackupItems
 @using SCREAM.Data.Entities.StorageTargets
 @using SCREAM.Data.Enums
 @using SCREAM.Web.Pages.Backup
@@ -137,7 +137,7 @@
                 SourceBackupJobId = 1001,
                 IsActive = true,
                 OverwriteExisting = true,
-                Items = new List<RestoreItem>()
+                Items = new List<BackupItem>()
             },
             new RestorePlan
             {
@@ -162,7 +162,7 @@
                 SourceBackupJobId = 1002,
                 IsActive = false,
                 OverwriteExisting = false,
-                Items = new List<RestoreItem>()
+                Items = new List<BackupItem>()
             }
         };
     }

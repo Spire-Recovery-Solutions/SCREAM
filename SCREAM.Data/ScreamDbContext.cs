@@ -3,9 +3,7 @@ using SCREAM.Data.Entities;
 using SCREAM.Data.Entities.Backup;
 using SCREAM.Data.Entities.Backup.BackupItems;
 using SCREAM.Data.Entities.Database;
-using SCREAM.Data.Entities.Database.DatabaseItems;
 using SCREAM.Data.Entities.Restore;
-using SCREAM.Data.Entities.Restore.RestoreItems;
 using SCREAM.Data.Entities.StorageTargets;
 
 namespace SCREAM.Data;
@@ -28,7 +26,6 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
     public DbSet<RestoreItemStatus> RestoreItemStatuses { get; set; }
     public DbSet<RestoreJobLog> RestoreJobLogs { get; set; }
     public DbSet<RestoreSettings> RestoreSettings { get; set; }
-    public DbSet<RestoreItem> RestoreItems { get; set; }
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -84,20 +81,6 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             e.HasOne(b => b.DatabaseItem)
                 .WithMany()
                 .HasForeignKey(b => b.DatabaseItemId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
-
-        mb.Entity<RestoreItem>(e =>
-        {
-            e.ToTable("RestoreItems");
-            e.HasOne(r => r.DatabaseItems)
-                .WithMany()
-                .HasForeignKey(b => b.DatabaseItemId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            e.HasOne(r => r.BackupItem)
-                .WithMany()
-                .HasForeignKey(r => r.BackupItemId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -262,10 +245,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .HasForeignKey(p => p.SourceBackupJobId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            e.HasMany(p => p.Items)
-                .WithOne()
-                .HasForeignKey(i => i.RestorePlanId)
-                .OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(p => p.Items);
         });
 
         mb.Entity<RestoreJob>(e =>

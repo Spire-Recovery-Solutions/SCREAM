@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using SCREAM.Data;
-using SCREAM.Data.Entities;
 using SCREAM.Data.Entities.Backup;
 
 namespace SCREAM.Service.Backup;
