@@ -114,7 +114,7 @@ public class Worker(ILogger<Worker> logger, IDbContextFactory<ScreamDbContext> d
                 {
                     RestorePlanId = restorePlan.Id,
                     Status = TaskStatus.Created,
-                    StartedAt = default,
+                    StartedAt = DateTime.UtcNow,
                     RestoreItems = new List<RestoreItem>()
                 };
 
