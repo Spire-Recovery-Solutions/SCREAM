@@ -8,6 +8,9 @@ namespace SCREAM.Data.Entities.Restore
     /// </summary>
     public class RestoreItem : ScreamDbBaseEntity
     {
+        public long RestoreJobId { get; set; }
+        public RestoreJob RestoreJob { get; set; } = null!;
+        
         /// <summary>
         /// The restore item this status is tracking
         /// </summary>

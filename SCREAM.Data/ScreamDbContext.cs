@@ -234,34 +234,41 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .HasForeignKey(p => p.DatabaseConnectionId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            e.HasOne(p => p.StorageTarget)
-                .WithMany()
-                .HasForeignKey(p => p.StorageTargetId)
-                .OnDelete(DeleteBehavior.Restrict);
-
             e.HasOne(p => p.SourceBackupJob)
                 .WithMany()
                 .HasForeignKey(p => p.SourceBackupJobId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            e.HasMany(p => p.Items);
+            e.HasMany(p => p.Items)
+                .WithMany()
+                .UsingEntity<RestorePlanBackupItem>(
+                    j => j.HasOne(rb => rb.BackupItem)
+                        .WithMany()
+                        .HasForeignKey(rb => rb.BackupItemId),
+                    j => j.HasOne(rb => rb.RestorePlan)
+                        .WithMany()
+                        .HasForeignKey(rb => rb.RestorePlanId)
+                );
         });
 
         mb.Entity<RestoreJob>(e =>
-       {
-           e.ToTable("RestoreJobs");
-           e.Property(p => p.Status).HasConversion<string>();
-           e.Property(p => p.IsCompressed).HasDefaultValue(false);
-           e.Property(p => p.IsEncrypted).HasDefaultValue(false);
+        {
+            e.ToTable("RestoreJobs");
+            e.Property(p => p.Status).HasConversion<string>();
+            e.Property(p => p.IsCompressed).HasDefaultValue(false);
+            e.Property(p => p.IsEncrypted).HasDefaultValue(false);
 
-           e.HasMany(h => h.RestoreItems);
+            e.HasMany(j => j.RestoreItems)
+                .WithOne(i => i.RestoreJob)
+                .HasForeignKey(i => i.RestoreJobId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-           // One-to-many relationship between RestoreJob and RestoreJobLogs
-           e.HasMany<RestoreJobLog>()
-               .WithOne()
-               .HasForeignKey(k => k.RestoreJobId)
-               .OnDelete(DeleteBehavior.Cascade);
-       });
+            // One-to-many relationship between RestoreJob and RestoreJobLogs
+            e.HasMany<RestoreJobLog>()
+                .WithOne()
+                .HasForeignKey(k => k.RestoreJobId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
 
         // RestoreJobLog configuration
         mb.Entity<RestoreJobLog>(e =>

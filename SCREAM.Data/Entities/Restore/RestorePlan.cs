@@ -16,9 +16,6 @@ namespace SCREAM.Data.Entities.Restore
         public long DatabaseConnectionId { get; set; }
         public DatabaseConnection DatabaseConnection { get; set; } = null!;
 
-        public long StorageTargetId { get; set; }
-        public StorageTarget StorageTarget { get; set; } = null!;
-
         public long SourceBackupJobId { get; set; }
         public BackupJob SourceBackupJob { get; set; } = null!;
 
@@ -29,5 +26,15 @@ namespace SCREAM.Data.Entities.Restore
         // Related collections
         public ICollection<RestoreJob> Jobs { get; set; } = new List<RestoreJob>();
         public ICollection<BackupItem> Items { get; set; } = new List<BackupItem>();
+    }
+
+
+    public class RestorePlanBackupItem
+    {
+        public long RestorePlanId { get; set; }
+        public RestorePlan RestorePlan { get; set; } = null!;
+
+        public long BackupItemId { get; set; }
+        public BackupItem BackupItem { get; set; } = null!;
     }
 }
