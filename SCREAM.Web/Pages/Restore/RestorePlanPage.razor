@@ -1,0 +1,202 @@
+﻿@page "/restore-plans"
+@using System.Text.Json
+@using SCREAM.Data.Entities
+@using SCREAM.Data.Entities.Restore
+@using System.Text.Json.Serialization
+@using SCREAM.Data.Entities.Restore.RestoreItems
+@using SCREAM.Data.Entities.StorageTargets
+@using SCREAM.Data.Enums
+@using SCREAM.Web.Pages.Backup
+@inject IHttpClientFactory ClientFactory
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudText Align="Align.Center" Typo="Typo.h6" Class="mb-4">
+    Manage Restore Plans
+</MudText>
+
+<MudTable Items="@_restorePlans"
+          Dense="true"
+          Hover="true"
+          Striped="true"
+          Loading="@_isLoading"
+          LoadingProgressColor="Color.Primary">
+    <ToolBarContent>
+        <MudStack Row Style="width:100%;" Class="mb-4" Justify="Justify.SpaceBetween">
+            <MudButton StartIcon="@Icons.Material.Filled.Add"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       OnClick="AddNewRestorePlan">
+                Add Restore Plan
+            </MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.Refresh"
+                       Variant="Variant.Outlined"
+                       Color="Color.Default"
+                       OnClick="RefreshRestorePlans">
+                Refresh
+            </MudButton>
+        </MudStack>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>Name</MudTh>
+        <MudTh>Database</MudTh>
+        <MudTh>Storage Target</MudTh>
+        <MudTh>Source Backup</MudTh>
+        <MudTh>Overwrite</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Description</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>@context.Name</MudTd>
+        <MudTd>@(context.DatabaseConnection?.HostName)</MudTd>
+        <MudTd>@(context.StorageTarget?.Name)</MudTd>
+        <MudTd>@context.SourceBackupJobId</MudTd>
+        <MudTd>
+            <MudChip T="bool" Color="@(context.OverwriteExisting ? Color.Warning : Color.Info)"
+                     Size="Size.Small">
+                @(context.OverwriteExisting ? "Yes" : "No")
+            </MudChip>
+        </MudTd>
+        <MudTd>
+            <MudChip T="bool" Color="@(context.IsActive ? Color.Success : Color.Error)"
+                     Size="Size.Small">
+                @(context.IsActive ? "Active" : "Inactive")
+            </MudChip>
+        </MudTd>
+        <MudTd>
+            <MudTooltip Text="@context.Description">
+                <span style="display: block; white-space: normal; word-break: break-word;">
+                    @context.Description
+                </span>
+            </MudTooltip>
+        </MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                           Color="Color.Primary"
+                           OnClick="@(() => EditRestorePlan(context))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                           Color="Color.Error"
+                           OnClick="@(() => DeleteRestorePlan(context))" />
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<RestorePlan> _restorePlans = new();
+    private HttpClient _httpClient;
+    private bool _isLoading = true;
+    private JsonSerializerOptions _jsonOptions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Initialize with fake data
+        _httpClient = ClientFactory.CreateClient("SCREAM");
+        _jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            };
+        await RefreshRestorePlans();
+    }
+
+    private void AddNewRestorePlan()
+    {
+        NavigationManager.NavigateTo("/restoreplan");
+    }
+
+    private void EditRestorePlan(RestorePlan restorePlan)
+    {
+        NavigationManager.NavigateTo($"/restoreplan/{restorePlan.Id}");
+    }
+
+    private List<RestorePlan> GetSampleRestorePlans()
+    {
+        return new List<RestorePlan>
+        {
+            new RestorePlan
+            {
+                Id = 1,
+                Name = "Production DB Restore",
+                Description = "Daily production database restore",
+                DatabaseConnection = new DatabaseConnection
+                {
+                    HostName = "prod-db.example.com",
+                    Type = DatabaseType.MySQL,
+                    UserName = "admin",
+                    Password = "password123",
+                    Port = 3306
+                },
+                StorageTarget = new LocalStorageTarget
+                {
+                    Name = "Local Backup Storage",
+                    Path = "/backups"
+                },
+                SourceBackupJobId = 1001,
+                IsActive = true,
+                OverwriteExisting = true,
+                Items = new List<RestoreItem>()
+            },
+            new RestorePlan
+            {
+                Id = 2,
+                Name = "Test Environment Restore",
+                Description = "Weekly test environment restoration",
+                DatabaseConnection = new DatabaseConnection
+                {
+                    HostName = "test-db.example.com",
+                    Type = DatabaseType.MySQL,
+                    UserName = "test_user",
+                    Password = "test_pass",
+                    Port = 3306
+                },
+                StorageTarget = new S3StorageTarget
+                {
+                    Name = "AWS S3 Backup",
+                    BucketName = "backup-bucket",
+                    AccessKey = "AKIAXXXXXXXXXXXXXXXX",
+                    SecretKey = "secret_key_value_here"
+                },
+                SourceBackupJobId = 1002,
+                IsActive = false,
+                OverwriteExisting = false,
+                Items = new List<RestoreItem>()
+            }
+        };
+    }
+
+    private async Task DeleteRestorePlan(RestorePlan restorePlan)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", $"Are you sure you want to delete the restore plan '{restorePlan.Name}'?" },
+            { "ButtonText", "Delete" },
+            { "Color", Color.Error }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete Confirmation", parameters);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false } && result.Data is bool confirmed && confirmed)
+        {
+            // Fake delete operation
+            _restorePlans.RemoveAll(p => p.Id == restorePlan.Id);
+            Snackbar.Add("Restore plan deleted successfully.", Severity.Success);
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshRestorePlans()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        // Use fake data
+        _restorePlans = GetSampleRestorePlans();
+        Snackbar.Add("Using sample restore plans data.", Severity.Info);
+        _isLoading = false;
+        StateHasChanged();
+    }
+}

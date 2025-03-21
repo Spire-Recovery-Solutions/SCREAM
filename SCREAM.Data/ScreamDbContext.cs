@@ -77,30 +77,29 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             e.Property(p => p.Name).IsRequired();
         });
 
-    mb.Entity<BackupItem>(e =>
-{
-    e.ToTable("BackupItems");
-    
-    // Configure the relationship
-    e.HasOne(b => b.DatabaseItem)
-        .WithMany()
-        .HasForeignKey(b => b.DatabaseItemId)  // Use the foreign key property
-        .OnDelete(DeleteBehavior.Restrict);
-});
+        mb.Entity<BackupItem>(e =>
+        {
+            e.ToTable("BackupItems");
+
+            e.HasOne(b => b.DatabaseItem)
+                .WithMany()
+                .HasForeignKey(b => b.DatabaseItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
 
         mb.Entity<RestoreItem>(e =>
-   {
-       e.ToTable("RestoreItems");
-       e.HasOne(r => r.DatabaseItems)
-           .WithMany()
-            .HasForeignKey(b => b.DatabaseItemId)
-           .OnDelete(DeleteBehavior.Restrict);
+        {
+            e.ToTable("RestoreItems");
+            e.HasOne(r => r.DatabaseItems)
+                .WithMany()
+                .HasForeignKey(b => b.DatabaseItemId)
+                .OnDelete(DeleteBehavior.Restrict);
 
-       e.HasOne(r => r.BackupItem)
-           .WithMany()
-           .HasForeignKey(r => r.BackupItemId)
-           .OnDelete(DeleteBehavior.Restrict);
-   });
+            e.HasOne(r => r.BackupItem)
+                .WithMany()
+                .HasForeignKey(r => r.BackupItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
 
         mb.Entity<DatabaseTableStructureItems>().Property(e => e.Engine).HasMaxLength(50);
         mb.Entity<DatabaseTableDataItems>().Property(e => e.RowCount);
@@ -113,20 +112,20 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
         });
 
         mb.Entity<DatabaseItem>(e =>
-    {
-        e.ToTable("DatabaseItems");
+        {
+            e.ToTable("DatabaseItems");
 
-        e.HasDiscriminator<DatabaseItemType>(d => d.Type)
-            .HasValue<DatabaseTableStructureItems>(DatabaseItemType.TableStructure)
-            .HasValue<DatabaseTableDataItems>(DatabaseItemType.TableData)
-            .HasValue<DatabaseViewItems>(DatabaseItemType.View)
-            .HasValue<DatabaseTriggerItems>(DatabaseItemType.Trigger)
-            .HasValue<DatabaseEventItems>(DatabaseItemType.Event)
-            .HasValue<DatabaseFunctionProcedureItems>(DatabaseItemType.FunctionProcedure);
+            e.HasDiscriminator<DatabaseItemType>(d => d.Type)
+                .HasValue<DatabaseTableStructureItems>(DatabaseItemType.TableStructure)
+                .HasValue<DatabaseTableDataItems>(DatabaseItemType.TableData)
+                .HasValue<DatabaseViewItems>(DatabaseItemType.View)
+                .HasValue<DatabaseTriggerItems>(DatabaseItemType.Trigger)
+                .HasValue<DatabaseEventItems>(DatabaseItemType.Event)
+                .HasValue<DatabaseFunctionProcedureItems>(DatabaseItemType.FunctionProcedure);
 
-        e.Property(p => p.Schema).IsRequired().HasMaxLength(100);
-        e.Property(p => p.Name).HasMaxLength(100);
-    });
+            e.Property(p => p.Schema).IsRequired().HasMaxLength(100);
+            e.Property(p => p.Name).HasMaxLength(100);
+        });
 
         mb.Entity<StorageTarget>(e =>
         {
