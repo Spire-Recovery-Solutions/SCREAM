@@ -1,7 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using SCREAM.Data;
-using SCREAM.Data.Entities;
 using SCREAM.Data.Entities.Backup;
+using SCREAM.Data.Entities.Restore;
+using SCREAM.Data.Enums;
 
 namespace SCREAM.Service.Backup;
 
@@ -24,7 +25,8 @@ public class Worker(ILogger<Worker> logger, IDbContextFactory<ScreamDbContext> d
             // 2. Check for BackupJobs that need to be executed
             // 3. Check for BackupJobs that need to be retried
             // 4. Check for BackupJobs that need to be cancelled
-
+            await ProcessCompletedBackupJobs();
+            await GenerateRestoreJobs();
             await Task.Delay(1000, stoppingToken);
         }
     }
@@ -85,6 +87,111 @@ public class Worker(ILogger<Worker> logger, IDbContextFactory<ScreamDbContext> d
                 CompletedAt = null
             };
             dbContext.BackupJobs.Add(backupJob);
+            await dbContext.SaveChangesAsync();
+        }
+    }
+    private async Task ProcessCompletedBackupJobs()
+    {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+
+        var completedJobs = await dbContext.BackupJobs
+            .Include(j => j.BackupPlan)
+            .ThenInclude(p => p.Items)
+            .Where(j => j.Status == TaskStatus.RanToCompletion && !j.HasTriggeredRestore)
+            .ToListAsync();
+
+        foreach (var backupJob in completedJobs)
+        {
+            var restorePlans = await dbContext.RestorePlans
+                .Include(r => r.Items)
+                .Where(r => r.SourceBackupPlanId == backupJob.BackupPlan.Id &&
+                          r.ScheduleType == ScheduleType.Triggered)
+                .ToListAsync();
+
+            foreach (var restorePlan in restorePlans)
+            {
+                var restoreJob = new RestoreJob
+                {
+                    RestorePlanId = restorePlan.Id,
+                    Status = TaskStatus.Created,
+                    StartedAt = DateTime.UtcNow,
+                    RestoreItems = new List<RestoreItem>()
+                };
+
+                foreach (var backupItem in restorePlan.Items)
+                {
+                    restoreJob.RestoreItems.Add(new RestoreItem
+                    {
+                        DatabaseItemId = backupItem.DatabaseItemId,
+                        Status = TaskStatus.Created,
+                        RetryCount = 0
+                    });
+                }
+
+                dbContext.RestoreJobs.Add(restoreJob);
+            }
+
+            backupJob.HasTriggeredRestore = true;
+        }
+
+        await dbContext.SaveChangesAsync();
+    }
+    private async Task GenerateRestoreJobs()
+    {
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+
+        var restorePlans = await dbContext.RestorePlans
+            .Include(r => r.Jobs)
+            .Where(r =>
+                r.IsActive &&
+                r.ScheduleType != ScheduleType.Triggered &&
+                r.NextRun == null
+            )
+            .ToListAsync();
+
+        foreach (var restorePlan in restorePlans)
+        {
+            // Skip if there are active jobs (Created, Running, etc.)
+            if (restorePlan.Jobs.Any(j => j.Status is >= TaskStatus.Created and < TaskStatus.RanToCompletion))
+            {
+                continue;
+            }
+
+            // TODO: Uncomment to implement retry logic for failed jobs
+            // var faultedJobs = restorePlan.Jobs.Where(j => j.Status == TaskStatus.Faulted).ToList();
+            // if (faultedJobs.Any())
+            // {
+            //     foreach (var job in faultedJobs)
+            //     {
+            //         if (job.RetryCount < 3)
+            //         {
+            //             job.RetryCount++;
+            //             dbContext.RestoreJobs.Update(job);
+            //         }
+            //         else
+            //         {
+            //             job.Status = TaskStatus.Canceled;
+            //             dbContext.RestoreJobs.Update(job);
+            //         }
+            //     }
+            // }
+
+            var nextRun = restorePlan.GetNextRun(DateTime.UtcNow);
+            if (nextRun != null)
+            {
+                restorePlan.NextRun = nextRun;
+                dbContext.RestorePlans.Update(restorePlan);
+                await dbContext.SaveChangesAsync();
+            }
+
+            var restoreJob = new RestoreJob
+            {
+                RestorePlan = restorePlan,
+                Status = TaskStatus.Created,
+                StartedAt = default,
+                CompletedAt = null
+            };
+            dbContext.RestoreJobs.Add(restoreJob);
             await dbContext.SaveChangesAsync();
         }
     }

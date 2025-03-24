@@ -1,9 +1,4 @@
 ﻿using SCREAM.Data.Entities.Backup;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SCREAM.Data.Entities.Restore
 {
@@ -20,9 +15,9 @@ namespace SCREAM.Data.Entities.Restore
         /// <summary>
         /// The related restore item status if applicable
         /// </summary>
-        public long? RestoreItemStatusId { get; set; }
+        public long? RestoreItemId { get; set; }
 
-        public RestoreItemStatus? RestoreItemStatus { get; set; }
+        public RestoreItem? RestoreItem{ get; set; }
 
         /// <summary>
         /// When the log entry was created

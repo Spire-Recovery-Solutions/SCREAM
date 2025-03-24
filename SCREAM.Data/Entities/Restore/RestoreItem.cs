@@ -1,22 +1,21 @@
-﻿using SCREAM.Data.Entities.Restore.RestoreItems;
+﻿using SCREAM.Data.Entities.Backup.BackupItems;
+using SCREAM.Data.Entities.Database;
 
 namespace SCREAM.Data.Entities.Restore
 {
     /// <summary>
     /// Tracks the status of individual restore items within a restore job
     /// </summary>
-    public class RestoreItemStatus : ScreamDbBaseEntity
+    public class RestoreItem : ScreamDbBaseEntity
     {
-        /// <summary>
-        /// The restore job this status belongs to
-        /// </summary>
         public long RestoreJobId { get; set; }
-
+        public RestoreJob RestoreJob { get; set; } = null!;
+        
         /// <summary>
         /// The restore item this status is tracking
         /// </summary>
-        public long RestoreItemId { get; set; }
-        public RestoreItem RestoreItem { get; set; } = null!;
+        public long DatabaseItemId { get; set; }
+        public DatabaseItem DatabaseItem { get; set; } = null!;
 
         /// <summary>
         /// Current execution status

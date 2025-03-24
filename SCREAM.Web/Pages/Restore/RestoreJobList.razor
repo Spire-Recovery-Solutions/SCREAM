@@ -1,0 +1,325 @@
+﻿@page "/restore-jobs"
+@using SCREAM.Data.Entities
+@using SCREAM.Data.Entities.Restore
+@using SCREAM.Data.Entities.Backup
+@using SCREAM.Data.Entities.Backup.BackupItems
+@using SCREAM.Data.Entities.StorageTargets
+@using SCREAM.Data.Entities.Database
+@using SCREAM.Data.Enums
+@using SCREAM.Web.Pages.Backup
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudText Align="Align.Center" Typo="Typo.h4" Class="mb-4">Restore Jobs</MudText>
+
+<MudTable Items="@_restoreJobs" Dense="true" Hover="true" Loading="@_loading" LoadingProgressColor="Color.Info"
+          Filter="new Func<RestoreJobViewModel, bool>(FilterFunc)" @bind-SelectedItem="_selectedJob"
+          OnRowClick="RowClickEvent" T="RestoreJobViewModel" Elevation="0">
+    <ToolBarContent>
+        <MudGrid>
+            <MudItem xs="12" md="9">
+                <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                              Class="mt-0"></MudTextField>
+            </MudItem>
+            <MudItem xs="12" md="3" Class="d-flex justify-end">
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.Refresh"
+                           OnClick="RefreshData">
+                    Refresh
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>Plan Name</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Progress</MudTh>
+        <MudTh>Started</MudTh>
+        <MudTh>Completed</MudTh>
+        <MudTh>Duration</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Plan Name">@context.PlanName</MudTd>
+        <MudTd DataLabel="Status">
+            <MudChip T="string" Color="@GetStatusColor(context.Status)" Size="Size.Small">
+                @context.Status.ToString()
+            </MudChip>
+        </MudTd>
+        <MudTd DataLabel="Progress">
+            <MudProgressLinear Color="@GetProgressColor(context.Status)"
+                               Value="@context.ProgressPercentage"
+                               Class="my-2"
+                               Striped="@(context.Status == TaskStatus.Running)"
+                               Indeterminate="@(context.Status == TaskStatus.Running && context.ProgressPercentage < 5)" />
+            @context.ProgressPercentage.ToString("0.#")%
+        </MudTd>
+        <MudTd DataLabel="Started">@context.StartedAt.ToLocalTime().ToString("g")</MudTd>
+        <MudTd DataLabel="Completed">
+            @(context.CompletedAt.HasValue ? context.CompletedAt.Value.ToLocalTime().ToString("g") : "-")
+        </MudTd>
+        <MudTd DataLabel="Duration">
+            @GetDuration(context)
+        </MudTd>
+        <MudTd DataLabel="Actions">
+            <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info"
+                           OnClick="@(() => ViewJob(context.Id))" />
+            @if (context.Status == TaskStatus.Faulted)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Replay" Color="Color.Warning"
+                               OnClick="@(() => RetryJob(context.Id))" />
+            }
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText>No restore jobs found</MudText>
+    </NoRecordsContent>
+    <LoadingContent>
+        <MudText>Loading restore jobs...</MudText>
+    </LoadingContent>
+    <PagerContent>
+        <MudTablePager PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private List<RestoreJobViewModel> _restoreJobs = new();
+    private bool _loading = true;
+    private string _searchString = "";
+    private RestoreJobViewModel? _selectedJob;
+    private System.Timers.Timer? _refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _refreshTimer = new System.Timers.Timer(15000);
+        _refreshTimer.Elapsed += async (sender, e) => await InvokeAsync(async () => await RefreshRunningJobs());
+        _refreshTimer.Start();
+
+        await RefreshData();
+    }
+
+    public async Task RefreshData()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            var jobs = await GetAllJobsAsync();
+
+            _restoreJobs = jobs
+                .OrderByDescending(j => GetStatusPriority(j.Status))
+                .ThenByDescending(j => j.StartedAt)
+                .Select(j => new RestoreJobViewModel
+                    {
+                        Id = j.Id,
+                        PlanId = j.RestorePlanId,
+                        PlanName = j.RestorePlan.Name,
+                        Status = j.Status,
+                        StartedAt = j.StartedAt,
+                        CompletedAt = j.CompletedAt,
+                        ProgressPercentage = CalculateProgress(j)
+                    })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading restore jobs: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    public Task<List<RestoreJob>> GetAllJobsAsync()
+    {
+        var restorePlan = new RestorePlan
+            {
+                Id = 1,
+                Name = "Daily Restore Plan",
+                Description = "Restores production DB daily",
+                DatabaseConnection = new DatabaseConnection
+                {
+                    Id = 1,
+                    HostName = "prod-db-server.example.com",
+                    UserName = "admin",
+                    Password = "******",
+                    Port = 3306,
+                    Type = DatabaseType.MySQL
+                },
+                SourceBackupPlan = new BackupPlan
+                {
+                    Id = 1,
+                    Name = "Daily Database Backup",
+                    Description = "Automated daily backup of production database"
+                },
+                DatabaseConnectionId = 1,
+                SourceBackupPlanId = 1,
+                ScheduleCron = "0 0 * * *",
+                ScheduleType = ScheduleType.Repeating,
+                LastRun = DateTime.Now.AddHours(-1),
+                NextRun = DateTime.Now.AddHours(1),
+                Items = new List<BackupItem>()
+            };
+
+        var jobs = new List<RestoreJob>
+        {
+            new RestoreJob
+            {
+                Id = 1,
+                RestorePlanId = restorePlan.Id,
+                RestorePlan = restorePlan,
+                Status = TaskStatus.Running,
+                StartedAt = DateTime.Now.AddMinutes(-30),
+                CompletedAt = null,
+                IsCompressed = false,
+                IsEncrypted = false,
+                RestoreItems = new List<RestoreItem>()
+            }
+        };
+
+        return Task.FromResult(jobs);
+    }
+
+    private async Task RefreshRunningJobs()
+    {
+        if (_restoreJobs.Any(j => j.Status == TaskStatus.Running))
+        {
+            await RefreshData();
+        }
+    }
+
+    private void RowClickEvent(TableRowClickEventArgs<RestoreJobViewModel> args)
+    {
+        ViewJob(args.Item.Id);
+    }
+
+    private void ViewJob(long jobId)
+    {
+        NavigationManager.NavigateTo($"/restore-jobs/{jobId}");
+    }
+
+    private async Task RetryJob(long jobId)
+    {
+        var parameters = new DialogParameters
+        {
+            { "ContentText", "Are you sure you want to retry this restore job?" },
+            { "ButtonText", "Retry" },
+            { "Color", Color.Warning }
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirm", parameters);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            try
+            {
+                Snackbar.Add("Restore job retry initiated", Severity.Success);
+                await RefreshData();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error retrying restore job: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private bool FilterFunc(RestoreJobViewModel job)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString))
+            return true;
+
+        if (job.PlanName.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (job.Status.ToString().Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
+    }
+
+    private string GetDuration(RestoreJobViewModel job)
+    {
+        var end = job.CompletedAt ?? DateTime.Now;
+        var duration = end - job.StartedAt;
+        return duration.TotalHours >= 1
+            ? $"{(int)duration.TotalHours}h {duration.Minutes}m {duration.Seconds}s"
+            : duration.TotalMinutes >= 1
+                ? $"{duration.Minutes}m {duration.Seconds}s"
+                : $"{duration.Seconds}s";
+    }
+
+    private Color GetStatusColor(TaskStatus status)
+    {
+        return status switch
+        {
+            TaskStatus.Running => Color.Info,
+            TaskStatus.RanToCompletion => Color.Success,
+            TaskStatus.Faulted => Color.Error,
+            TaskStatus.WaitingToRun => Color.Default,
+            _ => Color.Default
+        };
+    }
+
+    private Color GetProgressColor(TaskStatus status)
+    {
+        return status switch
+        {
+            TaskStatus.Running => Color.Info,
+            TaskStatus.RanToCompletion => Color.Success,
+            TaskStatus.Faulted => Color.Error,
+            TaskStatus.WaitingToRun => Color.Default,
+            _ => Color.Default
+        };
+    }
+
+    private int GetStatusPriority(TaskStatus status)
+    {
+        return status switch
+        {
+            TaskStatus.Running => 4,
+            TaskStatus.Faulted => 3,
+            TaskStatus.WaitingToRun => 2,
+            TaskStatus.RanToCompletion => 1,
+            _ => 0
+        };
+    }
+
+    private float CalculateProgress(RestoreJob job)
+    {
+        if (job.Status == TaskStatus.RanToCompletion)
+            return 100;
+
+        if (job.Status == TaskStatus.WaitingToRun)
+            return 0;
+
+        if (job.Status == TaskStatus.Running)
+        {
+            // Placeholder: Calculate progress based on actual restore item statuses.
+            return 50;
+        }
+
+        return 0;
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Stop();
+        _refreshTimer?.Dispose();
+    }
+
+    public class RestoreJobViewModel
+    {
+        public long Id { get; set; }
+        public long PlanId { get; set; }
+        public string PlanName { get; set; } = string.Empty;
+        public TaskStatus Status { get; set; }
+        public DateTime StartedAt { get; set; }
+        public DateTime? CompletedAt { get; set; }
+        public float ProgressPercentage { get; set; }
+    }
+}

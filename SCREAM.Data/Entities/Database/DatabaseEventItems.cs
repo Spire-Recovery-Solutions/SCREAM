@@ -1,12 +1,11 @@
 using CliWrap.Builders;
-using System.Text.Json.Serialization;
 
-namespace SCREAM.Data.Entities.Backup.BackupItems;
+namespace SCREAM.Data.Entities.Database;
 
 /// <summary>
 /// Represents database events for an entire schema
 /// </summary>
-public class EventItem : BackupItem
+public class DatabaseEventItems : DatabaseItem
 {
     public override DatabaseItemType Type
     {
@@ -14,9 +13,10 @@ public class EventItem : BackupItem
         set { }
     }
 
-    public override void ConfigureArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize)
+    public override void ConfigureBackupArguments(ArgumentsBuilder args,
+        string host, string user, string password, string maxPacketSize)
     {
-        args.Add($"--host={host}")
+          args.Add($"--host={host}")
             .Add($"--user={user}")
             .Add($"--password={password}")
             .Add("--no-data")
@@ -34,8 +34,4 @@ public class EventItem : BackupItem
             .Add(Schema);
     }
 
-    public override string GetOutputFileName()
-    {
-        return $"{Schema}-events.sql.xz.enc";
-    }
 }

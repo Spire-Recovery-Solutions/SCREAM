@@ -1,12 +1,11 @@
 using CliWrap.Builders;
-using System.Text.Json.Serialization;
 
-namespace SCREAM.Data.Entities.Backup.BackupItems;
+namespace SCREAM.Data.Entities.Database;
 
 /// <summary>
 /// Represents a table structure (CREATE TABLE statement)
 /// </summary>
-public class TableStructureItem : BackupItem
+public class DatabaseTableStructureItems : DatabaseItem
 {
     public override DatabaseItemType Type
     {
@@ -19,7 +18,7 @@ public class TableStructureItem : BackupItem
     /// </summary>
     public string Engine { get; set; } = string.Empty;
 
-    public override void ConfigureArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize)
+    public override void ConfigureBackupArguments(ArgumentsBuilder args, string host, string user, string password, string maxPacketSize)
     {
         args.Add($"--host={host}")
             .Add($"--user={user}")
@@ -39,8 +38,5 @@ public class TableStructureItem : BackupItem
             .Add(Name);
     }
 
-    public override string GetOutputFileName()
-    {
-        return $"{Schema}.{Name}-schema.sql.xz.enc";
-    }
+   
 }

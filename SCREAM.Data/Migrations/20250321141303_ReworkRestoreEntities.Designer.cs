@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SCREAM.Data;
 
@@ -10,9 +11,11 @@ using SCREAM.Data;
 namespace SCREAM.Data.Migrations
 {
     [DbContext(typeof(ScreamDbContext))]
-    partial class ScreamDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250321141303_ReworkRestoreEntities")]
+    partial class ReworkRestoreEntities
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.13");
@@ -85,6 +88,9 @@ namespace SCREAM.Data.Migrations
                     b.Property<bool>("IsSelected")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("RestorePlanId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("UpdatedAt")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -96,6 +102,8 @@ namespace SCREAM.Data.Migrations
                     b.HasIndex("BackupPlanId");
 
                     b.HasIndex("DatabaseItemId");
+
+                    b.HasIndex("RestorePlanId");
 
                     b.ToTable("BackupItems", (string)null);
                 });
@@ -387,7 +395,7 @@ namespace SCREAM.Data.Migrations
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("TEXT");
 
-                    b.Property<long>("RestoreJobId")
+                    b.Property<long?>("RestoreJobId")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("RetryCount")
@@ -543,6 +551,9 @@ namespace SCREAM.Data.Migrations
                     b.Property<long>("SourceBackupJobId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("StorageTargetId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("UpdatedAt")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -555,22 +566,9 @@ namespace SCREAM.Data.Migrations
 
                     b.HasIndex("SourceBackupJobId");
 
+                    b.HasIndex("StorageTargetId");
+
                     b.ToTable("RestorePlans", (string)null);
-                });
-
-            modelBuilder.Entity("SCREAM.Data.Entities.Restore.RestorePlanBackupItem", b =>
-                {
-                    b.Property<long>("BackupItemId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("RestorePlanId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("BackupItemId", "RestorePlanId");
-
-                    b.HasIndex("RestorePlanId");
-
-                    b.ToTable("RestorePlanBackupItem");
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.Restore.RestoreSettings", b =>
@@ -803,6 +801,10 @@ namespace SCREAM.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SCREAM.Data.Entities.Restore.RestorePlan", null)
+                        .WithMany("Items")
+                        .HasForeignKey("RestorePlanId");
+
                     b.Navigation("DatabaseItem");
                 });
 
@@ -860,15 +862,11 @@ namespace SCREAM.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("SCREAM.Data.Entities.Restore.RestoreJob", "RestoreJob")
+                    b.HasOne("SCREAM.Data.Entities.Restore.RestoreJob", null)
                         .WithMany("RestoreItems")
-                        .HasForeignKey("RestoreJobId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("RestoreJobId");
 
                     b.Navigation("DatabaseItem");
-
-                    b.Navigation("RestoreJob");
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.Restore.RestoreJob", b =>
@@ -912,28 +910,17 @@ namespace SCREAM.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SCREAM.Data.Entities.StorageTargets.StorageTarget", "StorageTarget")
+                        .WithMany()
+                        .HasForeignKey("StorageTargetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.Navigation("DatabaseConnection");
 
                     b.Navigation("SourceBackupJob");
-                });
 
-            modelBuilder.Entity("SCREAM.Data.Entities.Restore.RestorePlanBackupItem", b =>
-                {
-                    b.HasOne("SCREAM.Data.Entities.Backup.BackupItems.BackupItem", "BackupItem")
-                        .WithMany()
-                        .HasForeignKey("BackupItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("SCREAM.Data.Entities.Restore.RestorePlan", "RestorePlan")
-                        .WithMany()
-                        .HasForeignKey("RestorePlanId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("BackupItem");
-
-                    b.Navigation("RestorePlan");
+                    b.Navigation("StorageTarget");
                 });
 
             modelBuilder.Entity("SCREAM.Data.Entities.Backup.BackupJob", b =>
@@ -955,6 +942,8 @@ namespace SCREAM.Data.Migrations
 
             modelBuilder.Entity("SCREAM.Data.Entities.Restore.RestorePlan", b =>
                 {
+                    b.Navigation("Items");
+
                     b.Navigation("Jobs");
                 });
 #pragma warning restore 612, 618
