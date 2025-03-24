@@ -1,4 +1,5 @@
-﻿using SCREAM.Data.Entities.Backup;
+﻿using Microsoft.Extensions.Logging;
+using SCREAM.Data.Entities.Backup;
 
 namespace SCREAM.Data.Entities.Restore
 {
@@ -37,6 +38,6 @@ namespace SCREAM.Data.Entities.Restore
         /// <summary>
         /// The severity level of the log entry
         /// </summary>
-        public LogSeverity Severity { get; set; }
+        public LogLevel Severity { get; set; }
     }
 }

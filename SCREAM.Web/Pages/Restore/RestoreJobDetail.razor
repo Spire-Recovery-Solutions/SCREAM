@@ -383,7 +383,7 @@ else
                 Timestamp = DateTime.Now.AddMinutes(-20),
                 Title = "Job Started",
                 Message = "The restore job started successfully.",
-                Severity = LogSeverity.Info
+                Severity = LogLevel.Information
             },
             new()
             {
@@ -391,7 +391,7 @@ else
                 Timestamp = DateTime.Now.AddMinutes(-5),
                 Title = "Item Failure",
                 Message = "Restore item 'UserOrderView' failed due to null reference.",
-                Severity = LogSeverity.Error
+                Severity = LogLevel.Error
             },
             new()
             {
@@ -399,7 +399,7 @@ else
                 Timestamp = DateTime.Now.AddMinutes(-2),
                 Title = "Job Completed",
                 Message = "The restore job completed with some errors.",
-                Severity = LogSeverity.Warning
+                Severity = LogLevel.Warning
             }
         };
 
@@ -646,15 +646,14 @@ else
         };
     }
 
-    private string GetLogLevelColorCode(LogSeverity severity)
+    private string GetLogLevelColorCode(LogLevel severity)
     {
         return severity switch
         {
-            LogSeverity.Error => "#ff5252",    // Red
-            LogSeverity.Warning => "#fb8c00",  // Orange
-            LogSeverity.Info => "#29b6f6",     // Light Blue
-            LogSeverity.Success => "#66bb6a",  // Green
-            LogSeverity.Debug => "#9e9e9e",    // Gray
+            LogLevel.Error => "#ff5252",    // Red
+            LogLevel.Warning => "#fb8c00",  // Orange
+            LogLevel.Information => "#29b6f6",     // Light Blue
+            LogLevel.Debug => "#9e9e9e",    // Gray
             _ => "#d4d4d4"                     // Default light gray
         };
     }
@@ -685,7 +684,7 @@ else
         public DateTime Timestamp { get; set; }
         public string Title { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
-        public LogSeverity Severity { get; set; }
+        public LogLevel Severity { get; set; }
     }
 
 }

@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+
 namespace SCREAM.Data.Entities.Backup
 {
     /// <summary>
@@ -35,18 +37,6 @@ namespace SCREAM.Data.Entities.Backup
         /// <summary>
         /// The severity level of the log entry
         /// </summary>
-        public LogSeverity Severity { get; set; }
-    }
-
-    /// <summary>
-    /// Severity levels for log entries
-    /// </summary>
-    public enum LogSeverity
-    {
-        Debug,
-        Info,
-        Warning,
-        Error,
-        Success
+        public LogLevel Severity { get; set; }
     }
 }

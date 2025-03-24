@@ -623,7 +623,7 @@ app.MapPost("/jobs/restore/{restorePlanId:long}/run", async (IDbContextFactory<S
         Timestamp = DateTime.UtcNow,
         Title = "Job Created",
         Message = $"Restore job created for plan: {restorePlan.Name}",
-        Severity = LogSeverity.Info
+        Severity = LogLevel.Information
     };
 
     dbContext.RestoreJobLogs.Add(logEntry);
@@ -671,7 +671,7 @@ app.MapPost("/jobs/restore/{jobId:long}/retry",
             Timestamp = DateTime.UtcNow,
             Title = "Job Retry",
             Message = "Restore job retry initiated",
-            Severity = LogSeverity.Info
+            Severity = LogLevel.Information
         };
 
         dbContext.RestoreJobLogs.Add(logEntry);
@@ -724,7 +724,7 @@ app.MapPost("/jobs/restore/{jobId:long}/items/{itemId:long}/retry", async (
         Timestamp = DateTime.UtcNow,
         Title = "Item Retry",
         Message = $"Restore item retry initiated for {restoreItem.DatabaseItem.Name}",
-        Severity = LogSeverity.Info
+        Severity = LogLevel.Information
     };
 
     dbContext.RestoreJobLogs.Add(logEntry);
