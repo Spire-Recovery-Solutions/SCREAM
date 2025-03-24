@@ -184,12 +184,12 @@
 
         try
         {
-            _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/connections") ?? new();
-            _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("/storage") ?? new();
+            _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/targets/connections") ?? new();
+            _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("/targets/storage") ?? new();
 
             if (Id is > 0)
             {
-                var plan = await _httpClient.GetFromJsonAsync<BackupPlan>($"/backup-plans/{Id.Value}");
+                var plan = await _httpClient.GetFromJsonAsync<BackupPlan>($"/plans/backup/{Id.Value}");
                 if (plan != null)
                 {
                     _backupPlan = plan;
@@ -279,7 +279,7 @@
 
         try
         {
-            HttpResponseMessage response = await _httpClient.PostAsJsonAsync("/backup-plans", planToSave);
+            HttpResponseMessage response = await _httpClient.PostAsJsonAsync("/plans/backup", planToSave);
 
             if (response.IsSuccessStatusCode)
             {

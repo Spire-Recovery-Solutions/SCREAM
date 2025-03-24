@@ -107,7 +107,7 @@
         {
             try
             {
-                var response = await _httpClient.DeleteAsync($"/backup-plans/{backupPlan.Id}");
+                var response = await _httpClient.DeleteAsync($"/plans/backup/{backupPlan.Id}");
                 response.EnsureSuccessStatusCode();
                 _backupPlans.Remove(backupPlan);
                 Snackbar.Add("Backup plan deleted successfully.", Severity.Success);
@@ -126,7 +126,7 @@
 
         try
         {
-            var backupPlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("/backup-plans", _jsonOptions);
+            var backupPlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("/plans/backup", _jsonOptions);
             _backupPlans = backupPlans ?? new List<BackupPlan>();
             Snackbar.Add("Backup plans refreshed.", Severity.Info);
         }

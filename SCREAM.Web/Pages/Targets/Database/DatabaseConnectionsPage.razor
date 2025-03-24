@@ -97,7 +97,7 @@
         {
             try
             {
-                var response = await _httpClient.DeleteAsync($"/connections/{connection.Id}");
+                var response = await _httpClient.DeleteAsync($"/targets/connections/{connection.Id}");
                 response.EnsureSuccessStatusCode();
                 _connections.Remove(connection);
                 Snackbar.Add("Database connection deleted successfully.", Severity.Success);
@@ -116,7 +116,7 @@
 
         try
         {
-            var connections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/connections", _jsonOptions);
+            var connections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/targets/connections", _jsonOptions);
             _connections = connections ?? new List<DatabaseConnection>();
             Snackbar.Add("Connections refreshed.", Severity.Info);
         }

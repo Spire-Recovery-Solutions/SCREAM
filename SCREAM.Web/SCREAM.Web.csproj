@@ -29,4 +29,8 @@
       <Folder Include="Services\" />
     </ItemGroup>
 
+    <ItemGroup>
+      <_ContentIncludedByDefault Remove="Pages\Targets\Storage\S3\Index.razor" />
+    </ItemGroup>
+
 </Project>

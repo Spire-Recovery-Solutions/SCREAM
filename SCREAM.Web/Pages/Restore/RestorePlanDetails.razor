@@ -146,7 +146,7 @@
         Disabled="@(_restorePlan.DatabaseConnectionId == 0 || _restorePlan.SourceBackupPlanId == 0 || string.IsNullOrWhiteSpace(_restorePlan.Name))">
             Save Restore Plan
         </MudButton>
-        <MudButton OnClick="@(() => NavigationManager.NavigateTo("/restore-plans"))">Back</MudButton>
+        <MudButton OnClick="@(() => NavigationManager.NavigateTo("/plans/restore"))">Back</MudButton>
     </MudCardActions>
 </MudCard>
 
@@ -174,8 +174,8 @@
         _httpClient = ClientFactory.CreateClient("SCREAM");
 
         // Load database connections and backup plans from API endpoints.
-        _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/connections") ?? new();
-        _backupPlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("/backup-plans") ?? new();
+        _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/targets/connections") ?? new();
+        _backupPlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("/plans/backup") ?? new();
 
         // If editing an existing restore plan, load it (using fake data if API is not available)
         if (Id is > 0)

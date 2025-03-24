@@ -52,10 +52,11 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 
+#region Targets
 #region Storage
 
 // Get a list of all storage targets
-app.MapGet("/storage", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
+app.MapGet("/targets/storage", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
     var storageTargets = await dbContext.StorageTargets.ToListAsync();
@@ -63,7 +64,7 @@ app.MapGet("/storage", async (IDbContextFactory<ScreamDbContext> dbContextFactor
 });
 
 // Get a storage target by id
-app.MapGet("/storage/{storageTargetId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+app.MapGet("/targets/storage/{storageTargetId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
     long storageTargetId) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
@@ -73,7 +74,7 @@ app.MapGet("/storage/{storageTargetId:long}", async (IDbContextFactory<ScreamDbC
 });
 
 // Combined endpoint for creating/editing and testing storage targets
-app.MapPost("/storage", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+app.MapPost("/targets/storage", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
     StorageTarget storageTarget) =>
 {
     // First test the storage target
@@ -97,7 +98,7 @@ app.MapPost("/storage", async (IDbContextFactory<ScreamDbContext> dbContextFacto
         // Create new storage target
         dbContext.StorageTargets.Add(storageTarget);
         await dbContext.SaveChangesAsync();
-        return Results.Created($"/storage/{storageTarget.Id}", storageTarget);
+        return Results.Created($"/targets/storage/{storageTarget.Id}", storageTarget);
     }
     else
     {
@@ -119,7 +120,7 @@ app.MapPost("/storage", async (IDbContextFactory<ScreamDbContext> dbContextFacto
 });
 
 // Delete a storage target
-app.MapDelete("/storage/{storageTargetId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+app.MapDelete("/targets/storage/{storageTargetId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
     long storageTargetId) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
@@ -162,7 +163,7 @@ async Task<bool> TestStorageTarget(StorageTarget storageTarget)
 #region Connections
 
 // Get a list of all connections
-app.MapGet("/connections", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
+app.MapGet("/targets/connections", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
     var databaseConnections = await dbContext.DatabaseConnections.ToListAsync();
@@ -170,7 +171,7 @@ app.MapGet("/connections", async (IDbContextFactory<ScreamDbContext> dbContextFa
 });
 
 // Get a connection by id
-app.MapGet("/connections/{databaseConnectionId:long}", async (HttpContext _,
+app.MapGet("/targets/connections/{databaseConnectionId:long}", async (HttpContext _,
     IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
@@ -180,7 +181,7 @@ app.MapGet("/connections/{databaseConnectionId:long}", async (HttpContext _,
 });
 
 // Combined endpoint for creating/editing and testing database connections
-app.MapPost("/connections", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+app.MapPost("/targets/connections", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
     DatabaseConnection databaseConnection) =>
 {
     // First test the database connection
@@ -204,7 +205,7 @@ app.MapPost("/connections", async (IDbContextFactory<ScreamDbContext> dbContextF
         // Create new database connection
         dbContext.DatabaseConnections.Add(databaseConnection);
         await dbContext.SaveChangesAsync();
-        return Results.Created($"/connections/{databaseConnection.Id}", databaseConnection);
+        return Results.Created($"/targets/connections/{databaseConnection.Id}", databaseConnection);
     }
     else
     {
@@ -231,7 +232,7 @@ app.MapPost("/connections", async (IDbContextFactory<ScreamDbContext> dbContextF
 });
 
 // Delete a connection
-app.MapDelete("/connections/{databaseConnectionId:long}", async (HttpContext _,
+app.MapDelete("/targets/connections/{databaseConnectionId:long}", async (HttpContext _,
     IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
@@ -249,7 +250,7 @@ app.MapDelete("/connections/{databaseConnectionId:long}", async (HttpContext _,
 });
 
 // Scan a connections database
-app.MapPost("/connections/{databaseConnectionId:long}/scan", async (HttpContext _,
+app.MapPost("/targets/connections/{databaseConnectionId:long}/scan", async (HttpContext _,
     IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
@@ -286,10 +287,12 @@ async Task<bool> TestDatabaseConnection(DatabaseConnection databaseConnection)
 
 #endregion
 
+#endregion
+
 #region Backup Plans
 
 // Get a list of all backup plans
-app.MapGet("/backup-plans", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
+app.MapGet("/plans/backup", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
     var backupPlans = await dbContext.BackupPlans
@@ -299,7 +302,7 @@ app.MapGet("/backup-plans", async (IDbContextFactory<ScreamDbContext> dbContextF
     return Results.Ok(backupPlans);
 });
 // Get a backup plan by id
-app.MapGet("/backup-plans/{backupPlanId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+app.MapGet("/plans/backup/{backupPlanId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
     long backupPlanId) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
@@ -312,7 +315,7 @@ app.MapGet("/backup-plans/{backupPlanId:long}", async (IDbContextFactory<ScreamD
     return backupPlan == null ? Results.NotFound() : Results.Ok(backupPlan);
 });
 // Create or update a backup plan
-app.MapPost("/backup-plans", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+app.MapPost("/plans/backup", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
     BackupPlan backupPlan) =>
 {
     // // First test the database connection
@@ -336,7 +339,7 @@ app.MapPost("/backup-plans", async (IDbContextFactory<ScreamDbContext> dbContext
         // Create new backup plan
         dbContext.BackupPlans.Add(backupPlan);
         await dbContext.SaveChangesAsync();
-        return Results.Created($"/backup-plans/{backupPlan.Id}", backupPlan);
+        return Results.Created($"/plans/backup/{backupPlan.Id}", backupPlan);
     }
     else
     {
@@ -371,7 +374,7 @@ app.MapPost("/backup-plans", async (IDbContextFactory<ScreamDbContext> dbContext
 });
 
 // Delete a backup plan
-app.MapDelete("/backup-plans/{backupPlanId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+app.MapDelete("/plans/backup/{backupPlanId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
     long backupPlanId) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
