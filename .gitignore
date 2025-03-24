@@ -404,3 +404,5 @@ SCREAM.Service.Api/ScreamDb.db
 SCREAM.Service.Api/ScreamDb.db-shm
 
 SCREAM.Service.Api/ScreamDb.db-wal
+
+SCREAM.Data/ScreamDb.db
