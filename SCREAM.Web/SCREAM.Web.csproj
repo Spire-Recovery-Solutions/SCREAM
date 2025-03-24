@@ -25,4 +25,8 @@
       <ProjectReference Include="..\SCREAM.Business\SCREAM.Business.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Services\" />
+    </ItemGroup>
+
 </Project>

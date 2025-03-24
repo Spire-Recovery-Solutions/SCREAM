@@ -1,4 +1,4 @@
-@page "/backup-jobs/{JobId:long}"
+@page "/jobs/backup/{JobId:long}"
 @using SCREAM.Data.Entities
 @using SCREAM.Data.Entities.Backup
 @using SCREAM.Data.Entities.Backup.BackupItems
@@ -25,11 +25,11 @@ else
                     </MudStack>
                     <MudStack Row>
                         <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack"
-                        OnClick="GoBack">Back
+                                   OnClick="GoBack">Back
                         </MudButton>
                         <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                        StartIcon="@Icons.Material.Filled.Refresh"
-                        OnClick="RefreshData">Refresh
+                                   StartIcon="@Icons.Material.Filled.Refresh"
+                                   OnClick="RefreshData">Refresh
                         </MudButton>
                     </MudStack>
                 </MudStack>
@@ -86,16 +86,16 @@ else
                 <MudDivider Class="my-4"/>
                 <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Overall Progress</MudText>
                 <MudProgressLinear Color="@GetProgressColor(_job.Status)"
-                Value="@_overallProgress"
-                Striped="@(_job.Status == TaskStatus.Running)"
-                Indeterminate="@(_job.Status == TaskStatus.Running && _overallProgress < 5)"/>
+                                   Value="@_overallProgress"
+                                   Striped="@(_job.Status == TaskStatus.Running)"
+                                   Indeterminate="@(_job.Status == TaskStatus.Running && _overallProgress < 5)"/>
                 <MudText Typo="Typo.body2" Align="Align.Center">@_overallProgress.ToString("0.#")%</MudText>
 
                 @if (_job.Status == TaskStatus.Faulted)
                 {
                     <MudButton Variant="Variant.Filled" Color="Color.Warning"
-                    StartIcon="@Icons.Material.Filled.Replay" FullWidth
-                    OnClick="RetryFullJob" Class="mt-3">
+                               StartIcon="@Icons.Material.Filled.Replay" FullWidth
+                               OnClick="RetryFullJob" Class="mt-3">
                         Retry Job
                     </MudButton>
                 }
@@ -106,12 +106,12 @@ else
             <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
                 <MudTabPanel Text="Backup Items" Icon="@Icons.Material.Filled.List">
                     <MudTable Items="@_itemStatuses" Loading="@_loading" Dense="true" Hover="true"
-                    Filter="new Func<BackupItemStatusViewModel, bool>(FilterItems)">
+                              Filter="new Func<BackupItemStatusViewModel, bool>(FilterItems)">
                         <ToolBarContent>
                             <MudTextField @bind-Value="_searchString" Placeholder="Search"
-                            Adornment="Adornment.Start"
-                            AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
-                            Class="mt-0 mb-3"></MudTextField>
+                                          Adornment="Adornment.Start"
+                                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                                          Class="mt-0 mb-3"></MudTextField>
                         </ToolBarContent>
                         <HeaderContent>
                             <MudTh>Type</MudTh>
@@ -140,8 +140,8 @@ else
                             </MudTd>
                             <MudTd>
                                 <MudProgressLinear Color="@GetExecutionStatusColor(context.Status)"
-                                Value="@GetItemProgressValue(context.Status)"
-                                Striped="@(context.Status == TaskStatus.Running)"/>
+                                                   Value="@GetItemProgressValue(context.Status)"
+                                                   Striped="@(context.Status == TaskStatus.Running)"/>
                             </MudTd>
                             <MudTd>
                                 @GetItemDuration(context)
@@ -153,14 +153,14 @@ else
                                 @if (context.Status == TaskStatus.Faulted)
                                 {
                                     <MudIconButton Icon="@Icons.Material.Filled.Replay"
-                                    Color="Color.Warning"
-                                    OnClick="@(() => RetryItem(context.Id))"/>
+                                                   Color="Color.Warning"
+                                                   OnClick="@(() => RetryItem(context.Id))"/>
                                 }
                                 @if (!string.IsNullOrEmpty(context.ErrorMessage))
                                 {
                                     <MudIconButton Icon="@Icons.Material.Filled.Error"
-                                    Color="Color.Error"
-                                    OnClick="@(() => ShowErrorDetails(context))"/>
+                                                   Color="Color.Error"
+                                                   OnClick="@(() => ShowErrorDetails(context))"/>
                                 }
                             </MudTd>
                         </RowTemplate>
@@ -175,22 +175,24 @@ else
                     }
                     else
                     {
-                        <MudTimeline>
-                            @foreach (var log in _jobLogs)
-                            {
-                                <MudTimelineItem Color="@GetLogSeverityColor(log.Severity)" Size="Size.Small">
-                                    <ItemOpposite>
-                                        <MudText Typo="Typo.body2">@log.Timestamp.ToLocalTime().ToString("g")</MudText>
-                                    </ItemOpposite>
-                                    <ItemContent>
-                                        <MudText Typo="Typo.h6" Color="@GetLogSeverityColor(log.Severity)">
-                                            @log.Title
-                                        </MudText>
-                                        <MudText Typo="Typo.body2">@log.Message</MudText>
-                                    </ItemContent>
-                                </MudTimelineItem>
-                            }
-                        </MudTimeline>
+                        <MudPaper Class="pa-2" Style="height: 400px; background-color: #1e1e1e; overflow: hidden;">
+                            <MudVirtualize Items="_jobLogs" Context="log">
+                                <div class="d-flex py-1">
+                                    <span class="mr-2"
+                                          style="color: #8a8a8a; min-width: 130px; font-family: Consolas, monospace; font-size: 0.85rem;">@log.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")</span>
+                                    <span class="mr-2"
+                                          style="color: @GetLogLevelColorCode(log.Severity); min-width: 80px; font-weight: 600; font-family: Consolas, monospace;">@log.Severity</span>
+                                    <span
+                                        style="font-family: Consolas, monospace; color: #d4d4d4; overflow-wrap: anywhere;">
+                        @if (!string.IsNullOrEmpty(log.Title))
+                                        {
+                                            <span style="color: #52b0ef; font-weight: 500;">[@log.Title] </span>
+                                        }
+                                        <span>@log.Message</span>
+                    </span>
+                                </div>
+                            </MudVirtualize>
+                        </MudPaper>
                     }
                 </MudTabPanel>
             </MudTabs>
@@ -284,37 +286,37 @@ else
 
         var mockStatuses = new List<BackupItemStatus>
         {
-             new()
-        {
-            Id = 1,
-            BackupJobId = JobId,
-            BackupItem = new BackupItem
+            new()
             {
-                DatabaseItem = new DatabaseTableStructureItems
+                Id = 1,
+                BackupJobId = JobId,
+                BackupItem = new BackupItem
                 {
-                    Schema = "dbo",
-                    Name = "Users",
-                    Engine = "InnoDB"
-                }
+                    DatabaseItem = new DatabaseTableStructureItems
+                    {
+                        Schema = "dbo",
+                        Name = "Users",
+                        Engine = "InnoDB"
+                    }
+                },
+                Status = TaskStatus.RanToCompletion,
+                RetryCount = 0,
+                StartedAt = DateTime.Now.AddMinutes(-30),
+                CompletedAt = DateTime.Now.AddMinutes(-25)
             },
-            Status = TaskStatus.RanToCompletion,
-            RetryCount = 0,
-            StartedAt = DateTime.Now.AddMinutes(-30),
-            CompletedAt = DateTime.Now.AddMinutes(-25)
-        },
             new()
             {
                 Id = 2,
                 BackupJobId = JobId,
                 BackupItemId = 102,
-                BackupItem =  new BackupItem
+                BackupItem = new BackupItem
                 {
-                   DatabaseItem=new DatabaseTableDataItems
-                {
-                    Schema = "dbo",
-                    Name = "Users",
-                    RowCount = 100
-                }
+                    DatabaseItem = new DatabaseTableDataItems
+                    {
+                        Schema = "dbo",
+                        Name = "Users",
+                        RowCount = 100
+                    }
                 },
                 Status = TaskStatus.RanToCompletion,
                 RetryCount = 0,
@@ -365,7 +367,7 @@ else
             Id = s.Id,
             ItemId = s.BackupItemId,
             ItemName = GetItemName(s.BackupItem),
-                ItemType = s.BackupItem.DatabaseItem.Type,
+            ItemType = s.BackupItem.DatabaseItem.Type,
             Status = s.Status,
             RetryCount = s.RetryCount,
             StartedAt = s.StartedAt,
@@ -481,7 +483,7 @@ else
 
     private void GoBack()
     {
-        NavigationManager.NavigateTo("/backup-jobs");
+        NavigationManager.NavigateTo("/jobs/backup");
     }
 
     private async Task RetryFullJob()
@@ -565,6 +567,7 @@ else
 
         return false;
     }
+
     private string GetItemName(BackupItem item)
     {
         var databaseItem = item.DatabaseItem;
@@ -652,16 +655,17 @@ else
         };
     }
 
-    private Color GetLogSeverityColor(LogSeverity severity)
+
+    private string GetLogLevelColorCode(LogSeverity severity)
     {
         return severity switch
         {
-            LogSeverity.Error => Color.Error,
-            LogSeverity.Warning => Color.Warning,
-            LogSeverity.Info => Color.Info,
-            LogSeverity.Success => Color.Success,
-            LogSeverity.Debug => Color.Default,
-            _ => Color.Default
+            LogSeverity.Error => "#ff5252", // Red
+            LogSeverity.Warning => "#fb8c00", // Orange
+            LogSeverity.Info => "#29b6f6", // Light Blue
+            LogSeverity.Success => "#66bb6a", // Green
+            LogSeverity.Debug => "#9e9e9e", // Gray
+            _ => "#d4d4d4" // Default light gray
         };
     }
 

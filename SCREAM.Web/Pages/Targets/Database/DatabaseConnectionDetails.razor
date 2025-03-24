@@ -1,4 +1,4 @@
-﻿@page "/databasemanagement/connection/{Id:long?}"
+﻿@page "/targets/connections/{Id:long?}"
 @using SCREAM.Data.Entities
 @using SCREAM.Data.Enums
 @using System.Text.Json
@@ -87,7 +87,7 @@
                 DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
             };
 
-        if (Id.HasValue)
+        if (Id is > 0)
         {
             try
             {
@@ -138,7 +138,7 @@
             }
 
             Snackbar.Add("Connection saved successfully.", Severity.Success);
-            NavigationManager.NavigateTo("/databasemanagement/connections");
+            NavigationManager.NavigateTo("/targets/connections");
         }
         catch (Exception ex)
         {
@@ -146,5 +146,5 @@
         }
     }
 
-    private void Cancel() => NavigationManager.NavigateTo("/databasemanagement/connections");
+    private void Cancel() => NavigationManager.NavigateTo("/targets/connections");
 }

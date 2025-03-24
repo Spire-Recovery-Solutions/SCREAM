@@ -1,4 +1,4 @@
-﻿@page "/backupplan/{Id:long?}"
+﻿@page "/plans/backup/{Id:long?}"
 @using SCREAM.Data.Entities
 @using SCREAM.Data.Entities.Backup
 @using SCREAM.Data.Entities.Backup.BackupItems
@@ -149,7 +149,7 @@
 }
 
 <MudPaper Class="d-flex justify-center pa-4" Elevation="3">
-    <MudButton OnClick="@(() => NavigationManager.NavigateTo("/backupplans"))">Back</MudButton>
+    <MudButton OnClick="@(() => NavigationManager.NavigateTo("/plans/backup"))">Back</MudButton>
     <MudButton Variant="Variant.Filled"
                Color="Color.Success"
                StartIcon="@Icons.Material.Filled.Save"
@@ -187,7 +187,7 @@
             _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/connections") ?? new();
             _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("/storage") ?? new();
 
-            if (Id.HasValue)
+            if (Id is > 0)
             {
                 var plan = await _httpClient.GetFromJsonAsync<BackupPlan>($"/backup-plans/{Id.Value}");
                 if (plan != null)
@@ -284,7 +284,7 @@
             if (response.IsSuccessStatusCode)
             {
                 Snackbar.Add($"Backup plan {(Id.HasValue ? "updated" : "created")} successfully", Severity.Success);
-                NavigationManager.NavigateTo("/backupplans");
+                NavigationManager.NavigateTo("/plans/backup");
             }
             else
             {

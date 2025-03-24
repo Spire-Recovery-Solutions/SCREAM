@@ -1,4 +1,4 @@
-﻿@page "/storage/storage-target/{Id:long?}"
+﻿@page "/targets/storage/{Id:long?}"
 @using SCREAM.Data.Entities.StorageTargets
 @using System.Text.Json
 @using System.Text.Json.Serialization
@@ -19,22 +19,23 @@
             <MudSelectItem Value="StorageTargetType.S3">S3 Storage</MudSelectItem>
         </MudSelect>
 
-        <MudTextField @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Required="true" />
-        <MudTextField @bind-Value="_description" Label="Description" Variant="Variant.Outlined" />
+        <MudTextField @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Required="true"/>
+        <MudTextField @bind-Value="_description" Label="Description" Variant="Variant.Outlined"/>
 
         @if (_storageType == StorageTargetType.Local)
         {
-            <MudTextField @bind-Value="_path" Label="Path" Variant="Variant.Outlined" Required="true" />
+            <MudTextField @bind-Value="_path" Label="Path" Variant="Variant.Outlined" Required="true"/>
         }
         else if (_storageType == StorageTargetType.S3)
         {
-            <MudTextField @bind-Value="_bucketName" Label="Bucket Name" Variant="Variant.Outlined" Required="true" />
-            <MudTextField @bind-Value="_accessKey" Label="Access Key" Variant="Variant.Outlined" Required="true" />
-            <MudTextField @bind-Value="_secretKey" Label="Secret Key" Variant="Variant.Outlined" InputType="InputType.Password" Required="true" />
+            <MudTextField @bind-Value="_bucketName" Label="Bucket Name" Variant="Variant.Outlined" Required="true"/>
+            <MudTextField @bind-Value="_accessKey" Label="Access Key" Variant="Variant.Outlined" Required="true"/>
+            <MudTextField @bind-Value="_secretKey" Label="Secret Key" Variant="Variant.Outlined"
+                          InputType="InputType.Password" Required="true"/>
         }
     </MudStack>
 
-    <MudDivider Class="my-3" />
+    <MudDivider Class="my-3"/>
 
     <MudStack Row="true" Justify="Justify.Center">
         <MudButton OnClick="Cancel" Variant="Variant.Outlined">Cancel</MudButton>
@@ -56,20 +57,20 @@
     private string _accessKey = string.Empty;
     private string _secretKey = string.Empty;
 
-    private StorageTarget Model { get; set; }
+    private StorageTarget? Model { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
         _httpClient = ClientFactory.CreateClient("SCREAM");
         _jsonOptions = new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-            };
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        };
 
         UpdateModelType();
 
-        if (Id.HasValue)
+        if (Id is > 0)
         {
             try
             {
@@ -103,33 +104,30 @@
 
     private void UpdateModelType()
     {
-        switch (_storageType)
+        Model = _storageType switch
         {
-            case StorageTargetType.Local:
-                Model = new LocalStorageTarget
-                    {
-                        Id = Id ?? 0,
-                        Name = _name,
-                        Description = string.IsNullOrWhiteSpace(_description) ? null : _description,
-                        Type = StorageTargetType.Local,
-                        Path = _path
-                    };
-                break;
-            case StorageTargetType.S3:
-                Model = new S3StorageTarget
-                    {
-                        Id = Id ?? 0,
-                        Name = _name,
-                        Description = string.IsNullOrWhiteSpace(_description) ? null : _description,
-                        Type = StorageTargetType.S3,
-                        BucketName = _bucketName,
-                        AccessKey = _accessKey,
-                        SecretKey = _secretKey
-                    };
-                break;
-            default:
-                throw new NotSupportedException("Unsupported storage type");
-        }
+            StorageTargetType.Local => new LocalStorageTarget
+            {
+                Id = Id ?? 0,
+                Name = _name,
+                Description = string.IsNullOrWhiteSpace(_description) ? null : _description,
+                Type = StorageTargetType.Local,
+                Path = _path
+            },
+            StorageTargetType.S3 => new S3StorageTarget
+            {
+                Id = Id ?? 0,
+                Name = _name,
+                Description = string.IsNullOrWhiteSpace(_description) ? null : _description,
+                Type = StorageTargetType.S3,
+                BucketName = _bucketName,
+                AccessKey = _accessKey,
+                SecretKey = _secretKey
+            },
+            // StorageTargetType.AzureBlob => expr,
+            // StorageTargetType.GoogleCloudStorage => expr,
+            _ => throw new NotSupportedException("Unsupported storage type")
+        };
     }
 
     private async Task SaveTarget()
@@ -143,28 +141,22 @@
 
         UpdateModelType();
 
-        HttpResponseMessage response;
         try
         {
-            response = await _httpClient.PostAsJsonAsync("/storage", Model, _jsonOptions);
+            var response = await _httpClient.PostAsJsonAsync("/storage", Model, _jsonOptions);
 
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
 
-                if (errorContent.Contains("Storage target test failed"))
-                {
-                    Snackbar.Add("Storage target test failed. Please check your configuration.", Severity.Error);
-                }
-                else
-                {
-                    Snackbar.Add($"Error saving target: {response.StatusCode} - {errorContent}", Severity.Error);
-                }
+                Snackbar.Add(errorContent.Contains("Storage target test failed")
+                    ? "Storage target test failed. Please check your configuration."
+                    : $"Error saving target: {response.StatusCode} - {errorContent}", Severity.Error);
                 return;
             }
 
             Snackbar.Add("Storage target saved successfully.", Severity.Success);
-            NavigationManager.NavigateTo("/storage/storage-targets");
+            NavigationManager.NavigateTo("/targets/storage");
         }
         catch (Exception ex)
         {
@@ -172,5 +164,5 @@
         }
     }
 
-    private void Cancel() => NavigationManager.NavigateTo("/storage/storage-targets");
+    private void Cancel() => NavigationManager.NavigateTo("/targets/storage");
 }

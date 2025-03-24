@@ -1,4 +1,4 @@
-﻿@page "/storage-targets"
+﻿@page "/targets/storage"
 @using SCREAM.Data.Entities.StorageTargets
 @using System.Text.Json
 @using System.Text.Json.Serialization
@@ -89,12 +89,12 @@
 
     private void AddNewTarget()
     {
-        NavigationManager.NavigateTo("/storage/storage-target");
+        NavigationManager.NavigateTo("/targets/storage/0");
     }
 
     private void EditTarget(StorageTarget target)
     {
-        NavigationManager.NavigateTo($"/storage/storage-target/{target.Id}");
+        NavigationManager.NavigateTo($"/targets/storage/{target.Id}");
     }
 
     private async Task DeleteTarget(StorageTarget target)

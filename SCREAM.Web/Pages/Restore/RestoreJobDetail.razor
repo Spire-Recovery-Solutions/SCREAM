@@ -1,10 +1,9 @@
-﻿@page "/restore-jobs/{JobId:long}"
+﻿@page "/jobs/restore/{JobId:long}"
 @using SCREAM.Data.Entities
 @using SCREAM.Data.Entities.Restore
 @using SCREAM.Data.Entities.Backup
 @using SCREAM.Data.Entities.Backup.BackupItems
 @using SCREAM.Data.Entities.Database
-@using SCREAM.Data.Entities.StorageTargets
 @using SCREAM.Data.Enums
 @using SCREAM.Web.Pages.Backup
 @inject NavigationManager NavigationManager
@@ -146,8 +145,8 @@ else
                             </MudTd>
                             <MudTd>
                                 <MudProgressLinear Color="@GetExecutionStatusColor(context.Status)"
-                                                     Value="@GetItemProgressValue(context.Status)"
-                                                     Striped="@(context.Status == TaskStatus.Running)"/>
+                                                   Value="@GetItemProgressValue(context.Status)"
+                                                   Striped="@(context.Status == TaskStatus.Running)"/>
                             </MudTd>
                             <MudTd>
                                 @GetItemDuration(context)
@@ -181,24 +180,24 @@ else
                     }
                     else
                     {
-                        <MudTimeline>
-                            @foreach (var log in _jobLogs)
-                            {
-                                <MudTimelineItem Color="@GetLogSeverityColor(log.Severity)" Size="Size.Small">
-                                    <ItemOpposite>
-                                        <MudText Typo="Typo.body2">
-                                            @log.Timestamp.ToLocalTime().ToString("g")
-                                        </MudText>
-                                    </ItemOpposite>
-                                    <ItemContent>
-                                        <MudText Typo="Typo.h6" Color="@GetLogSeverityColor(log.Severity)">
-                                            @log.Title
-                                        </MudText>
-                                        <MudText Typo="Typo.body2">@log.Message</MudText>
-                                    </ItemContent>
-                                </MudTimelineItem>
-                            }
-                        </MudTimeline>
+                        <MudPaper Class="pa-2" Style="height: 400px; background-color: #1e1e1e; overflow: hidden;">
+                            <MudVirtualize Items="_jobLogs" Context="log">
+                                <div class="d-flex py-1">
+                                    <span class="mr-2"
+                                          style="color: #8a8a8a; min-width: 130px; font-family: Consolas, monospace; font-size: 0.85rem;">@log.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")</span>
+                                    <span class="mr-2"
+                                          style="color: @GetLogLevelColorCode(log.Severity); min-width: 80px; font-weight: 600; font-family: Consolas, monospace;">@log.Severity</span>
+                                    <span
+                                        style="font-family: Consolas, monospace; color: #d4d4d4; overflow-wrap: anywhere;">
+                        @if (!string.IsNullOrEmpty(log.Title))
+                                        {
+                                            <span style="color: #52b0ef; font-weight: 500;">[@log.Title] </span>
+                                        }
+                                        <span>@log.Message</span>
+                    </span>
+                                </div>
+                            </MudVirtualize>
+                        </MudPaper>
                     }
                 </MudTabPanel>
             </MudTabs>
@@ -476,7 +475,7 @@ else
 
     private void GoBack()
     {
-        NavigationManager.NavigateTo("/restore-jobs");
+        NavigationManager.NavigateTo("/jobs/restore");
     }
 
     private async Task RetryFullJob()
@@ -491,7 +490,7 @@ else
         var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirm", parameters);
         var result = await dialog.Result;
 
-       if (result is { Canceled: false })
+        if (result is { Canceled: false })
         {
             try
             {
@@ -647,18 +646,19 @@ else
         };
     }
 
-    private Color GetLogSeverityColor(LogSeverity severity)
+    private string GetLogLevelColorCode(LogSeverity severity)
     {
         return severity switch
         {
-            LogSeverity.Error => Color.Error,
-            LogSeverity.Warning => Color.Warning,
-            LogSeverity.Info => Color.Info,
-            LogSeverity.Success => Color.Success,
-            LogSeverity.Debug => Color.Default,
-            _ => Color.Default
+            LogSeverity.Error => "#ff5252",    // Red
+            LogSeverity.Warning => "#fb8c00",  // Orange
+            LogSeverity.Info => "#29b6f6",     // Light Blue
+            LogSeverity.Success => "#66bb6a",  // Green
+            LogSeverity.Debug => "#9e9e9e",    // Gray
+            _ => "#d4d4d4"                     // Default light gray
         };
     }
+
 
     public void Dispose()
     {
@@ -687,4 +687,5 @@ else
         public string Message { get; set; } = string.Empty;
         public LogSeverity Severity { get; set; }
     }
+
 }

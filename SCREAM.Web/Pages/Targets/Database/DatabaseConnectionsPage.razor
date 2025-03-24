@@ -1,4 +1,4 @@
-@page "/connections"
+@page "/targets/connections"
 @using SCREAM.Data.Entities
 @using SCREAM.Web.Pages.Backup
 @using System.Text.Json
@@ -73,12 +73,12 @@
 
     private void AddNewConnection()
     {
-        NavigationManager.NavigateTo("/databasemanagement/connection");
+        NavigationManager.NavigateTo("/targets/connections/0");
     }
 
     private void EditConnection(DatabaseConnection connection)
     {
-        NavigationManager.NavigateTo($"/databasemanagement/connection/{connection.Id}");
+        NavigationManager.NavigateTo($"/targets/connections/{connection.Id}");
     }
 
     private async Task DeleteConnection(DatabaseConnection connection)

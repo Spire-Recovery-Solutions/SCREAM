@@ -1,15 +1,13 @@
-﻿@page "/restoreplan/{Id:long?}"
+﻿@page "/plans/restore/{Id:long?}"
 @using SCREAM.Data.Entities
 @using SCREAM.Data.Entities.Database
 @using SCREAM.Data.Entities.Restore
 @using SCREAM.Data.Entities.Backup
 @using SCREAM.Data.Entities.Backup.BackupItems
-@using SCREAM.Data.Entities.StorageTargets
 @using SCREAM.Data.Enums
 @using SCREAM.Web.Pages.Backup
 @inject ISnackbar Snackbar
 @inject IHttpClientFactory ClientFactory
-@inject IDialogService DialogService
 @inject NavigationManager NavigationManager
 
 
@@ -180,7 +178,7 @@
         _backupPlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("/backup-plans") ?? new();
 
         // If editing an existing restore plan, load it (using fake data if API is not available)
-        if (Id.HasValue)
+        if (Id is > 0)
         {
             // Here you can later call an API endpoint to get the full restore plan with its backup items.
             _restorePlan = new RestorePlan
@@ -260,6 +258,6 @@
             return;
 
         Snackbar.Add($"Restore plan {(Id.HasValue ? "updated" : "created")} successfully", Severity.Success);
-        NavigationManager.NavigateTo("/restore-plans");
+        NavigationManager.NavigateTo("/plans/restore");
     }
 }

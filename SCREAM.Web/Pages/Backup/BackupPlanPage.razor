@@ -1,4 +1,4 @@
-@page "/backup-plans"
+@page "/plans/backup"
 @using System.Text.Json
 @using SCREAM.Data.Entities.Backup
 @using System.Text.Json.Serialization
@@ -83,12 +83,12 @@
 
     private void AddNewBackupPlan()
     {
-        NavigationManager.NavigateTo("/backupplan");
+        NavigationManager.NavigateTo("/plans/backup/0");
     }
 
     private void EditBackupPlan(BackupPlan backupPlan)
     {
-        NavigationManager.NavigateTo($"/backupplan/{backupPlan.Id}");
+        NavigationManager.NavigateTo($"/plans/backup/{backupPlan.Id}");
     }
 
     private async Task DeleteBackupPlan(BackupPlan backupPlan)

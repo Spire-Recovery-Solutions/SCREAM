@@ -1,4 +1,4 @@
-@page "/backup-jobs"
+@page "/jobs/backup"
 @using SCREAM.Data.Entities
 @using SCREAM.Data.Entities.Backup
 @using SCREAM.Data.Entities.Backup.BackupItems
@@ -193,7 +193,7 @@
 
     private void ViewJob(long jobId)
     {
-        NavigationManager.NavigateTo($"/backup-jobs/{jobId}");
+        NavigationManager.NavigateTo($"/jobs/backup/{jobId}");
     }
 
     private async Task RetryJob(long jobId)

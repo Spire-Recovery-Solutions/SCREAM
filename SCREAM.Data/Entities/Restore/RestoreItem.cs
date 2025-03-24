@@ -1,5 +1,4 @@
-﻿using SCREAM.Data.Entities.Backup.BackupItems;
-using SCREAM.Data.Entities.Database;
+﻿using SCREAM.Data.Entities.Database;
 
 namespace SCREAM.Data.Entities.Restore
 {
