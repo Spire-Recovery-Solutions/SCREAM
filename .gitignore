@@ -398,3 +398,9 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+SCREAM.Service.Api/ScreamDb.db
+
+SCREAM.Service.Api/ScreamDb.db-shm
+
+SCREAM.Service.Api/ScreamDb.db-wal
