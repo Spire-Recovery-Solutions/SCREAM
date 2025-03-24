@@ -10,14 +10,9 @@ public static class DatabaseConnectionValidator
     {
         var validationContext = new ValidationContext(databaseConnection);
         var validationResults = new List<ValidationResult>();
-        bool isValid = Validator.TryValidateObject(databaseConnection, validationContext, validationResults, true);
+        var isValid = Validator.TryValidateObject(databaseConnection, validationContext, validationResults, true);
 
-        if (!isValid)
-        {
-            return false;
-        }
-
-        return ValidateDatabaseConnectionProperties(databaseConnection);
+        return isValid && ValidateDatabaseConnectionProperties(databaseConnection);
     }
 
     private static bool ValidateDatabaseConnectionProperties(DatabaseTarget databaseConnection)
@@ -48,7 +43,7 @@ public static class DatabaseConnectionValidator
     {
         try
         {
-            using var connection = new MySqlConnection(databaseConnection.ConnectionString);
+            await using var connection = new MySqlConnection(databaseConnection.ConnectionString);
             await connection.OpenAsync();
             return true;
         }

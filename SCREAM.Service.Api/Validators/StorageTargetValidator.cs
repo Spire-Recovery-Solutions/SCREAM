@@ -9,22 +9,14 @@ public static class StorageTargetValidator
     {
         var validationContext = new ValidationContext(storageTarget);
         var validationResults = new List<ValidationResult>();
-        bool isValid = Validator.TryValidateObject(storageTarget, validationContext, validationResults, true);
+        var isValid = Validator.TryValidateObject(storageTarget, validationContext, validationResults, true);
 
-        if (!isValid)
+        return isValid && storageTarget switch
         {
-            return false;
-        }
-
-        switch (storageTarget)
-        {
-            case LocalStorageTarget localStorageTarget:
-                return ValidateLocalStorageTarget(localStorageTarget);
-            case S3StorageTarget s3StorageTarget:
-                return ValidateS3StorageTarget(s3StorageTarget);
-            default:
-                return false;
-        }
+            LocalStorageTarget localStorageTarget => ValidateLocalStorageTarget(localStorageTarget),
+            S3StorageTarget s3StorageTarget => ValidateS3StorageTarget(s3StorageTarget),
+            _ => false
+        };
     }
 
     private static bool ValidateLocalStorageTarget(LocalStorageTarget localStorageTarget)

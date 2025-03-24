@@ -188,13 +188,13 @@ app.MapPost("/targets/database", async (IDbContextFactory<ScreamDbContext> dbCon
     DatabaseTarget databaseConnection) =>
 {
     // First test the database connection
-    var isValid = ValidateDatabaseConnection(databaseConnection);
+    var isValid = DatabaseConnectionValidator.Validate(databaseConnection);
     if (!isValid)
     {
         return Results.BadRequest("Invalid database connection configuration.");
     }
 
-    var testResult = await TestDatabaseConnection(databaseConnection);
+    var testResult = await DatabaseConnectionValidator.TestDatabaseConnection(databaseConnection);
     if (!testResult)
     {
         return Results.BadRequest("Database connection test failed.");
@@ -268,25 +268,6 @@ app.MapPost("/targets/database/{databaseConnectionId:long}/scan", async (HttpCon
 
     return Results.Ok(backupItems);
 });
-
-bool ValidateDatabaseConnection(DatabaseTarget databaseConnection)
-{
-    return DatabaseConnectionValidator.Validate(databaseConnection);
-}
-
-async Task<bool> TestDatabaseConnection(DatabaseTarget databaseConnection)
-{
-    try
-    {
-        using var connection = new MySqlConnection(databaseConnection.ConnectionString);
-        await connection.OpenAsync();
-        return true;
-    }
-    catch (Exception)
-    {
-        return false;
-    }
-}
 
 #endregion
 
