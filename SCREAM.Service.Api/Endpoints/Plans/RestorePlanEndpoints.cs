@@ -10,7 +10,7 @@ public static class RestorePlanEndpoints
     public static void MapRestorePlanEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/plans/restore")
-            .WithTags("Restore Plans");
+            .WithTags("Plans/Restore");
 
         // Get a list of all restore plans
         group.MapGet("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>

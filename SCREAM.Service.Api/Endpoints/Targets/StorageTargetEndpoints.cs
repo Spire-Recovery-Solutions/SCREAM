@@ -10,7 +10,7 @@ public static class StorageTargetEndpoints
     public static void MapStorageTargetEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/targets/storage")
-            .WithTags("Storage Targets");
+            .WithTags("Targets/Storage");
 
         // Get a list of all storage targets
         group.MapGet("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>

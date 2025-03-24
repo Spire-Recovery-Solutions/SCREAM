@@ -11,7 +11,7 @@ public static class DatabaseTargetEndpoints
     public static void MapDatabaseTargetEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/targets/database")
-            .WithTags("Database Targets");
+            .WithTags("Targets/Database");
 
         // Get a list of all connections
         group.MapGet("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>

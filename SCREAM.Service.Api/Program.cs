@@ -3,6 +3,7 @@ using SCREAM.Data;
 using SCREAM.Data.Entities;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.OpenApi.Models;
 using SCREAM.Data.Enums;
 using SCREAM.Service.Api.Endpoints.Jobs;
 using SCREAM.Service.Api.Endpoints.Plans;

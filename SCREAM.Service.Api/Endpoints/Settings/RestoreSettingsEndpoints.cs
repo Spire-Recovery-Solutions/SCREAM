@@ -9,7 +9,7 @@ public static class RestoreSettingsEndpoints
     public static void MapRestoreSettingsEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/settings/restore")
-            .WithTags("Restore Settings");
+            .WithTags("Settings/Restore");
 
         // Get restore settings
         group.MapGet("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>

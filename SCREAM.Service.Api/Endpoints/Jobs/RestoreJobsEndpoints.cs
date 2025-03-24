@@ -9,7 +9,7 @@ public static class RestoreJobEndpoints
     public static void MapRestoreJobEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/jobs/restore")
-            .WithTags("Restore Jobs");
+            .WithTags("Jobs/Restore");
 
         // Get all restore jobs
         group.MapGet("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>

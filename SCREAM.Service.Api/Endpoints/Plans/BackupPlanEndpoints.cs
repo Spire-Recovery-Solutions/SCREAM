@@ -9,7 +9,7 @@ public static class BackupPlanEndpoints
     public static void MapBackupPlanEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/plans/backup")
-            .WithTags("Backup Plans");
+            .WithTags("Plans/Backup");
 
         // Get a list of all backup plans
         group.MapGet("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
