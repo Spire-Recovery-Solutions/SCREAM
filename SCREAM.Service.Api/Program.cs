@@ -54,6 +54,8 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 
+
+
 #region Targets
 
 #region Storage
@@ -163,7 +165,7 @@ async Task<bool> TestStorageTarget(StorageTarget storageTarget)
 
 #endregion
 
-#region Connections
+#region Databases
 
 // Get a list of all connections
 app.MapGet("/targets/database", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
@@ -273,6 +275,7 @@ app.MapPost("/targets/database/{databaseConnectionId:long}/scan", async (HttpCon
 
 #endregion
 
+#region Plans
 #region Backup Plans
 
 // Get a list of all backup plans
@@ -760,6 +763,11 @@ app.MapPost("/settings/restore",
     });
 
 #endregion
+#endregion
+
+
+
+
 
 // Ensure database is created
 using (var scope = app.Services.CreateScope())
