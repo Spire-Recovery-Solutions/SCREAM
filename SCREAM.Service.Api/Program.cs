@@ -9,6 +9,7 @@ using SCREAM.Data.Enums;
 using SCREAM.Service.Api.Validators;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using SCREAM.Data.Entities.Restore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -395,6 +396,336 @@ app.MapDelete("/plans/backup/{backupPlanId:long}", async (IDbContextFactory<Scre
 
 
 #endregion
+
+#region Restore Plans
+
+// Get a list of all restore plans
+app.MapGet("/plans/restore", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var restorePlans = await dbContext.RestorePlans
+        .Include(i => i.DatabaseConnection)
+        .Include(i => i.SourceBackupPlan)
+        .ToListAsync();
+    return Results.Ok(restorePlans);
+});
+
+// Get a restore plan by id
+app.MapGet("/plans/restore/{restorePlanId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+    long restorePlanId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var restorePlan = await dbContext.RestorePlans
+        .Include(i => i.DatabaseConnection)
+        .Include(i => i.SourceBackupPlan)
+        .Include(i => i.Items)
+        .ThenInclude(item => item.DatabaseItem)
+        .FirstOrDefaultAsync(x => x.Id == restorePlanId);
+    return restorePlan == null ? Results.NotFound() : Results.Ok(restorePlan);
+});
+
+// Create or update a restore plan
+app.MapPost("/plans/restore", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+    RestorePlan restorePlan) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+
+    if (restorePlan.Id == 0)
+    {
+        // Create new restore plan
+        dbContext.RestorePlans.Add(restorePlan);
+        await dbContext.SaveChangesAsync();
+        return Results.Created($"/plans/restore/{restorePlan.Id}", restorePlan);
+    }
+    else
+    {
+        var existingPlan = await dbContext.RestorePlans
+            .Include(rp => rp.Items)
+            .FirstOrDefaultAsync(rp => rp.Id == restorePlan.Id);
+
+        if (existingPlan == null)
+            return Results.NotFound();
+
+        dbContext.Entry(existingPlan).CurrentValues.SetValues(restorePlan);
+
+        var existingItemsDict = existingPlan.Items.Where(i => i.Id != 0)
+            .ToDictionary(i => i.Id);
+        var newItemsDict = restorePlan.Items.Where(i => i.Id != 0)
+            .ToDictionary(i => i.Id);
+
+        foreach (var itemId in existingItemsDict.Keys.Except(newItemsDict.Keys))
+            dbContext.Remove(existingItemsDict[itemId]);
+
+        foreach (var newItem in restorePlan.Items)
+        {
+            if (newItem.Id != 0 && existingItemsDict.TryGetValue(newItem.Id, out var existingItem))
+                dbContext.Entry(existingItem).CurrentValues.SetValues(newItem);
+            else
+                existingPlan.Items.Add(newItem);
+        }
+
+        await dbContext.SaveChangesAsync();
+        return Results.Ok(existingPlan);
+    }
+});
+
+// Delete a restore plan
+app.MapDelete("/plans/restore/{restorePlanId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+    long restorePlanId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var restorePlan = await dbContext.RestorePlans
+        .Include(p => p.Items)
+        .FirstOrDefaultAsync(x => x.Id == restorePlanId);
+
+    if (restorePlan == null)
+    {
+        return Results.NotFound();
+    }
+
+    dbContext.RestorePlans.Remove(restorePlan);
+    await dbContext.SaveChangesAsync();
+
+    return Results.NoContent();
+});
+
+// Endpoints for restore jobs
+app.MapGet("/jobs/restore", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var restoreJobs = await dbContext.RestoreJobs
+        .Include(job => job.RestorePlan)
+        .OrderByDescending(job => job.StartedAt)
+        .ToListAsync();
+    return Results.Ok(restoreJobs);
+});
+
+app.MapGet("/jobs/restore/{jobId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory, long jobId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var restoreJob = await dbContext.RestoreJobs
+        .Include(job => job.RestorePlan)
+        .ThenInclude(plan => plan.DatabaseConnection)
+        .Include(job => job.RestorePlan)
+        .ThenInclude(plan => plan.SourceBackupPlan)
+        .Include(job => job.RestoreItems)
+        .ThenInclude(item => item.DatabaseItem)
+        .FirstOrDefaultAsync(job => job.Id == jobId);
+
+    return restoreJob == null ? Results.NotFound() : Results.Ok(restoreJob);
+});
+
+app.MapGet("/jobs/restore/{jobId:long}/logs", async (IDbContextFactory<ScreamDbContext> dbContextFactory, long jobId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var logs = await dbContext.RestoreJobLogs
+        .Where(log => log.RestoreJobId == jobId)
+        .OrderByDescending(log => log.Timestamp)
+        .ToListAsync();
+
+    return Results.Ok(logs);
+});
+
+app.MapPost("/jobs/restore/{restorePlanId:long}/run", async (IDbContextFactory<ScreamDbContext> dbContextFactory, 
+    long restorePlanId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var restorePlan = await dbContext.RestorePlans
+        .Include(plan => plan.DatabaseConnection)
+        .Include(plan => plan.SourceBackupPlan)
+        .Include(plan => plan.Items)
+        .ThenInclude(item => item.DatabaseItem)
+        .FirstOrDefaultAsync(plan => plan.Id == restorePlanId);
+
+    if (restorePlan == null)
+        return Results.NotFound();
+
+    // Create a new restore job
+    var restoreJob = new RestoreJob
+    {
+        RestorePlanId = restorePlanId,
+        RestorePlan = restorePlan,
+        Status = TaskStatus.Created,
+        StartedAt = DateTime.UtcNow,
+        CompletedAt = null,
+        IsCompressed = false,
+        IsEncrypted = false,
+        RestoreItems = new List<RestoreItem>()
+    };
+
+    // Add restore items from the plan
+    foreach (var planItem in restorePlan.Items.Where(i => i.IsSelected))
+    {
+        restoreJob.RestoreItems.Add(new RestoreItem
+        {
+            RestoreJobId = restoreJob.Id,
+            RestoreJob = restoreJob,
+            DatabaseItemId = planItem.DatabaseItemId,
+            DatabaseItem = planItem.DatabaseItem,
+            Status = TaskStatus.WaitingToRun,
+            RetryCount = 0,
+            StartedAt = null,
+            CompletedAt = null
+        });
+    }
+
+    dbContext.RestoreJobs.Add(restoreJob);
+    await dbContext.SaveChangesAsync();
+
+    // Add initial log entry
+    var logEntry = new RestoreJobLog
+    {
+        RestoreJobId = restoreJob.Id,
+        Timestamp = DateTime.UtcNow,
+        Title = "Job Created",
+        Message = $"Restore job created for plan: {restorePlan.Name}",
+        Severity = LogSeverity.Info
+    };
+
+    dbContext.RestoreJobLogs.Add(logEntry);
+    await dbContext.SaveChangesAsync();
+
+    // Here you would trigger the actual restore process, perhaps via a background service
+    // Since that's outside the scope of this API endpoint implementation, we'll assume
+    // some other part of the system will pick up the job and process it
+
+    return Results.Created($"/jobs/restore/{restoreJob.Id}", restoreJob);
+});
+
+app.MapPost("/jobs/restore/{jobId:long}/retry", async (IDbContextFactory<ScreamDbContext> dbContextFactory, long jobId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var restoreJob = await dbContext.RestoreJobs
+        .Include(job => job.RestoreItems)
+        .FirstOrDefaultAsync(job => job.Id == jobId);
+
+    if (restoreJob == null)
+        return Results.NotFound();
+
+    if (restoreJob.Status != TaskStatus.Faulted && restoreJob.Status != TaskStatus.Canceled)
+        return Results.BadRequest("Only failed or canceled jobs can be retried");
+
+    // Reset job status
+    restoreJob.Status = TaskStatus.WaitingToRun;
+    restoreJob.CompletedAt = null;
+
+    // Reset failed items
+    foreach (var item in restoreJob.RestoreItems.Where(i => i.Status == TaskStatus.Faulted))
+    {
+        item.Status = TaskStatus.WaitingToRun;
+        item.CompletedAt = null;
+        item.RetryCount += 1;
+    }
+
+    await dbContext.SaveChangesAsync();
+
+    // Add log entry
+    var logEntry = new RestoreJobLog
+    {
+        RestoreJobId = restoreJob.Id,
+        Timestamp = DateTime.UtcNow,
+        Title = "Job Retry",
+        Message = "Restore job retry initiated",
+        Severity = LogSeverity.Info
+    };
+
+    dbContext.RestoreJobLogs.Add(logEntry);
+    await dbContext.SaveChangesAsync();
+
+    return Results.Ok(restoreJob);
+});
+
+app.MapPost("/jobs/restore/{jobId:long}/items/{itemId:long}/retry", async (IDbContextFactory<ScreamDbContext> dbContextFactory, 
+    long jobId, long itemId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var restoreItem = await dbContext.RestoreItems
+        .Include(item => item.RestoreJob)
+        .FirstOrDefaultAsync(item => item.Id == itemId && item.RestoreJobId == jobId);
+
+    if (restoreItem == null)
+        return Results.NotFound();
+
+    if (restoreItem.Status != TaskStatus.Faulted)
+        return Results.BadRequest("Only failed items can be retried");
+
+    // Reset item status
+    restoreItem.Status = TaskStatus.WaitingToRun;
+    restoreItem.CompletedAt = null;
+    restoreItem.RetryCount += 1;
+    restoreItem.ErrorMessage = null;
+
+    // If job was completed with failure, reset it to running
+    if (restoreItem.RestoreJob.Status == TaskStatus.Faulted)
+    {
+        restoreItem.RestoreJob.Status = TaskStatus.Running;
+        restoreItem.RestoreJob.CompletedAt = null;
+    }
+
+    await dbContext.SaveChangesAsync();
+
+    // Add log entry
+    var logEntry = new RestoreJobLog
+    {
+        RestoreJobId = restoreItem.RestoreJobId,
+        RestoreItemId = restoreItem.Id,
+        Timestamp = DateTime.UtcNow,
+        Title = "Item Retry",
+        Message = $"Restore item retry initiated for {restoreItem.DatabaseItem.Name}",
+        Severity = LogSeverity.Info
+    };
+
+    dbContext.RestoreJobLogs.Add(logEntry);
+    await dbContext.SaveChangesAsync();
+
+    return Results.Ok(restoreItem);
+});
+
+// Get restore settings
+app.MapGet("/settings/restore", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var settings = await dbContext.RestoreSettings.FirstOrDefaultAsync();
+    
+    if (settings == null)
+    {
+        // Create default settings if none exist
+        settings = new RestoreSettings
+        {
+            MaxAutoRetries = 3,
+            OverwriteExistingByDefault = false,
+            UseParallelExecution = true,
+            ImportTimeout = 3600,
+            SendEmailNotifications = false
+        };
+        
+        dbContext.RestoreSettings.Add(settings);
+        await dbContext.SaveChangesAsync();
+    }
+    
+    return Results.Ok(settings);
+});
+
+// Update restore settings
+app.MapPost("/settings/restore", async (IDbContextFactory<ScreamDbContext> dbContextFactory, RestoreSettings settings) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var existingSettings = await dbContext.RestoreSettings.FirstOrDefaultAsync();
+    
+    if (existingSettings == null)
+    {
+        dbContext.RestoreSettings.Add(settings);
+    }
+    else
+    {
+        dbContext.Entry(existingSettings).CurrentValues.SetValues(settings);
+    }
+    
+    await dbContext.SaveChangesAsync();
+    return Results.Ok(settings);
+});
+
+#endregion 
 
 // Ensure database is created
 using (var scope = app.Services.CreateScope())
