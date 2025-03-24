@@ -10,8 +10,8 @@ public class BackupPlan : ScreamDbBaseEntity
     public required string Description { get; set; }
 
     // Navigation properties and foreign keys for related entities
-    public long DatabaseConnectionId { get; set; }
-    public DatabaseConnection DatabaseConnection { get; set; } = null!;
+    public long DatabaseTargetId { get; set; }
+    public DatabaseTarget DatabaseTarget { get; set; } = null!;
 
     public long StorageTargetId { get; set; }
     public StorageTarget StorageTarget { get; set; } = null!;

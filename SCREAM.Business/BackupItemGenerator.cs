@@ -14,7 +14,7 @@ namespace SCREAM.Business
         /// <summary>
         /// Gets all database objects that can be backed up using mysqldump via CliWrap.
         /// </summary>
-        public async Task<List<BackupItem>> GetBackupItems(DatabaseConnection dbConnection)
+        public async Task<List<BackupItem>> GetBackupItems(DatabaseTarget dbConnection)
         {
             await using var connection = new MySqlConnection(dbConnection.ConnectionString);
 

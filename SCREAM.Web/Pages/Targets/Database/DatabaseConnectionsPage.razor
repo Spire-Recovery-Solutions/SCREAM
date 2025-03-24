@@ -1,4 +1,4 @@
-@page "/targets/connections"
+@page "/targets/database"
 @using SCREAM.Data.Entities
 @using SCREAM.Web.Pages.Backup
 @using System.Text.Json
@@ -54,7 +54,7 @@
 </MudTable>
 
 @code {
-    private List<DatabaseConnection> _connections = new();
+    private List<DatabaseTarget> _connections = new();
     private HttpClient _httpClient;
     private bool _isLoading = true;
     private JsonSerializerOptions _jsonOptions;
@@ -73,15 +73,15 @@
 
     private void AddNewConnection()
     {
-        NavigationManager.NavigateTo("/targets/connections/0");
+        NavigationManager.NavigateTo("/targets/database/0");
     }
 
-    private void EditConnection(DatabaseConnection connection)
+    private void EditConnection(DatabaseTarget connection)
     {
-        NavigationManager.NavigateTo($"/targets/connections/{connection.Id}");
+        NavigationManager.NavigateTo($"/targets/database/{connection.Id}");
     }
 
-    private async Task DeleteConnection(DatabaseConnection connection)
+    private async Task DeleteConnection(DatabaseTarget connection)
     {
         var parameters = new DialogParameters
         {
@@ -97,7 +97,7 @@
         {
             try
             {
-                var response = await _httpClient.DeleteAsync($"/targets/connections/{connection.Id}");
+                var response = await _httpClient.DeleteAsync($"/targets/database/{connection.Id}");
                 response.EnsureSuccessStatusCode();
                 _connections.Remove(connection);
                 Snackbar.Add("Database connection deleted successfully.", Severity.Success);
@@ -116,14 +116,14 @@
 
         try
         {
-            var connections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/targets/connections", _jsonOptions);
-            _connections = connections ?? new List<DatabaseConnection>();
+            var connections = await _httpClient.GetFromJsonAsync<List<DatabaseTarget>>("/targets/database", _jsonOptions);
+            _connections = connections ?? new List<DatabaseTarget>();
             Snackbar.Add("Connections refreshed.", Severity.Info);
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Error fetching connections: {ex.Message}", Severity.Error);
-            _connections = new List<DatabaseConnection>();
+            _connections = new List<DatabaseTarget>();
         }
         finally
         {

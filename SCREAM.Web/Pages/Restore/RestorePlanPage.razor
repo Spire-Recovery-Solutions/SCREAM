@@ -49,7 +49,7 @@
     </HeaderContent>
     <RowTemplate>
         <MudTd>@context.Name</MudTd>
-        <MudTd>@(context.DatabaseConnection?.HostName)</MudTd>
+        <MudTd>@(context.DatabaseTarget?.HostName)</MudTd>
         <MudTd>@context.SourceBackupPlan?.Name</MudTd>
         <MudTd>
             <MudChip T="bool" Color="@(context.OverwriteExisting ? Color.Warning : Color.Info)"
@@ -125,7 +125,7 @@
                     Name = "Test Backup",
                     Description = "Test Description"
                 },
-                DatabaseConnection = new()
+                DatabaseTarget = new()
                 {
                     HostName = "prod-db.example.com",
                     Type = DatabaseType.MySQL,
@@ -151,7 +151,7 @@
                     Name = "Test2 Backup",
                     Description = "Test Description"
                 },
-                DatabaseConnection = new()
+                DatabaseTarget = new()
                 {
                     HostName = "test-db.example.com",
                     Type = DatabaseType.MySQL,

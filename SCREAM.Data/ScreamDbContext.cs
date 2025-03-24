@@ -12,7 +12,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
 {
     public DbSet<DatabaseItem> DatabaseItems { get; set; }
     public DbSet<BackupPlan> BackupPlans { get; set; }
-    public DbSet<DatabaseConnection> DatabaseConnections { get; set; }
+    public DbSet<DatabaseTarget> DatabaseTargets { get; set; }
     public DbSet<BackupJob> BackupJobs { get; set; }
     public DbSet<BackupItemStatus> BackupItemStatuses { get; set; }
     public DbSet<BackupJobLog> BackupJobLogs { get; set; }
@@ -55,9 +55,9 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .HasForeignKey(j => j.BackupPlanId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            e.HasOne(p => p.DatabaseConnection)
+            e.HasOne(p => p.DatabaseTarget)
                 .WithMany()
-                .HasForeignKey(p => p.DatabaseConnectionId)
+                .HasForeignKey(p => p.DatabaseTargetId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             e.HasOne(p => p.StorageTarget)
@@ -87,9 +87,9 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
         mb.Entity<DatabaseTableDataItems>().Property(e => e.RowCount);
 
         // DatabaseConnection configuration
-        mb.Entity<DatabaseConnection>(e =>
+        mb.Entity<DatabaseTarget>(e =>
         {
-            e.ToTable("DatabaseConnections");
+            e.ToTable("DatabaseTargets");
             e.Property(p => p.Type).HasConversion<string>();
         });
 
@@ -229,9 +229,9 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
                 .HasForeignKey(j => j.RestorePlanId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            e.HasOne(p => p.DatabaseConnection)
+            e.HasOne(p => p.DatabaseTarget)
                 .WithMany()
-                .HasForeignKey(p => p.DatabaseConnectionId)
+                .HasForeignKey(p => p.DatabaseTargetId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             e.HasOne(p => p.SourceBackupPlan)

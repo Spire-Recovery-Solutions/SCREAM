@@ -166,26 +166,26 @@ async Task<bool> TestStorageTarget(StorageTarget storageTarget)
 #region Connections
 
 // Get a list of all connections
-app.MapGet("/targets/connections", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
+app.MapGet("/targets/database", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-    var databaseConnections = await dbContext.DatabaseConnections.ToListAsync();
+    var databaseConnections = await dbContext.DatabaseTargets.ToListAsync();
     return Results.Ok(databaseConnections);
 });
 
 // Get a connection by id
-app.MapGet("/targets/connections/{databaseConnectionId:long}", async (HttpContext _,
+app.MapGet("/targets/database/{databaseConnectionId:long}", async (HttpContext _,
     IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-    var databaseConnection = await dbContext.DatabaseConnections
+    var databaseConnection = await dbContext.DatabaseTargets
         .FirstOrDefaultAsync(x => x.Id == databaseConnectionId);
     return databaseConnection == null ? Results.NotFound() : Results.Ok(databaseConnection);
 });
 
 // Combined endpoint for creating/editing and testing database connections
-app.MapPost("/targets/connections", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
-    DatabaseConnection databaseConnection) =>
+app.MapPost("/targets/database", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+    DatabaseTarget databaseConnection) =>
 {
     // First test the database connection
     var isValid = ValidateDatabaseConnection(databaseConnection);
@@ -206,14 +206,14 @@ app.MapPost("/targets/connections", async (IDbContextFactory<ScreamDbContext> db
     if (databaseConnection.Id == 0)
     {
         // Create new database connection
-        dbContext.DatabaseConnections.Add(databaseConnection);
+        dbContext.DatabaseTargets.Add(databaseConnection);
         await dbContext.SaveChangesAsync();
-        return Results.Created($"/targets/connections/{databaseConnection.Id}", databaseConnection);
+        return Results.Created($"/targets/database/{databaseConnection.Id}", databaseConnection);
     }
     else
     {
         // Update existing database connection
-        var existingConnection = await dbContext.DatabaseConnections
+        var existingConnection = await dbContext.DatabaseTargets
             .FirstOrDefaultAsync(x => x.Id == databaseConnection.Id);
 
         if (existingConnection == null)
@@ -235,29 +235,29 @@ app.MapPost("/targets/connections", async (IDbContextFactory<ScreamDbContext> db
 });
 
 // Delete a connection
-app.MapDelete("/targets/connections/{databaseConnectionId:long}", async (HttpContext _,
+app.MapDelete("/targets/database/{databaseConnectionId:long}", async (HttpContext _,
     IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-    var databaseConnection = await dbContext.DatabaseConnections
+    var databaseConnection = await dbContext.DatabaseTargets
         .FirstOrDefaultAsync(x => x.Id == databaseConnectionId);
     if (databaseConnection == null)
     {
         return Results.NotFound();
     }
 
-    dbContext.DatabaseConnections.Remove(databaseConnection);
+    dbContext.DatabaseTargets.Remove(databaseConnection);
     await dbContext.SaveChangesAsync();
 
     return Results.NoContent();
 });
 
 // Scan a connections database
-app.MapPost("/targets/connections/{databaseConnectionId:long}/scan", async (HttpContext _,
+app.MapPost("/targets/database/{databaseConnectionId:long}/scan", async (HttpContext _,
     IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-    var databaseConnection = dbContext.DatabaseConnections.FirstOrDefault(c => c.Id == databaseConnectionId);
+    var databaseConnection = dbContext.DatabaseTargets.FirstOrDefault(c => c.Id == databaseConnectionId);
     if (databaseConnection == null)
     {
         return Results.NotFound();
@@ -269,12 +269,12 @@ app.MapPost("/targets/connections/{databaseConnectionId:long}/scan", async (Http
     return Results.Ok(backupItems);
 });
 
-bool ValidateDatabaseConnection(DatabaseConnection databaseConnection)
+bool ValidateDatabaseConnection(DatabaseTarget databaseConnection)
 {
     return DatabaseConnectionValidator.Validate(databaseConnection);
 }
 
-async Task<bool> TestDatabaseConnection(DatabaseConnection databaseConnection)
+async Task<bool> TestDatabaseConnection(DatabaseTarget databaseConnection)
 {
     try
     {
@@ -299,7 +299,7 @@ app.MapGet("/plans/backup", async (IDbContextFactory<ScreamDbContext> dbContextF
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
     var backupPlans = await dbContext.BackupPlans
-        .Include(i => i.DatabaseConnection)
+        .Include(i => i.DatabaseTarget)
         .Include(i => i.StorageTarget)
         .ToListAsync();
     return Results.Ok(backupPlans);
@@ -310,7 +310,7 @@ app.MapGet("/plans/backup/{backupPlanId:long}", async (IDbContextFactory<ScreamD
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
     var backupPlan = await dbContext.BackupPlans
-        .Include(i => i.DatabaseConnection)
+        .Include(i => i.DatabaseTarget)
         .Include(i => i.StorageTarget)
         .Include(i => i.Items)
         .ThenInclude(item => item.DatabaseItem)
@@ -405,7 +405,7 @@ app.MapGet("/plans/restore", async (IDbContextFactory<ScreamDbContext> dbContext
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
     var restorePlans = await dbContext.RestorePlans
-        .Include(i => i.DatabaseConnection)
+        .Include(i => i.DatabaseTarget)
         .Include(i => i.SourceBackupPlan)
         .ToListAsync();
     return Results.Ok(restorePlans);
@@ -417,7 +417,7 @@ app.MapGet("/plans/restore/{restorePlanId:long}", async (IDbContextFactory<Screa
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
     var restorePlan = await dbContext.RestorePlans
-        .Include(i => i.DatabaseConnection)
+        .Include(i => i.DatabaseTarget)
         .Include(i => i.SourceBackupPlan)
         .Include(i => i.Items)
         .ThenInclude(item => item.DatabaseItem)
@@ -501,7 +501,7 @@ app.MapPost("/plans/restore", async (IDbContextFactory<ScreamDbContext> dbContex
 
         // Reload the plan with updated relationships
         var updatedPlan = await dbContext.RestorePlans
-            .Include(i => i.DatabaseConnection)
+            .Include(i => i.DatabaseTarget)
             .Include(i => i.SourceBackupPlan)
             .Include(i => i.Items)
             .ThenInclude(item => item.DatabaseItem)
@@ -549,7 +549,7 @@ app.MapGet("/jobs/restore/{jobId:long}", async (IDbContextFactory<ScreamDbContex
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
     var restoreJob = await dbContext.RestoreJobs
         .Include(job => job.RestorePlan)
-        .ThenInclude(plan => plan.DatabaseConnection)
+        .ThenInclude(plan => plan.DatabaseTarget)
         .Include(job => job.RestorePlan)
         .ThenInclude(plan => plan.SourceBackupPlan)
         .Include(job => job.RestoreItems)
@@ -575,7 +575,7 @@ app.MapPost("/jobs/restore/{restorePlanId:long}/run", async (IDbContextFactory<S
 {
     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
     var restorePlan = await dbContext.RestorePlans
-        .Include(plan => plan.DatabaseConnection)
+        .Include(plan => plan.DatabaseTarget)
         .Include(plan => plan.SourceBackupPlan)
         .Include(plan => plan.Items)
         .ThenInclude(item => item.DatabaseItem)
@@ -787,7 +787,7 @@ using (var scope = app.Services.CreateScope())
     var dbContext = dbContextFactory.CreateDbContext();
     dbContext.Database.EnsureDeleted();
     dbContext.Database.Migrate();
-    dbContext.DatabaseConnections.Add(new DatabaseConnection
+    dbContext.DatabaseTargets.Add(new DatabaseTarget
     {
         HostName = "localhost",
         Port = 3306,

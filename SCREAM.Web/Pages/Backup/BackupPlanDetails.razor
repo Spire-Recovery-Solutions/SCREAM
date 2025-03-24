@@ -34,19 +34,19 @@
                 </MudItem>
 
                 <MudItem xs="12" md="6">
-                    <MudSelect T="long" @bind-Value="_backupPlan.DatabaseConnectionId"
+                    <MudSelect T="long" @bind-Value="_backupPlan.DatabaseTargetId"
                                Label="Database Connection"
                                Variant="Variant.Outlined"
                                Required="true"
                                HelperText="Select the database you want to back up">
-                        @if (_databaseConnections == null || _databaseConnections.Count == 0)
+                        @if (_databaseTargets == null || _databaseTargets.Count == 0)
                         {
                             <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
                         }
                         else
                         {
                             <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
-                            @foreach (var conn in _databaseConnections)
+                            @foreach (var conn in _databaseTargets)
                             {
                                 <MudSelectItem Value="@conn.Id">
                                     @conn.HostName (@conn.Type)
@@ -124,7 +124,7 @@
                    Color="Color.Primary"
                    StartIcon="@Icons.Material.Filled.Search"
                    OnClick="ScanDatabase"
-                   Disabled="@(_backupPlan.DatabaseConnectionId == 0 || _isScanning)"
+                   Disabled="@(_backupPlan.DatabaseTargetId == 0 || _isScanning)"
                    Class="ml-auto">
             @if (_isScanning)
             {
@@ -139,7 +139,7 @@
     </MudCardActions>
 </MudCard>
 
-@if (_backupPlan.DatabaseConnectionId != 0 && _backupPlan.Items?.Count > 0)
+@if (_backupPlan.DatabaseTargetId != 0 && _backupPlan.Items?.Count > 0)
 {
     <MudCard Elevation="3" Class="mt-4 mb-4">
         <MudCardContent>
@@ -154,7 +154,7 @@
                Color="Color.Success"
                StartIcon="@Icons.Material.Filled.Save"
                OnClick="SavePlan"
-               Disabled="@(_backupPlan.DatabaseConnectionId == 0 || _backupPlan.StorageTargetId == 0 || string.IsNullOrWhiteSpace(_backupPlan.Name))">
+               Disabled="@(_backupPlan.DatabaseTargetId == 0 || _backupPlan.StorageTargetId == 0 || string.IsNullOrWhiteSpace(_backupPlan.Name))">
         Save Backup Plan
     </MudButton>
 </MudPaper>
@@ -175,7 +175,7 @@
 
     private bool _isScanning;
     private HttpClient _httpClient;
-    private List<DatabaseConnection> _databaseConnections = new();
+    private List<DatabaseTarget> _databaseTargets = new();
     private List<StorageTarget> _storageTargets = new();
 
     protected override async Task OnInitializedAsync()
@@ -184,7 +184,7 @@
 
         try
         {
-            _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/targets/connections") ?? new();
+            _databaseTargets = await _httpClient.GetFromJsonAsync<List<DatabaseTarget>>("/targets/database") ?? new();
             _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("/targets/storage") ?? new();
 
             if (Id is > 0)
@@ -204,7 +204,7 @@
 
     private async Task ScanDatabase()
     {
-        if (_backupPlan.DatabaseConnectionId == 0) return;
+        if (_backupPlan.DatabaseTargetId == 0) return;
 
         HashSet<string> selectedKeys = new();
         if (_backupPlan.Items.Count > 0)
@@ -231,7 +231,7 @@
 
         try
         {
-            var response = await _httpClient.PostAsync($"connections/{_backupPlan.DatabaseConnectionId}/scan", null);
+            var response = await _httpClient.PostAsync($"connections/{_backupPlan.DatabaseTargetId}/scan", null);
             response.EnsureSuccessStatusCode();
 
             var newItems = await response.Content.ReadFromJsonAsync<List<BackupItem>>();
@@ -269,7 +269,7 @@
                 Id = _backupPlan.Id,
                 Name = _backupPlan.Name,
                 Description = _backupPlan.Description,
-                DatabaseConnectionId = _backupPlan.DatabaseConnectionId,
+                DatabaseTargetId = _backupPlan.DatabaseTargetId,
                 StorageTargetId = _backupPlan.StorageTargetId,
                 ScheduleType = _backupPlan.ScheduleType,
                 ScheduleCron = _backupPlan.ScheduleCron,

@@ -67,7 +67,7 @@ else
                     <MudListItem>
                         <MudText Typo="Typo.body1">
                             <MudIcon Icon="@Icons.Material.Filled.Storage" Class="mr-2"/>
-                            <strong>Database:</strong> @_job.RestorePlan.DatabaseConnection.HostName
+                            <strong>Database:</strong> @_job.RestorePlan.DatabaseTarget.HostName
                         </MudText>
                     </MudListItem>
                     <MudListItem>
@@ -236,7 +236,7 @@ else
                 Id = 1,
                 Name = "Daily Restore Plan",
                 Description = "Restores production DB daily",
-                DatabaseConnection = new()
+                DatabaseTarget = new()
                 {
                     Id = 1,
                     HostName = "prod-db-server.example.com",
@@ -251,7 +251,7 @@ else
                     Name = "Daily Database Backup",
                     Description = "Automated daily backup of production database"
                 },
-                DatabaseConnectionId = 1,
+                DatabaseTargetId = 1,
                 SourceBackupPlanId = 1,
                 ScheduleCron = "0 0 * * *",
                 ScheduleType = ScheduleType.Repeating,

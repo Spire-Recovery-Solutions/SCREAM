@@ -6,7 +6,7 @@ namespace SCREAM.Service.Api.Validators;
 
 public static class DatabaseConnectionValidator
 {
-    public static bool Validate(DatabaseConnection databaseConnection)
+    public static bool Validate(DatabaseTarget databaseConnection)
     {
         var validationContext = new ValidationContext(databaseConnection);
         var validationResults = new List<ValidationResult>();
@@ -20,7 +20,7 @@ public static class DatabaseConnectionValidator
         return ValidateDatabaseConnectionProperties(databaseConnection);
     }
 
-    private static bool ValidateDatabaseConnectionProperties(DatabaseConnection databaseConnection)
+    private static bool ValidateDatabaseConnectionProperties(DatabaseTarget databaseConnection)
     {
         return !string.IsNullOrEmpty(databaseConnection.HostName) &&
                databaseConnection.Port > 0 &&
@@ -44,7 +44,7 @@ public static class DatabaseConnectionValidator
         }
     }
 
-    public static async Task<bool> TestDatabaseConnection(DatabaseConnection databaseConnection)
+    public static async Task<bool> TestDatabaseConnection(DatabaseTarget databaseConnection)
     {
         try
         {

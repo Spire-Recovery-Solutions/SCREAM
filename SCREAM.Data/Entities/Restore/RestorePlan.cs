@@ -14,8 +14,8 @@ namespace SCREAM.Data.Entities.Restore
         public required string Description { get; set; }
 
         // Navigation properties and foreign keys for related entities
-        public long DatabaseConnectionId { get; set; }
-        public DatabaseConnection DatabaseConnection { get; set; } = null!;
+        public long DatabaseTargetId { get; set; }
+        public DatabaseTarget DatabaseTarget { get; set; } = null!;
 
         public long SourceBackupPlanId { get; set; }
         public BackupPlan SourceBackupPlan { get; set; } = null!;

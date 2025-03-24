@@ -1,4 +1,4 @@
-﻿@page "/targets/connections/{Id:long?}"
+﻿@page "/targets/database/{Id:long?}"
 @using SCREAM.Data.Entities
 @using SCREAM.Data.Enums
 @using System.Text.Json
@@ -67,7 +67,7 @@
     [Parameter] public long? Id { get; set; }
 
     private MudForm _form;
-    private DatabaseConnection _connection = new()
+    private DatabaseTarget _connection = new()
         {
             HostName = "",
             Port = 3306,
@@ -91,7 +91,7 @@
         {
             try
             {
-                var connectionResult = await _httpClient.GetFromJsonAsync<DatabaseConnection>($"/targets/connections/{Id.Value}", _jsonOptions);
+                var connectionResult = await _httpClient.GetFromJsonAsync<DatabaseTarget>($"/targets/database/{Id.Value}", _jsonOptions);
                 if (connectionResult is not null)
                 {
                     _connection = connectionResult;
@@ -120,7 +120,7 @@
 
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("/targets/connections", _connection, _jsonOptions);
+            var response = await _httpClient.PostAsJsonAsync("/targets/database", _connection, _jsonOptions);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -138,7 +138,7 @@
             }
 
             Snackbar.Add("Connection saved successfully.", Severity.Success);
-            NavigationManager.NavigateTo("/targets/connections");
+            NavigationManager.NavigateTo("/targets/database");
         }
         catch (Exception ex)
         {
@@ -146,5 +146,5 @@
         }
     }
 
-    private void Cancel() => NavigationManager.NavigateTo("/targets/connections");
+    private void Cancel() => NavigationManager.NavigateTo("/targets/database");
 }

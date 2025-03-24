@@ -34,7 +34,7 @@
                     Required="true" />
                 </MudItem>
                 <MudItem xs="12" md="6">
-                    <MudSelect T="long" @bind-Value="_restorePlan.DatabaseConnectionId"
+                    <MudSelect T="long" @bind-Value="_restorePlan.DatabaseTargetId"
                     Label="Database Connection"
                     Variant="Variant.Outlined"
                     Required="true"
@@ -143,7 +143,7 @@
         Color="Color.Success"
         StartIcon="@Icons.Material.Filled.Save"
         OnClick="SavePlan"
-        Disabled="@(_restorePlan.DatabaseConnectionId == 0 || _restorePlan.SourceBackupPlanId == 0 || string.IsNullOrWhiteSpace(_restorePlan.Name))">
+        Disabled="@(_restorePlan.DatabaseTargetId == 0 || _restorePlan.SourceBackupPlanId == 0 || string.IsNullOrWhiteSpace(_restorePlan.Name))">
             Save Restore Plan
         </MudButton>
         <MudButton OnClick="@(() => NavigationManager.NavigateTo("/plans/restore"))">Back</MudButton>
@@ -166,7 +166,7 @@
         };
 
     private HttpClient _httpClient;
-    private List<DatabaseConnection> _databaseConnections = new();
+    private List<DatabaseTarget> _databaseConnections = new();
     private List<BackupPlan> _backupPlans = new();
 
     protected override async Task OnInitializedAsync()
@@ -174,7 +174,7 @@
         _httpClient = ClientFactory.CreateClient("SCREAM");
 
         // Load database connections and backup plans from API endpoints.
-        _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseConnection>>("/targets/connections") ?? new();
+        _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseTarget>>("/targets/database") ?? new();
         _backupPlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("/plans/backup") ?? new();
 
         // If editing an existing restore plan, load it (using fake data if API is not available)
@@ -186,8 +186,8 @@
                     Id = Id.Value,
                     Name = "Sample Restore Plan",
                     Description = "Restores production DB daily",
-                    DatabaseConnectionId = _databaseConnections.FirstOrDefault()?.Id ?? 0,
-                    DatabaseConnection = _databaseConnections.FirstOrDefault(),
+                    DatabaseTargetId = _databaseConnections.FirstOrDefault()?.Id ?? 0,
+                    DatabaseTarget = _databaseConnections.FirstOrDefault(),
                     SourceBackupPlanId = _backupPlans.FirstOrDefault()?.Id ?? 0,
                     SourceBackupPlan = _backupPlans.FirstOrDefault(),
                     ScheduleCron = "0 0 * * *",
@@ -227,7 +227,7 @@
 
     private async Task ScanBackupItems()
     {
-        if (_restorePlan.DatabaseConnectionId == 0 || _restorePlan.SourceBackupPlanId == 0)
+        if (_restorePlan.DatabaseTargetId == 0 || _restorePlan.SourceBackupPlanId == 0)
         {
             Snackbar.Add("Please select a Database Connection and Source Backup Plan first.", Severity.Warning);
             return;

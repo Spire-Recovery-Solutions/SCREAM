@@ -2,7 +2,7 @@ using SCREAM.Data.Enums;
 
 namespace SCREAM.Data.Entities
 {
-   public class DatabaseConnection : ScreamDbBaseEntity
+   public class DatabaseTarget : ScreamDbBaseEntity
     { 
         public required string HostName { get; set; } = string.Empty;
         public required int Port { get; set; } = 3306;

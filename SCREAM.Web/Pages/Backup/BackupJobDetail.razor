@@ -64,7 +64,7 @@ else
                     <MudListItem>
                         <MudText Typo="Typo.body1">
                             <MudIcon Icon="@Icons.Material.Filled.Storage" Class="mr-2"/>
-                            <strong>Database:</strong> @_job.BackupPlan.DatabaseConnection.HostName
+                            <strong>Database:</strong> @_job.BackupPlan.DatabaseTarget.HostName
                         </MudText>
                     </MudListItem>
                     <MudListItem>
@@ -232,7 +232,7 @@ else
                 Id = 1,
                 Name = "Daily Database Backup",
                 Description = "Automated daily backup of production database",
-                DatabaseConnection = new()
+                DatabaseTarget = new()
                 {
                     Id = 1,
                     HostName = "prod-db-server.example.com",
