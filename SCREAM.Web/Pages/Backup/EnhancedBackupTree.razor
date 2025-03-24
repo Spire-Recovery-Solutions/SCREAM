@@ -336,23 +336,23 @@ else
         public Color Color { get; set; }
     }
 
-    private readonly List<QuickSelectOption> _quickSelectOptions = new()
-    {
+    private readonly List<QuickSelectOption> _quickSelectOptions =
+    [
         new QuickSelectOption { Type = DatabaseItemType.TableStructure, Label = "Select All Structure", Color = Color.Primary },
         new QuickSelectOption { Type = DatabaseItemType.TableData, Label = "Select All Data", Color = Color.Secondary },
         new QuickSelectOption { Type = DatabaseItemType.View, Label = "Select All Views", Color = Color.Tertiary },
         new QuickSelectOption { Type = DatabaseItemType.Trigger, Label = "Select All Triggers", Color = Color.Info },
         new QuickSelectOption { Type = DatabaseItemType.Event, Label = "Select All Events", Color = Color.Success },
         new QuickSelectOption { Type = DatabaseItemType.FunctionProcedure, Label = "Select All Functions/Procedures", Color = Color.Warning }
-    };
+    ];
 
     private class SchemaGroup
     {
         public string SchemaName { get; set; } = string.Empty;
-        public List<BackupItem> Items { get; set; } = new();
-        public List<BackupItem> SchemaItems { get; set; } = new();
-        public List<TypeGroup> TypeGroups { get; set; } = new();
-        public List<TableGroup> Tables { get; set; } = new(); // Kept for backward compatibility
+        public List<BackupItem> Items { get; set; } = [];
+        public List<BackupItem> SchemaItems { get; set; } = [];
+        public List<TypeGroup> TypeGroups { get; set; } = [];
+        public List<TableGroup> Tables { get; set; } = []; // Kept for backward compatibility
         public bool IsFullySelected { get; set; }
         public bool IsExpanded { get; set; }
     }
@@ -360,7 +360,7 @@ else
     private class TypeGroupDefinition
     {
         public string DisplayName { get; set; } = string.Empty;
-        public List<DatabaseItemType> Types { get; set; } = new();
+        public List<DatabaseItemType> Types { get; set; } = [];
         public Func<BackupItem, string> GroupingFunc { get; set; }
         public bool SupportsSearch { get; set; } = false;
     }
@@ -368,9 +368,9 @@ else
     private class TypeGroup
     {
         public string DisplayName { get; set; } = string.Empty;
-        public List<DatabaseItemType> Types { get; set; } = new();
-        public List<ItemGroup> ItemGroups { get; set; } = new();
-        public List<ItemGroup> FilteredItemGroups { get; set; } = new();
+        public List<DatabaseItemType> Types { get; set; } = [];
+        public List<ItemGroup> ItemGroups { get; set; } = [];
+        public List<ItemGroup> FilteredItemGroups { get; set; } = [];
         public string SearchString { get; set; } = string.Empty;
         public bool SupportsSearch { get; set; } = false;
     }
@@ -378,7 +378,7 @@ else
     private class ItemGroup
     {
         public string GroupName { get; set; } = string.Empty;
-        public List<BackupItem> Items { get; set; } = new();
+        public List<BackupItem> Items { get; set; } = [];
         public bool IsFullySelected { get; set; }
         public bool IsExpanded { get; set; }
     }
@@ -387,50 +387,54 @@ else
     private class TableGroup
     {
         public string TableName { get; set; } = string.Empty;
-        public List<BackupItem> Items { get; set; } = new();
+        public List<BackupItem> Items { get; set; } = [];
         public bool IsFullySelected { get; set; }
         public bool IsExpanded { get; set; }
     }
 
 // Define type group definitions
-    private readonly List<TypeGroupDefinition> _typeGroupDefinitions = new()
-    {
+    private readonly List<TypeGroupDefinition> _typeGroupDefinitions =
+    [
         new TypeGroupDefinition
         {
             DisplayName = "Tables (Structure & Data)",
-            Types = new List<DatabaseItemType> { DatabaseItemType.TableStructure, DatabaseItemType.TableData },
+            Types = [DatabaseItemType.TableStructure, DatabaseItemType.TableData],
             GroupingFunc = (item) => item.DatabaseItem.Name ?? "", // Group by table name
             SupportsSearch = true
         },
+
         new TypeGroupDefinition
         {
             DisplayName = "Views",
-            Types = new List<DatabaseItemType> { DatabaseItemType.View },
+            Types = [DatabaseItemType.View],
             GroupingFunc = (item) => item.DatabaseItem.Name ?? "", // Group by view name
             SupportsSearch = true
         },
+
         new TypeGroupDefinition
         {
             DisplayName = "Triggers",
-            Types = new List<DatabaseItemType> { DatabaseItemType.Trigger },
+            Types = [DatabaseItemType.Trigger],
             GroupingFunc = (item) => item.DatabaseItem.Name ?? "", // Group by trigger name
             SupportsSearch = true
         },
+
         new TypeGroupDefinition
         {
             DisplayName = "Events",
-            Types = new List<DatabaseItemType> { DatabaseItemType.Event },
+            Types = [DatabaseItemType.Event],
             GroupingFunc = (item) => item.DatabaseItem.Name ?? "", // Group by event name
             SupportsSearch = true
         },
+
         new TypeGroupDefinition
         {
             DisplayName = "Functions & Procedures",
-            Types = new List<DatabaseItemType> { DatabaseItemType.FunctionProcedure },
+            Types = [DatabaseItemType.FunctionProcedure],
             GroupingFunc = (item) => item.DatabaseItem.Name ?? "", // Group by function/procedure name
             SupportsSearch = true
         }
-    };
+    ];
 
 // Helper methods for updating selection states and getting display info
 
@@ -505,8 +509,8 @@ else
     [Parameter] public ICollection<BackupItem> Items { get; set; }  
     [Parameter] public EventCallback<ICollection<BackupItem>> ItemsChanged { get; set; }
 
-    private List<SchemaGroup> _schemaGroups = new();
-    private List<SchemaGroup> _filteredSchemaGroups = new();
+    private List<SchemaGroup> _schemaGroups = [];
+    private List<SchemaGroup> _filteredSchemaGroups = [];
     private bool _isLoading = false;
     private string _selectedSchemaFilter = "all";
     private string _selectedTypeFilter = "all";
@@ -575,7 +579,7 @@ else
                     DisplayName = typeGroupDef.DisplayName,
                     Types = typeGroupDef.Types,
                     SupportsSearch = typeGroupDef.SupportsSearch,
-                    ItemGroups = new List<ItemGroup>()
+                    ItemGroups = []
                 };
 
                 // Group items by the grouping function
@@ -606,7 +610,7 @@ else
             }
 
             // For backward compatibility, maintain Tables collection but don't use it
-            schema.Tables = new List<TableGroup>();
+            schema.Tables = [];
 
             UpdateSchemaSelectionState(schema);
             newSchemaGroups.Add(schema);
@@ -643,7 +647,7 @@ else
                     else
                     {
                         // If this type group doesn't contain the selected type, clear its items
-                        typeGroup.FilteredItemGroups = new List<ItemGroup>();
+                        typeGroup.FilteredItemGroups = [];
                     }
                 }
             }

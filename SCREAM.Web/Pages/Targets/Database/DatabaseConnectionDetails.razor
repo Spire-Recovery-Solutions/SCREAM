@@ -91,7 +91,7 @@
         {
             try
             {
-                var connectionResult = await _httpClient.GetFromJsonAsync<DatabaseTarget>($"/targets/database/{Id.Value}", _jsonOptions);
+                var connectionResult = await _httpClient.GetFromJsonAsync<DatabaseTarget>($"targets/database/{Id.Value}", _jsonOptions);
                 if (connectionResult is not null)
                 {
                     _connection = connectionResult;
@@ -120,7 +120,7 @@
 
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("/targets/database", _connection, _jsonOptions);
+            var response = await _httpClient.PostAsJsonAsync("targets/database", _connection, _jsonOptions);
 
             if (!response.IsSuccessStatusCode)
             {

@@ -84,7 +84,7 @@
 </MudTable>
 
 @code {
-    private List<RestorePlan> _restorePlans = new();
+    private List<RestorePlan> _restorePlans = [];
     private HttpClient _httpClient;
     private bool _isLoading = true;
     private JsonSerializerOptions _jsonOptions;
@@ -113,14 +113,14 @@
 
     private List<RestorePlan> GetSampleRestorePlans()
     {
-        return new List<RestorePlan>
-        {
+        return
+        [
             new()
             {
                 Id = 1,
                 Name = "Production DB Restore",
                 Description = "Daily production database restore",
-                SourceBackupPlan = new() 
+                SourceBackupPlan = new()
                 {
                     Name = "Test Backup",
                     Description = "Test Description"
@@ -141,12 +141,13 @@
                 OverwriteExisting = true,
                 Items = new List<BackupItem>()
             },
+
             new()
             {
                 Id = 2,
                 Name = "Test Environment Restore",
                 Description = "Weekly test environment restoration",
-                 SourceBackupPlan = new()
+                SourceBackupPlan = new()
                 {
                     Name = "Test2 Backup",
                     Description = "Test Description"
@@ -167,7 +168,7 @@
                 OverwriteExisting = false,
                 Items = new List<BackupItem>()
             }
-        };
+        ];
     }
 
     private async Task DeleteRestorePlan(RestorePlan restorePlan)

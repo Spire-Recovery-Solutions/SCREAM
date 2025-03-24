@@ -1,13 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using MySqlConnector;
 using SCREAM.Data;
 using SCREAM.Data.Entities;
-using SCREAM.Data.Entities.Backup;
-using SCREAM.Data.Entities.Restore;
-using SCREAM.Endpoints.Jobs;
-using SCREAM.Endpoints.Plans;
-using SCREAM.Endpoints.Targets;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using SCREAM.Data.Enums;
@@ -65,7 +58,8 @@ app.MapRestorePlanEndpoints();
 app.MapBackupJobEndpoints();
 app.MapRestoreJobEndpoints();
 app.MapRestoreSettingsEndpoints();
-app.MapBackupSettingsEndpoints();  // Add this line
+app.MapBackupSettingsEndpoints(); 
+
 
 // Ensure database is created
 using (var scope = app.Services.CreateScope())

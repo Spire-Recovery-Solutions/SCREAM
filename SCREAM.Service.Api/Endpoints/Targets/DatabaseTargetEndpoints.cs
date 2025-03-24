@@ -17,32 +17,32 @@ public static class DatabaseTargetEndpoints
         group.MapGet("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-            var databaseConnections = await dbContext.DatabaseTargets.ToListAsync();
-            return Results.Ok(databaseConnections);
+            var databaseTargets = await dbContext.DatabaseTargets.ToListAsync();
+            return Results.Ok(databaseTargets);
         });
 
         // Get a connection by id
-        group.MapGet("/{databaseConnectionId:long}", async (HttpContext _,
-            IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
+        group.MapGet("/{databaseTargetId:long}", async (HttpContext _,
+            IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseTargetId) =>
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-            var databaseConnection = await dbContext.DatabaseTargets
-                .FirstOrDefaultAsync(x => x.Id == databaseConnectionId);
-            return databaseConnection == null ? Results.NotFound() : Results.Ok(databaseConnection);
+            var databaseTarget = await dbContext.DatabaseTargets
+                .FirstOrDefaultAsync(x => x.Id == databaseTargetId);
+            return databaseTarget == null ? Results.NotFound() : Results.Ok(databaseTarget);
         });
 
         // Combined endpoint for creating/editing and testing database connections
         group.MapPost("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
-            DatabaseTarget databaseConnection) =>
+            DatabaseTarget databaseTarget) =>
         {
             // First test the database connection
-            var isValid = DatabaseConnectionValidator.Validate(databaseConnection);
+            var isValid = DatabaseTargetValidator.Validate(databaseTarget);
             if (!isValid)
             {
                 return Results.BadRequest("Invalid database connection configuration.");
             }
 
-            var testResult = await DatabaseConnectionValidator.TestDatabaseConnection(databaseConnection);
+            var testResult = await DatabaseTargetValidator.TestDatabaseTarget(databaseTarget);
             if (!testResult)
             {
                 return Results.BadRequest("Database connection test failed.");
@@ -51,18 +51,18 @@ public static class DatabaseTargetEndpoints
             // If test succeeds, save the database connection
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
 
-            if (databaseConnection.Id == 0)
+            if (databaseTarget.Id == 0)
             {
                 // Create new database connection
-                dbContext.DatabaseTargets.Add(databaseConnection);
+                dbContext.DatabaseTargets.Add(databaseTarget);
                 await dbContext.SaveChangesAsync();
-                return Results.Created($"/targets/database/{databaseConnection.Id}", databaseConnection);
+                return Results.Created($"/targets/database/{databaseTarget.Id}", databaseTarget);
             }
             else
             {
                 // Update existing database connection
                 var existingConnection = await dbContext.DatabaseTargets
-                    .FirstOrDefaultAsync(x => x.Id == databaseConnection.Id);
+                    .FirstOrDefaultAsync(x => x.Id == databaseTarget.Id);
 
                 if (existingConnection == null)
                 {
@@ -70,49 +70,49 @@ public static class DatabaseTargetEndpoints
                 }
 
                 // Update properties
-                existingConnection.HostName = databaseConnection.HostName;
-                existingConnection.Port = databaseConnection.Port;
-                existingConnection.UserName = databaseConnection.UserName;
-                existingConnection.Password = databaseConnection.Password;
-                existingConnection.Type = databaseConnection.Type;
+                existingConnection.HostName = databaseTarget.HostName;
+                existingConnection.Port = databaseTarget.Port;
+                existingConnection.UserName = databaseTarget.UserName;
+                existingConnection.Password = databaseTarget.Password;
+                existingConnection.Type = databaseTarget.Type;
 
                 await dbContext.SaveChangesAsync();
 
-                return Results.Ok(databaseConnection);
+                return Results.Ok(databaseTarget);
             }
         });
 
         // Delete a connection
-        group.MapDelete("/{databaseConnectionId:long}", async (HttpContext _,
-            IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
+        group.MapDelete("/{databaseTargetId:long}", async (HttpContext _,
+            IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseTargetId) =>
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-            var databaseConnection = await dbContext.DatabaseTargets
-                .FirstOrDefaultAsync(x => x.Id == databaseConnectionId);
-            if (databaseConnection == null)
+            var databaseTarget = await dbContext.DatabaseTargets
+                .FirstOrDefaultAsync(x => x.Id == databaseTargetId);
+            if (databaseTarget == null)
             {
                 return Results.NotFound();
             }
 
-            dbContext.DatabaseTargets.Remove(databaseConnection);
+            dbContext.DatabaseTargets.Remove(databaseTarget);
             await dbContext.SaveChangesAsync();
 
             return Results.NoContent();
         });
 
         // Scan a connections database
-        group.MapPost("/{databaseConnectionId:long}/scan", async (HttpContext _,
-            IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseConnectionId) =>
+        group.MapPost("/{databaseTargetId:long}/scan", async (HttpContext _,
+            IDbContextFactory<ScreamDbContext> dbContextFactory, long databaseTargetId) =>
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-            var databaseConnection = dbContext.DatabaseTargets.FirstOrDefault(c => c.Id == databaseConnectionId);
-            if (databaseConnection == null)
+            var databaseTarget = dbContext.DatabaseTargets.FirstOrDefault(c => c.Id == databaseTargetId);
+            if (databaseTarget == null)
             {
                 return Results.NotFound();
             }
 
             var big = new BackupItemGenerator();
-            var backupItems = await big.GetBackupItems(databaseConnection);
+            var backupItems = await big.GetBackupItems(databaseTarget);
 
             return Results.Ok(backupItems);
         });

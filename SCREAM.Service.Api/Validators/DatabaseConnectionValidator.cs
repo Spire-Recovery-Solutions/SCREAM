@@ -4,23 +4,23 @@ using MySqlConnector;
 
 namespace SCREAM.Service.Api.Validators;
 
-public static class DatabaseConnectionValidator
+public static class DatabaseTargetValidator
 {
-    public static bool Validate(DatabaseTarget databaseConnection)
+    public static bool Validate(DatabaseTarget databaseTarget)
     {
-        var validationContext = new ValidationContext(databaseConnection);
+        var validationContext = new ValidationContext(databaseTarget);
         var validationResults = new List<ValidationResult>();
-        var isValid = Validator.TryValidateObject(databaseConnection, validationContext, validationResults, true);
+        var isValid = Validator.TryValidateObject(databaseTarget, validationContext, validationResults, true);
 
-        return isValid && ValidateDatabaseConnectionProperties(databaseConnection);
+        return isValid && ValidateDatabaseTargetProperties(databaseTarget);
     }
 
-    private static bool ValidateDatabaseConnectionProperties(DatabaseTarget databaseConnection)
+    private static bool ValidateDatabaseTargetProperties(DatabaseTarget databaseTarget)
     {
-        return !string.IsNullOrEmpty(databaseConnection.HostName) &&
-               databaseConnection.Port > 0 &&
-               !string.IsNullOrEmpty(databaseConnection.UserName) &&
-               !string.IsNullOrEmpty(databaseConnection.Password);
+        return !string.IsNullOrEmpty(databaseTarget.HostName) &&
+               databaseTarget.Port > 0 &&
+               !string.IsNullOrEmpty(databaseTarget.UserName) &&
+               !string.IsNullOrEmpty(databaseTarget.Password);
     }
 
     public static bool ValidateConnectionString(string connectionString)
@@ -39,11 +39,11 @@ public static class DatabaseConnectionValidator
         }
     }
 
-    public static async Task<bool> TestDatabaseConnection(DatabaseTarget databaseConnection)
+    public static async Task<bool> TestDatabaseTarget(DatabaseTarget databaseTarget)
     {
         try
         {
-            await using var connection = new MySqlConnection(databaseConnection.ConnectionString);
+            await using var connection = new MySqlConnection(databaseTarget.ConnectionString);
             await connection.OpenAsync();
             return true;
         }

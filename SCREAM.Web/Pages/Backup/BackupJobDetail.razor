@@ -204,8 +204,8 @@ else
     [Parameter] public long JobId { get; set; }
 
     private BackupJob? _job;
-    private List<BackupItemStatusViewModel> _itemStatuses = new();
-    private List<BackupJobLogViewModel> _jobLogs = new();
+    private List<BackupItemStatusViewModel> _itemStatuses = [];
+    private List<BackupJobLogViewModel> _jobLogs = [];
     private bool _loading = true;
     private string _searchString = "";
     private float _overallProgress = 0;

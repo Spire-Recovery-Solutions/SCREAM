@@ -209,8 +209,8 @@ else
     [Parameter] public long JobId { get; set; }
 
     private RestoreJob? _job;
-    private List<RestoreItemStatusViewModel> _itemStatuses = new();
-    private List<RestoreJobLogViewModel> _jobLogs = new();
+    private List<RestoreItemStatusViewModel> _itemStatuses = [];
+    private List<RestoreJobLogViewModel> _jobLogs = [];
     private bool _loading = true;
     private string _searchString = "";
     private float _overallProgress = 0;

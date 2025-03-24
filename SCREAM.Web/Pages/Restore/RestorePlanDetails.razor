@@ -166,16 +166,16 @@
         };
 
     private HttpClient _httpClient;
-    private List<DatabaseTarget> _databaseConnections = new();
-    private List<BackupPlan> _backupPlans = new();
+    private List<DatabaseTarget> _databaseConnections = [];
+    private List<BackupPlan> _backupPlans = [];
 
     protected override async Task OnInitializedAsync()
     {
         _httpClient = ClientFactory.CreateClient("SCREAM");
 
         // Load database connections and backup plans from API endpoints.
-        _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseTarget>>("/targets/database") ?? new();
-        _backupPlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("/plans/backup") ?? new();
+        _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseTarget>>("targets/database") ?? [];
+        _backupPlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("plans/backup") ?? [];
 
         // If editing an existing restore plan, load it (using fake data if API is not available)
         if (Id is > 0)
@@ -233,7 +233,7 @@
             return;
         }
 
-        var response = await _httpClient.GetAsync($"backup-plans/{_restorePlan.SourceBackupPlanId}");
+        var response = await _httpClient.GetAsync($"plans/backup/{_restorePlan.SourceBackupPlanId}");
         if (response.IsSuccessStatusCode)
         {
             var backupPlan = await response.Content.ReadFromJsonAsync<BackupPlan>();

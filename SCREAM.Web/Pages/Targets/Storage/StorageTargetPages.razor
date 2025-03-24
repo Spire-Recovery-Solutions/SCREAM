@@ -52,7 +52,7 @@
 </MudTable>
 
 @code {
-    private List<StorageTarget> _storageTargets = new();
+    private List<StorageTarget> _storageTargets = [];
     private HttpClient _httpClient;
     private JsonSerializerOptions _jsonOptions;
     private bool _isLoading = false;
@@ -74,8 +74,8 @@
         try
         {
             _isLoading = true;
-            _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("storage", _jsonOptions)
-                               ?? new List<StorageTarget>();
+            _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("targets/storage", _jsonOptions)
+                               ?? [];
         }
         catch (Exception ex)
         {
@@ -113,7 +113,7 @@
         {
             try
             {
-                var response = await _httpClient.DeleteAsync($"storage/{target.Id}");
+                var response = await _httpClient.DeleteAsync($"targets/storage/{target.Id}");
                 if (response.IsSuccessStatusCode)
                 {
                     _storageTargets.Remove(target);

@@ -175,8 +175,8 @@
 
     private bool _isScanning;
     private HttpClient _httpClient;
-    private List<DatabaseTarget> _databaseTargets = new();
-    private List<StorageTarget> _storageTargets = new();
+    private List<DatabaseTarget> _databaseTargets = [];
+    private List<StorageTarget> _storageTargets = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -184,12 +184,12 @@
 
         try
         {
-            _databaseTargets = await _httpClient.GetFromJsonAsync<List<DatabaseTarget>>("/targets/database") ?? new();
-            _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("/targets/storage") ?? new();
+            _databaseTargets = await _httpClient.GetFromJsonAsync<List<DatabaseTarget>>("targets/database") ?? [];
+            _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("targets/storage") ?? [];
 
             if (Id is > 0)
             {
-                var plan = await _httpClient.GetFromJsonAsync<BackupPlan>($"/plans/backup/{Id.Value}");
+                var plan = await _httpClient.GetFromJsonAsync<BackupPlan>($"plans/backup/{Id.Value}");
                 if (plan != null)
                 {
                     _backupPlan = plan;
@@ -206,7 +206,7 @@
     {
         if (_backupPlan.DatabaseTargetId == 0) return;
 
-        HashSet<string> selectedKeys = new();
+        HashSet<string> selectedKeys = [];
         if (_backupPlan.Items.Count > 0)
         {
             var parameters = new DialogParameters
@@ -231,7 +231,7 @@
 
         try
         {
-            var response = await _httpClient.PostAsync($"connections/{_backupPlan.DatabaseTargetId}/scan", null);
+            var response = await _httpClient.PostAsync($"targets/database/{_backupPlan.DatabaseTargetId}/scan", null);
             response.EnsureSuccessStatusCode();
 
             var newItems = await response.Content.ReadFromJsonAsync<List<BackupItem>>();
@@ -274,12 +274,12 @@
                 ScheduleType = _backupPlan.ScheduleType,
                 ScheduleCron = _backupPlan.ScheduleCron,
                 IsActive = _backupPlan.IsActive,
-                Items = _backupPlan.Items?.Where(i => i.IsSelected).ToList() ?? new List<BackupItem>()
+                Items = _backupPlan.Items?.Where(i => i.IsSelected).ToList() ?? []
             };
 
         try
         {
-            HttpResponseMessage response = await _httpClient.PostAsJsonAsync("/plans/backup", planToSave);
+            HttpResponseMessage response = await _httpClient.PostAsJsonAsync("plans/backup", planToSave);
 
             if (response.IsSuccessStatusCode)
             {

@@ -54,7 +54,7 @@
 </MudTable>
 
 @code {
-    private List<DatabaseTarget> _connections = new();
+    private List<DatabaseTarget> _connections = [];
     private HttpClient _httpClient;
     private bool _isLoading = true;
     private JsonSerializerOptions _jsonOptions;
@@ -97,7 +97,7 @@
         {
             try
             {
-                var response = await _httpClient.DeleteAsync($"/targets/database/{connection.Id}");
+                var response = await _httpClient.DeleteAsync($"targets/database/{connection.Id}");
                 response.EnsureSuccessStatusCode();
                 _connections.Remove(connection);
                 Snackbar.Add("Database connection deleted successfully.", Severity.Success);
@@ -116,14 +116,14 @@
 
         try
         {
-            var connections = await _httpClient.GetFromJsonAsync<List<DatabaseTarget>>("/targets/database", _jsonOptions);
-            _connections = connections ?? new List<DatabaseTarget>();
+            var connections = await _httpClient.GetFromJsonAsync<List<DatabaseTarget>>("targets/database", _jsonOptions);
+            _connections = connections ?? [];
             Snackbar.Add("Connections refreshed.", Severity.Info);
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Error fetching connections: {ex.Message}", Severity.Error);
-            _connections = new List<DatabaseTarget>();
+            _connections = [];
         }
         finally
         {
