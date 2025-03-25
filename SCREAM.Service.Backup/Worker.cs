@@ -1,198 +1,104 @@
-using Microsoft.EntityFrameworkCore;
-using SCREAM.Data;
 using SCREAM.Data.Entities.Backup;
-using SCREAM.Data.Entities.Restore;
-using SCREAM.Data.Enums;
+using System.Net.Http.Json;
 
 namespace SCREAM.Service.Backup;
 
-public class Worker(ILogger<Worker> logger, IDbContextFactory<ScreamDbContext> dbContextFactory) : BackgroundService
+public class Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory) : BackgroundService
 {
-    //TODO: This needs to communicate with the API locally to handle all database operations
+    private readonly ILogger<Worker> _logger = logger;
+    private readonly HttpClient _httpClient = httpClientFactory.CreateClient("SCREAM");
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            if (logger.IsEnabled(LogLevel.Information))
+            if (_logger.IsEnabled(LogLevel.Information))
             {
-                logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+                _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
             }
 
-            //TODO: 
-            // 1. Check for BackupPlans that need BackupJobs created
+            // Use API calls instead of direct DbContext usage.
             await GenerateBackupJobs();
-            // 2. Check for BackupJobs that need to be executed
-            // 3. Check for BackupJobs that need to be retried
-            // 4. Check for BackupJobs that need to be cancelled
-            await ProcessCompletedBackupJobs();
-            await GenerateRestoreJobs();
+
             await Task.Delay(1000, stoppingToken);
         }
     }
 
     private async Task GenerateBackupJobs()
     {
-        await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-
-        // Get all active BackupPlans that have a schedule with NextRun == null
-        var backupPlans = await dbContext.BackupPlans
-            .Include(i => i.Jobs)
-            .Where(w => w.IsActive && w.NextRun == null)
-            .ToListAsync();
-
-        foreach (var backupPlan in backupPlans)
+        try
         {
-            if (backupPlan.Jobs.Any(a => a.Status is >= TaskStatus.Created and < TaskStatus.RanToCompletion))
+            // Get all backup plans via the API.
+            var backupPlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("plans/backup");
+            if (backupPlans is null)
             {
-                // If there are any jobs that are already created or running, skip this backup plan
-                continue;
-            }
-            //TODO: Check for retries on the Faulted jobs
-            // var faultedJobs = backupPlan.Jobs.Where(w => w.Status == TaskStatus.Faulted).ToList();
-            // if (faultedJobs.Any())
-            // {
-            //     foreach (var faultedJob in faultedJobs)
-            //     {
-            //         // Check if the job can be retried
-            //         if (faultedJob.RetryCount < 3)
-            //         {
-            //             faultedJob.RetryCount++;
-            //             dbContext.BackupJobs.Update(faultedJob);
-            //         }
-            //         else
-            //         {
-            //             // If the job has reached the max retry count, mark it as cancelled
-            //             faultedJob.Status = TaskStatus.Canceled;
-            //             dbContext.BackupJobs.Update(faultedJob);
-            //         }
-            //     }
-            // }
-
-            // Calculate NextRun 
-            var nextRun = backupPlan.GetNextRun(DateTime.UtcNow);
-            if (nextRun != null)
-            {
-                backupPlan.NextRun = nextRun;
-                dbContext.BackupPlans.Update(backupPlan);
-                await dbContext.SaveChangesAsync();
+                _logger.LogWarning("No backup plans found from API.");
+                return;
             }
 
-            // Create BackupJob
-            var backupJob = new BackupJob
+            // Filter for active backup plans with NextRun == null.
+            foreach (var backupPlan in backupPlans.Where(bp => bp.IsActive && bp.NextRun == null))
             {
-                BackupPlan = backupPlan,
-                Status = TaskStatus.Created,
-                StartedAt = default,
-                CompletedAt = null
-            };
-            dbContext.BackupJobs.Add(backupJob);
-            await dbContext.SaveChangesAsync();
-        }
-    }
-    private async Task ProcessCompletedBackupJobs()
-    {
-        await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-
-        var completedJobs = await dbContext.BackupJobs
-            .Include(j => j.BackupPlan)
-            .ThenInclude(p => p.Items)
-            .Where(j => j.Status == TaskStatus.RanToCompletion && !j.HasTriggeredRestore)
-            .ToListAsync();
-
-        foreach (var backupJob in completedJobs)
-        {
-            var restorePlans = await dbContext.RestorePlans
-                .Include(r => r.Items)
-                .Where(r => r.SourceBackupPlanId == backupJob.BackupPlan.Id &&
-                          r.ScheduleType == ScheduleType.Triggered)
-                .ToListAsync();
-
-            foreach (var restorePlan in restorePlans)
-            {
-                var restoreJob = new RestoreJob
+                // Check if there are any jobs that are already created or running.
+                if (backupPlan.Jobs != null && backupPlan.Jobs.Any(job => job.Status >= TaskStatus.Created && job.Status < TaskStatus.RanToCompletion))
                 {
-                    RestorePlanId = restorePlan.Id,
-                    Status = TaskStatus.Created,
-                    StartedAt = DateTime.UtcNow,
-                    RestoreItems = new List<RestoreItem>()
-                };
+                    continue;
+                }
+                //TODO: Check for retries on the Faulted jobs
+                // var faultedJobs = backupPlan.Jobs.Where(w => w.Status == TaskStatus.Faulted).ToList();
+                // if (faultedJobs.Any())
+                // {
+                //     foreach (var faultedJob in faultedJobs)
+                //     {
+                //         // Check if the job can be retried
+                //         if (faultedJob.RetryCount < 3)
+                //         {
+                //             faultedJob.RetryCount++;
+                //             dbContext.BackupJobs.Update(faultedJob);
+                //         }
+                //         else
+                //         {
+                //             // If the job has reached the max retry count, mark it as cancelled
+                //             faultedJob.Status = TaskStatus.Canceled;
+                //             dbContext.BackupJobs.Update(faultedJob);
+                //         }
+                //     }
+                // }
 
-                foreach (var backupItem in restorePlan.Items)
+                // Calculate NextRun
+                var nextRun = backupPlan.GetNextRun(DateTime.UtcNow);
+                if (nextRun != null)
                 {
-                    restoreJob.RestoreItems.Add(new RestoreItem
+                    backupPlan.NextRun = nextRun;
+                    // Update the backup plan via API (assumes a PUT endpoint exists).
+                    var responseback = await _httpClient.PostAsJsonAsync("plans/backup", backupPlan);
+                    if (responseback.IsSuccessStatusCode)
                     {
-                        DatabaseItemId = backupItem.DatabaseItemId,
-                        Status = TaskStatus.Created,
-                        RetryCount = 0
-                    });
+                        _logger.LogInformation("Backup plan {BackupPlanId} updated with NextRun {NextRun}", backupPlan.Id, backupPlan.NextRun);
+                    }
+                    else
+                    {
+                        var error = await responseback.Content.ReadAsStringAsync();
+                        _logger.LogError("Error updating backup plan {BackupPlanId}: {Error}", backupPlan.Id, error);
+                    }
                 }
 
-                dbContext.RestoreJobs.Add(restoreJob);
+                // Create a new BackupJob by calling the API endpoint.
+                var response = await _httpClient.PostAsync($"jobs/backup/{backupPlan.Id}/run", null);
+                if (response.IsSuccessStatusCode)
+                {
+                    _logger.LogInformation("Created backup job for plan {PlanId}", backupPlan.Id);
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Failed to create backup job for plan {PlanId}: {Error}", backupPlan.Id, error);
+                }
             }
-
-            backupJob.HasTriggeredRestore = true;
         }
-
-        await dbContext.SaveChangesAsync();
-    }
-    private async Task GenerateRestoreJobs()
-    {
-        await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-
-        var restorePlans = await dbContext.RestorePlans
-            .Include(r => r.Jobs)
-            .Where(r =>
-                r.IsActive &&
-                r.ScheduleType != ScheduleType.Triggered &&
-                r.NextRun == null
-            )
-            .ToListAsync();
-
-        foreach (var restorePlan in restorePlans)
+        catch (Exception ex)
         {
-            // Skip if there are active jobs (Created, Running, etc.)
-            if (restorePlan.Jobs.Any(j => j.Status is >= TaskStatus.Created and < TaskStatus.RanToCompletion))
-            {
-                continue;
-            }
-
-            // TODO: Uncomment to implement retry logic for failed jobs
-            // var faultedJobs = restorePlan.Jobs.Where(j => j.Status == TaskStatus.Faulted).ToList();
-            // if (faultedJobs.Any())
-            // {
-            //     foreach (var job in faultedJobs)
-            //     {
-            //         if (job.RetryCount < 3)
-            //         {
-            //             job.RetryCount++;
-            //             dbContext.RestoreJobs.Update(job);
-            //         }
-            //         else
-            //         {
-            //             job.Status = TaskStatus.Canceled;
-            //             dbContext.RestoreJobs.Update(job);
-            //         }
-            //     }
-            // }
-
-            var nextRun = restorePlan.GetNextRun(DateTime.UtcNow);
-            if (nextRun != null)
-            {
-                restorePlan.NextRun = nextRun;
-                dbContext.RestorePlans.Update(restorePlan);
-                await dbContext.SaveChangesAsync();
-            }
-
-            var restoreJob = new RestoreJob
-            {
-                RestorePlan = restorePlan,
-                Status = TaskStatus.Created,
-                StartedAt = default,
-                CompletedAt = null
-            };
-            dbContext.RestoreJobs.Add(restoreJob);
-            await dbContext.SaveChangesAsync();
+            _logger.LogError(ex, "Error generating backup jobs via API.");
         }
     }
 }

@@ -8,6 +8,7 @@
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IHttpClientFactory ClientFactory
 
 <MudText Align="Align.Center" Typo="Typo.h4" Class="mb-4">Backup Jobs</MudText>
 
@@ -82,15 +83,18 @@
 </MudTable>
 
 @code {
-    private List<BackupJobViewModel> _backupJobs = [];
+    private List<BackupJobViewModel> _backupJobs = new();
     private bool _loading = true;
     private string _searchString = "";
     private BackupJobViewModel? _selectedJob;
     private System.Timers.Timer? _refreshTimer;
+    private HttpClient _httpClient;
 
     protected override async Task OnInitializedAsync()
     {
-        _refreshTimer = new System.Timers.Timer(15000); // refresh every 15 seconds
+        _httpClient = ClientFactory.CreateClient("SCREAM");
+
+        _refreshTimer = new System.Timers.Timer(15000);
         _refreshTimer.Elapsed += async (sender, e) => await InvokeAsync(async () => await RefreshRunningJobs());
         _refreshTimer.Start();
 
@@ -104,23 +108,31 @@
 
         try
         {
-            // var jobs = await BackupJobService.GetAllJobsAsync();
-            var jobs = await GetAllJobsAsync();
+            var jobs = await _httpClient.GetFromJsonAsync<List<BackupJob>>("jobs/backup");
+            var plans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("plans/backup");
+            var planDict = plans?.ToDictionary(p => p.Id, p => p) ?? new Dictionary<long, BackupPlan>();
 
-            _backupJobs = jobs
-                .OrderByDescending(j => GetStatusPriority(j.Status))
-                .ThenByDescending(j => j.StartedAt)
-                .Select(j => new BackupJobViewModel
-                    {
-                        Id = j.Id,
-                        PlanId = j.BackupPlanId,
-                        PlanName = j.BackupPlan.Name,
-                        Status = j.Status,
-                        StartedAt = j.StartedAt,
-                        CompletedAt = j.CompletedAt,
-                        ProgressPercentage = CalculateProgress(j)
-                    })
-                .ToList();
+            if (jobs is null)
+            {
+                _backupJobs = new List<BackupJobViewModel>();
+            }
+            else
+            {
+                _backupJobs = jobs
+                    .OrderByDescending(j => GetStatusPriority(j.Status))
+                    .ThenByDescending(j => j.StartedAt)
+                    .Select(j => new BackupJobViewModel
+                        {
+                            Id = j.Id,
+                            PlanId = j.BackupPlanId,
+                            PlanName = planDict.ContainsKey(j.BackupPlanId) ? planDict[j.BackupPlanId].Name : "N/A",
+                            Status = j.Status,
+                            StartedAt = j.StartedAt,
+                            CompletedAt = j.CompletedAt,
+                            ProgressPercentage = CalculateProgress(j)
+                        })
+                    .ToList();
+            }
         }
         catch (Exception ex)
         {
@@ -131,52 +143,6 @@
             _loading = false;
             StateHasChanged();
         }
-    }
-
-    public Task<List<BackupJob>> GetAllJobsAsync()
-    {
-        var plan = new BackupPlan
-            {
-                Id = 1,
-                Name = "Daily Database Backup",
-                Description = "Automated daily backup of production database",
-                DatabaseTarget = new DatabaseTarget
-                {
-                    Id = 1,
-                    HostName = "prod-db-server.example.com",
-                    UserName = "admin",
-                    Password = "******",
-                    Port = 3306,
-                    Type = DatabaseType.MySQL
-                },
-                StorageTarget = new LocalStorageTarget
-                {
-                    Id = 1,
-                    Name = "Local Disk",
-                    Path = "/backups",
-                    Type = StorageTargetType.Local
-                },
-                ScheduleCron = "0 0 * * *",
-                ScheduleType = ScheduleType.Repeating,
-                LastRun = DateTime.Now.AddHours(-1),
-                NextRun = DateTime.Now.AddHours(1),
-                Items = new List<BackupItem>()
-            };
-
-        var _job = new List<BackupJob>
-        {
-            new()
-            {
-                Id = 1,
-                BackupPlanId = plan.Id,
-                BackupPlan = plan,
-                Status = TaskStatus.Running,
-                StartedAt = DateTime.Now.AddMinutes(-35),
-                CompletedAt = null
-            }
-        };
-
-        return Task.FromResult(_job);
     }
 
     private async Task RefreshRunningJobs()
@@ -213,9 +179,17 @@
         {
             try
             {
-                // await BackupJobService.RetryJobAsync(jobId);
-                Snackbar.Add("Backup job retry initiated", Severity.Success);
-                await RefreshData();
+                var retryResponse = await _httpClient.PostAsync($"jobs/backup/{jobId}/retry", null);
+                if (retryResponse.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Backup job retry initiated", Severity.Success);
+                    await RefreshData();
+                }
+                else
+                {
+                    var error = await retryResponse.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Error retrying backup job: {error}", Severity.Error);
+                }
             }
             catch (Exception ex)
             {
@@ -224,7 +198,6 @@
         }
     }
 
-    // Filter function for the search box
     private bool FilterFunc(BackupJobViewModel job)
     {
         if (string.IsNullOrWhiteSpace(_searchString))

@@ -16,21 +16,16 @@ public static class RestoreJobEndpoints
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
             var restoreJobs = await dbContext.RestoreJobs
-                .Include(job => job.RestorePlan)
                 .OrderByDescending(job => job.StartedAt)
                 .ToListAsync();
             return Results.Ok(restoreJobs);
         });
 
         // Get a restore job by id
-        group.MapGet("/{jobId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory, long jobId) =>
+         group.MapGet("/{jobId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory, long jobId) =>
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
             var restoreJob = await dbContext.RestoreJobs
-                .Include(job => job.RestorePlan)
-                .ThenInclude(plan => plan.DatabaseTarget)
-                .Include(job => job.RestorePlan)
-                .ThenInclude(plan => plan.SourceBackupPlan)
                 .Include(job => job.RestoreItems)
                 .ThenInclude(item => item.DatabaseItem)
                 .FirstOrDefaultAsync(job => job.Id == jobId);
@@ -69,7 +64,6 @@ public static class RestoreJobEndpoints
             var restoreJob = new RestoreJob
             {
                 RestorePlanId = restorePlanId,
-                RestorePlan = restorePlan,
                 Status = TaskStatus.Created,
                 StartedAt = DateTime.UtcNow,
                 CompletedAt = null,

@@ -14,30 +14,25 @@ public static class BackupJobEndpoints
         // Get all backup jobs
         group.MapGet("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
         {
-            await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-            var backupJobs = await dbContext.BackupJobs
-                .Include(job => job.BackupPlan)
-                .OrderByDescending(job => job.StartedAt)
-                .ToListAsync();
-            return Results.Ok(backupJobs);
-        });
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var backupJobs = await dbContext.BackupJobs
+        .OrderByDescending(job => job.StartedAt)
+        .ToListAsync();
+    return Results.Ok(backupJobs);
+});
 
         // Get a backup job by id
         group.MapGet("/{jobId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory, long jobId) =>
-        {
-            await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-            var backupJob = await dbContext.BackupJobs
-                .Include(job => job.BackupPlan)
-                .ThenInclude(plan => plan.DatabaseTarget)
-                .Include(job => job.BackupPlan)
-                .ThenInclude(plan => plan.StorageTarget)
-                .Include(job => job.BackupItemStatuses)
-                .ThenInclude(status => status.BackupItem)
-                .ThenInclude(item => item.DatabaseItem)
-                .FirstOrDefaultAsync(job => job.Id == jobId);
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var backupJob = await dbContext.BackupJobs
+        .Include(job => job.BackupItemStatuses)
+        .ThenInclude(status => status.BackupItem)
+        .ThenInclude(item => item.DatabaseItem)
+        .FirstOrDefaultAsync(job => job.Id == jobId);
 
-            return backupJob == null ? Results.NotFound() : Results.Ok(backupJob);
-        });
+    return backupJob == null ? Results.NotFound() : Results.Ok(backupJob);
+});
 
         // Get logs for a backup job
         group.MapGet("/{jobId:long}/logs", async (IDbContextFactory<ScreamDbContext> dbContextFactory, long jobId) =>
@@ -70,7 +65,6 @@ public static class BackupJobEndpoints
             var backupJob = new BackupJob
             {
                 BackupPlanId = backupPlanId,
-                BackupPlan = backupPlan,
                 Status = TaskStatus.Created,
                 StartedAt = DateTime.UtcNow,
                 CompletedAt = null,

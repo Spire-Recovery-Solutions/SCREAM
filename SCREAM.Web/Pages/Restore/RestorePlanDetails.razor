@@ -167,61 +167,27 @@
         };
 
     private HttpClient _httpClient;
-    private List<DatabaseTarget> _databaseConnections = [];
-    private List<BackupPlan> _backupPlans = [];
+    private List<DatabaseTarget> _databaseConnections = new();
+    private List<BackupPlan> _backupPlans = new();
 
     protected override async Task OnInitializedAsync()
     {
         _httpClient = ClientFactory.CreateClient("SCREAM");
 
-        // Load database connections and backup plans from API endpoints.
-        _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseTarget>>("targets/database") ?? [];
-        _backupPlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("plans/backup") ?? [];
+        _databaseConnections = await _httpClient.GetFromJsonAsync<List<DatabaseTarget>>("targets/database") ?? new();
+        _backupPlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("plans/backup") ?? new();
 
-        // If editing an existing restore plan, load it (using fake data if API is not available)
         if (Id is > 0)
         {
-            _restorePlan = new RestorePlan
-                {
-                    Id = Id.Value,
-                    Name = "Sample Restore Plan",
-                    Description = "Restores production DB daily",
-                    DatabaseTargetId = _databaseConnections.FirstOrDefault()?.Id ?? 0,
-                    DatabaseTarget = _databaseConnections.FirstOrDefault(),
-                    SourceBackupPlanId = _backupPlans.FirstOrDefault()?.Id ?? 0,
-                    SourceBackupPlan = _backupPlans.FirstOrDefault(),
-                    ScheduleCron = "0 0 * * *",
-                    ScheduleType = ScheduleType.Repeating,
-                    LastRun = DateTime.UtcNow.AddDays(-1),
-                    NextRun = DateTime.UtcNow.AddHours(5),
-                    IsActive = true,
-                    OverwriteExisting = false,
-                    Items = new List<BackupItem>
-                {
-                    new BackupItem
-                    {
-                        IsSelected = true,
-                        DatabaseItemId = 1,
-                        DatabaseItem = new DatabaseTableStructureItems
-                        {
-                            Schema = "dbo",
-                            Name = "Customers",
-                            Type = DatabaseItemType.TableStructure
-                        }
-                    },
-                    new BackupItem
-                    {
-                        IsSelected = false,
-                        DatabaseItemId = 2,
-                        DatabaseItem = new DatabaseTableDataItems
-                        {
-                            Schema = "dbo",
-                            Name = "Orders",
-                            Type = DatabaseItemType.TableData
-                        }
-                    }
-                }
-                };
+            var planFromApi = await _httpClient.GetFromJsonAsync<RestorePlan>($"plans/restore/{Id.Value}");
+            if (planFromApi != null)
+            {
+                _restorePlan = planFromApi;
+            }
+            else
+            {
+                Snackbar.Add("Restore plan not found.", Severity.Error);
+            }
         }
     }
 
@@ -233,22 +199,54 @@
             return;
         }
 
-        var response = await _httpClient.GetAsync($"plans/backup/{_restorePlan.SourceBackupPlanId}");
-        if (response.IsSuccessStatusCode)
+        HashSet<string> selectedKeys = new();
+        if (_restorePlan.Items.Count > 0)
         {
-            var backupPlan = await response.Content.ReadFromJsonAsync<BackupPlan>();
-            if (backupPlan?.Items != null)
+            selectedKeys = _restorePlan.Items
+                .Where(i => i.IsSelected)
+                .Select(i => $"{i.DatabaseItem.Type}:{i.DatabaseItem.Schema}:{i.DatabaseItem.Name}")
+                .ToHashSet();
+        }
+
+        try
+        {
+            var response = await _httpClient.GetAsync($"plans/backup/{_restorePlan.SourceBackupPlanId}");
+            if (response.IsSuccessStatusCode)
             {
-                _restorePlan.Items = backupPlan.Items;
-                Snackbar.Add("Backup items loaded successfully from API.", Severity.Success);
+                var backupPlan = await response.Content.ReadFromJsonAsync<BackupPlan>();
+                if (backupPlan?.Items != null)
+                {
+                    var newItems = backupPlan.Items;
+                    foreach (var item in newItems)
+                    {
+                        string key = $"{item.DatabaseItem.Type}:{item.DatabaseItem.Schema}:{item.DatabaseItem.Name}";
+                        item.IsSelected = _restorePlan.Items.Count == 0 || selectedKeys.Contains(key);
+                    }
+
+                    _restorePlan.Items = newItems;
+                    Snackbar.Add("Backup items loaded successfully from API.", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add("No backup items found in the API response.", Severity.Warning);
+                }
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Error scanning backup items from API: {error}", Severity.Error);
             }
         }
-        else
+        catch (Exception ex)
         {
-            Snackbar.Add("Error scanning backup items from API.", Severity.Error);
+            Snackbar.Add($"Error scanning backup items: {ex.Message}", Severity.Error);
         }
-        StateHasChanged();
+        finally
+        {
+            StateHasChanged();
+        }
     }
+
 
     private async Task SavePlan()
     {
@@ -284,8 +282,7 @@
             var parameters = new DialogParameters
             {
                 { "Message", "Saving restore plan. Please wait..." },
-                { "Title", "Saving Restore Plan. "}
-
+                { "Title", "Saving Restore Plan" }
             };
             dialog = await DialogService.ShowAsync<SavingProgressDialog>("Saving Restore Plan", parameters, options);
             HttpResponseMessage response = await _httpClient.PostAsJsonAsync("plans/restore", planToSave);
