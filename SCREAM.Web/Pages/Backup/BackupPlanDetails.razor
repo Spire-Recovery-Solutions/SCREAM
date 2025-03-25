@@ -4,6 +4,7 @@
 @using SCREAM.Data.Entities.Backup.BackupItems
 @using SCREAM.Data.Entities.StorageTargets
 @using SCREAM.Data.Enums
+@using SCREAM.Web.Pages.Backup.Dialogs
 @inject ISnackbar Snackbar
 @inject IHttpClientFactory ClientFactory
 @inject IDialogService DialogService
@@ -12,7 +13,7 @@
 <MudCard Elevation="3" Class="mb-4">
     <MudCardHeader>
         <CardHeaderContent>
-            <MudText Typo="Typo.h5">@(Id.HasValue ? "Edit" : "Create") Backup Plan</MudText>
+            <MudText Typo="Typo.h5">@(Id is > 0 ? "Edit" : "Create") Backup Plan</MudText>
         </CardHeaderContent>
     </MudCardHeader>
 
@@ -277,13 +278,29 @@
                 Items = _backupPlan.Items?.Where(i => i.IsSelected).ToList() ?? []
             };
 
+        IDialogReference dialog = null;
         try
         {
+            var options = new DialogOptions
+                {
+                    CloseOnEscapeKey = false,
+                    BackgroundClass = "my-custom-class",
+                    BackdropClick = false,
+                    FullWidth = true,
+                    MaxWidth = MaxWidth.Small
+                };
+
+            var parameters = new DialogParameters
+            {
+                { "Message", "Saving backup plan. Please wait..." }
+            };
+            dialog = await DialogService.ShowAsync<SavingProgressDialog>("Saving Backup Plan", parameters, options);
+
             HttpResponseMessage response = await _httpClient.PostAsJsonAsync("plans/backup", planToSave);
 
             if (response.IsSuccessStatusCode)
             {
-                Snackbar.Add($"Backup plan {(Id.HasValue ? "updated" : "created")} successfully", Severity.Success);
+                Snackbar.Add($"Backup plan {(Id is > 0 ? "updated" : "created")} successfully", Severity.Success);
                 NavigationManager.NavigateTo("/plans/backup");
             }
             else
@@ -295,6 +312,10 @@
         catch (Exception ex)
         {
             Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            dialog?.Close();
         }
     }
 }

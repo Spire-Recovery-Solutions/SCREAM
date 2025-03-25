@@ -1,0 +1,22 @@
+﻿@using MudBlazor
+
+<MudDialog Class="pa-4">
+    <DialogContent>
+        <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Spacing="4">
+            <MudProgressCircular Size=Size.Medium
+                                 Indeterminate="true"
+                                 Color="Color.Primary" />
+            <MudText Typo="Typo.h6" Class="text-center">
+                @Title
+            </MudText>
+            <MudText Typo="Typo.body1" Class="text-center">
+                @Message
+            </MudText>
+        </MudStack>
+    </DialogContent>
+</MudDialog>
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+    [Parameter] public string Title { get; set; } = "Saving Backup Plan";
+    [Parameter] public string Message { get; set; } = "Please wait while we save your backup plan...";
+}
