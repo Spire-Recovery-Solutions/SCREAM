@@ -15,7 +15,7 @@
 <MudCard Elevation="3" Class="mb-4">
     <MudCardHeader>
         <CardHeaderContent>
-            <MudText Typo="Typo.h5">@(Id.HasValue ? "Edit" : "Create") Restore Plan</MudText>
+            <MudText Typo="Typo.h5">@(Id is > 0 ? "Edit" : "Create") Restore Plan</MudText>
         </CardHeaderContent>
     </MudCardHeader>
 
@@ -103,7 +103,7 @@
                                               HelperText="e.g., '0 0 * * *' for daily at midnight" />
                             </MudItem>
                         }
-                        @if (Id.HasValue)
+                        @if (Id is > 0)
                         {
                             <MudItem xs="12" md="6">
                                 <MudSwitch T="bool" @bind-Value="_restorePlan.IsActive"
@@ -291,7 +291,7 @@
             HttpResponseMessage response = await _httpClient.PostAsJsonAsync("plans/restore", planToSave);
             if (response.IsSuccessStatusCode)
             {
-                Snackbar.Add($"Restore plan {(Id.HasValue ? "updated" : "created")} successfully", Severity.Success);
+                Snackbar.Add($"Restore plan {(Id is > 0 ? "updated" : "created")} successfully", Severity.Success);
                 NavigationManager.NavigateTo("/plans/restore");
             }
             else

@@ -13,7 +13,7 @@
 <MudCard Elevation="3" Class="mb-4">
     <MudCardHeader>
         <CardHeaderContent>
-            <MudText Typo="Typo.h5">@(Id.HasValue ? "Edit" : "Create") Backup Plan</MudText>
+            <MudText Typo="Typo.h5">@(Id is > 0 ? "Edit" : "Create") Backup Plan</MudText>
         </CardHeaderContent>
     </MudCardHeader>
 
@@ -300,7 +300,7 @@
 
             if (response.IsSuccessStatusCode)
             {
-                Snackbar.Add($"Backup plan {(Id.HasValue ? "updated" : "created")} successfully", Severity.Success);
+                Snackbar.Add($"Backup plan {(Id is > 0 ? "updated" : "created")} successfully", Severity.Success);
                 NavigationManager.NavigateTo("/plans/backup");
             }
             else
