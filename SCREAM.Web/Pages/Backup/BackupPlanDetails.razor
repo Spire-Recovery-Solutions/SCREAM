@@ -4,6 +4,7 @@
 @using SCREAM.Data.Entities.Backup.BackupItems
 @using SCREAM.Data.Entities.StorageTargets
 @using SCREAM.Data.Enums
+@using SCREAM.Web.Pages.Backup.Dialogs
 @inject ISnackbar Snackbar
 @inject IHttpClientFactory ClientFactory
 @inject IDialogService DialogService
@@ -277,8 +278,24 @@
                 Items = _backupPlan.Items?.Where(i => i.IsSelected).ToList() ?? []
             };
 
+        IDialogReference dialog = null;
         try
         {
+            var options = new DialogOptions
+                {
+                    CloseOnEscapeKey = false,
+                    BackgroundClass = "my-custom-class",
+                    BackdropClick = false,
+                    FullWidth = true,
+                    MaxWidth = MaxWidth.Small
+                };
+
+            var parameters = new DialogParameters
+            {
+                { "Message", "Saving backup plan. Please wait..." }
+            };
+            dialog = await DialogService.ShowAsync<SavingProgressDialog>("Saving Backup Plan", parameters, options);
+
             HttpResponseMessage response = await _httpClient.PostAsJsonAsync("plans/backup", planToSave);
 
             if (response.IsSuccessStatusCode)
@@ -295,6 +312,10 @@
         catch (Exception ex)
         {
             Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            dialog?.Close();
         }
     }
 }
