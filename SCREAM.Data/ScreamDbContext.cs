@@ -259,7 +259,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             e.Property(p => p.IsEncrypted).HasDefaultValue(false);
 
             e.HasMany(j => j.RestoreItems)
-                .WithOne(i => i.RestoreJob)
+                .WithOne()
                 .HasForeignKey(i => i.RestoreJobId)
                 .OnDelete(DeleteBehavior.Cascade);
 

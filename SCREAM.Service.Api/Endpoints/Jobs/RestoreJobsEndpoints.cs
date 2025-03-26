@@ -22,16 +22,16 @@ public static class RestoreJobEndpoints
         });
 
         // Get a restore job by id
-         group.MapGet("/{jobId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory, long jobId) =>
-        {
-            await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-            var restoreJob = await dbContext.RestoreJobs
-                .Include(job => job.RestoreItems)
-                .ThenInclude(item => item.DatabaseItem)
-                .FirstOrDefaultAsync(job => job.Id == jobId);
+        group.MapGet("/{jobId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory, long jobId) =>
+       {
+           await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+           var restoreJob = await dbContext.RestoreJobs
+               .Include(job => job.RestoreItems)
+               .ThenInclude(item => item.DatabaseItem)
+               .FirstOrDefaultAsync(job => job.Id == jobId);
 
-            return restoreJob == null ? Results.NotFound() : Results.Ok(restoreJob);
-        });
+           return restoreJob == null ? Results.NotFound() : Results.Ok(restoreJob);
+       });
 
         // Get logs for a restore job
         group.MapGet("/{jobId:long}/logs", async (IDbContextFactory<ScreamDbContext> dbContextFactory, long jobId) =>
@@ -118,13 +118,14 @@ public static class RestoreJobEndpoints
             restoreItem.RetryCount += 1;
             restoreItem.ErrorMessage = null;
 
-            // If job was completed with failure, reset it to running
-            if (restoreItem.RestoreJob.Status == TaskStatus.Faulted)
-            {
-                restoreItem.RestoreJob.Status = TaskStatus.Running;
-                restoreItem.RestoreJob.CompletedAt = null;
-            }
+            var job = await dbContext.RestoreJobs
+                .FirstOrDefaultAsync(j => j.Id == restoreItem.RestoreJobId);
 
+            if (job != null && job.Status == TaskStatus.Faulted)
+            {
+                job.Status = TaskStatus.Running;
+                job.CompletedAt = null;
+            }
             await dbContext.SaveChangesAsync();
 
             // Add log entry

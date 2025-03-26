@@ -98,7 +98,9 @@ namespace SCREAM.Service.Restore
                 foreach (var restorePlan in eligiblePlans)
                 {
                     // Retrieve active restore jobs for this plan via a separate API call.
-                    var activeJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>($"jobs/restore?planId={restorePlan.Id}", stoppingToken);
+                    var activeJobs =
+                        await _httpClient.GetFromJsonAsync<List<RestoreJob>>($"jobs/restore?planId={restorePlan.Id}",
+                            stoppingToken);
 
 
                     if (activeJobs != null && activeJobs.Any(j =>
@@ -134,9 +136,6 @@ namespace SCREAM.Service.Restore
                         var response = await _httpClient.PostAsJsonAsync($"plans/restore/{restorePlan.Id}/run", new { },
                             stoppingToken);
 
-                        // Log full response details
-                        var responseContent = await response.Content.ReadAsStringAsync(stoppingToken);
-
                         if (response.IsSuccessStatusCode)
                         {
                             _logger.LogInformation("Created restore job for restore plan {RestorePlanId}",
@@ -144,10 +143,12 @@ namespace SCREAM.Service.Restore
                         }
                         else
                         {
+                            var responseContent = await response.Content.ReadAsStringAsync(stoppingToken);
                             _logger.LogError(
                                 "Failed to create restore job for plan {RestorePlanId}. Status: {StatusCode}, Content: {Content}",
                                 restorePlan.Id, response.StatusCode, responseContent);
                         }
+
                     }
                     catch (Exception ex)
                     {
