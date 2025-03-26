@@ -45,68 +45,6 @@ public static class RestoreJobEndpoints
             return Results.Ok(logs);
         });
 
-        // Run a restore plan
-        group.MapPost("/{restorePlanId:long}/run", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
-            long restorePlanId) =>
-        {
-            await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-            var restorePlan = await dbContext.RestorePlans
-                .Include(plan => plan.DatabaseTarget)
-                .Include(plan => plan.SourceBackupPlan)
-                .Include(plan => plan.Items)
-                .ThenInclude(item => item.DatabaseItem)
-                .FirstOrDefaultAsync(plan => plan.Id == restorePlanId);
-
-            if (restorePlan == null)
-                return Results.NotFound();
-
-            // Create a new restore job
-            var restoreJob = new RestoreJob
-            {
-                RestorePlanId = restorePlanId,
-                Status = TaskStatus.Created,
-                StartedAt = DateTime.UtcNow,
-                CompletedAt = null,
-                IsCompressed = false,
-                IsEncrypted = false,
-                RestoreItems = new List<RestoreItem>()
-            };
-
-            // Add restore items from the plan - only the selected items
-            foreach (var planItem in restorePlan.Items.Where(i => i.IsSelected))
-            {
-                restoreJob.RestoreItems.Add(new RestoreItem
-                {
-                    RestoreJobId = restoreJob.Id,
-                    RestoreJob = restoreJob,
-                    DatabaseItemId = planItem.DatabaseItemId,
-                    DatabaseItem = planItem.DatabaseItem,
-                    Status = TaskStatus.WaitingToRun,
-                    RetryCount = 0,
-                    StartedAt = null,
-                    CompletedAt = null
-                });
-            }
-
-            dbContext.RestoreJobs.Add(restoreJob);
-            await dbContext.SaveChangesAsync();
-
-            // Add initial log entry
-            var logEntry = new RestoreJobLog
-            {
-                RestoreJobId = restoreJob.Id,
-                Timestamp = DateTime.UtcNow,
-                Title = "Job Created",
-                Message = $"Restore job created for plan: {restorePlan.Name}",
-                Severity = LogLevel.Information
-            };
-
-            dbContext.RestoreJobLogs.Add(logEntry);
-            await dbContext.SaveChangesAsync();
-
-            return Results.Created($"/jobs/restore/{restoreJob.Id}", restoreJob);
-        });
-
         // Retry a failed restore job
         group.MapPost("/{jobId:long}/retry",
             async (IDbContextFactory<ScreamDbContext> dbContextFactory, long jobId) =>

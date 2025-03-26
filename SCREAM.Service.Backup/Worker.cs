@@ -18,29 +18,35 @@ public class Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory
             }
 
             // Use API calls instead of direct DbContext usage.
-            await GenerateBackupJobs();
+            await GenerateBackupJobs(stoppingToken);
 
             await Task.Delay(1000, stoppingToken);
         }
     }
 
-    private async Task GenerateBackupJobs()
+    private async Task GenerateBackupJobs(CancellationToken stoppingToken)
     {
         try
         {
-            // Get all backup plans via the API.
-            var backupPlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("plans/backup");
+            // Retrieve only active backup plans with NextRun == null from the API.
+            var backupPlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>(
+                "plans/backup?isActive=true&nextRunIsNull=true", stoppingToken);
             if (backupPlans is null)
             {
                 _logger.LogWarning("No backup plans found from API.");
                 return;
             }
 
-            // Filter for active backup plans with NextRun == null.
-            foreach (var backupPlan in backupPlans.Where(bp => bp.IsActive && bp.NextRun == null))
+
+            foreach (var backupPlan in backupPlans)
             {
+                // Retrieve active jobs for this backup plan via the API.
+                var activeJobs = await _httpClient.GetFromJsonAsync<List<BackupJob>>(
+                    $"jobs/backup?planId={backupPlan.Id}", stoppingToken);
+
                 // Check if there are any jobs that are already created or running.
-                if (backupPlan.Jobs != null && backupPlan.Jobs.Any(job => job.Status >= TaskStatus.Created && job.Status < TaskStatus.RanToCompletion))
+                if (activeJobs != null && activeJobs.Any(job => job.Status >= TaskStatus.Created
+                                                                && job.Status < TaskStatus.RanToCompletion))
                 {
                     continue;
                 }
@@ -70,28 +76,31 @@ public class Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory
                 if (nextRun != null)
                 {
                     backupPlan.NextRun = nextRun;
+
                     // Update the backup plan via API (assumes a PUT endpoint exists).
-                    var responseback = await _httpClient.PostAsJsonAsync("plans/backup", backupPlan);
-                    if (responseback.IsSuccessStatusCode)
+                    var responseBack = await _httpClient.PostAsJsonAsync("plans/backup", backupPlan, stoppingToken);
+                    if (responseBack.IsSuccessStatusCode)
                     {
-                        _logger.LogInformation("Backup plan {BackupPlanId} updated with NextRun {NextRun}", backupPlan.Id, backupPlan.NextRun);
+                        _logger.LogInformation("Backup plan {BackupPlanId} updated with NextRun {NextRun}",
+                            backupPlan.Id, backupPlan.NextRun);
                     }
                     else
                     {
-                        var error = await responseback.Content.ReadAsStringAsync();
+                        var error = await responseBack.Content.ReadAsStringAsync(stoppingToken);
                         _logger.LogError("Error updating backup plan {BackupPlanId}: {Error}", backupPlan.Id, error);
                     }
                 }
 
                 // Create a new BackupJob by calling the API endpoint.
-                var response = await _httpClient.PostAsync($"jobs/backup/{backupPlan.Id}/run", null);
+                var response = await _httpClient.PostAsync(
+                    $"plans/backup/{backupPlan.Id}/run", null, stoppingToken);
                 if (response.IsSuccessStatusCode)
                 {
                     _logger.LogInformation("Created backup job for plan {PlanId}", backupPlan.Id);
                 }
                 else
                 {
-                    var error = await response.Content.ReadAsStringAsync();
+                    var error = await response.Content.ReadAsStringAsync(stoppingToken);
                     _logger.LogError("Failed to create backup job for plan {PlanId}: {Error}", backupPlan.Id, error);
                 }
             }

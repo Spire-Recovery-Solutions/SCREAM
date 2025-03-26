@@ -1,6 +1,5 @@
 using SCREAM.Data.Entities.Backup;
 using SCREAM.Data.Entities.Restore;
-using SCREAM.Data.Enums;
 using System.Net.Http.Json;
 
 namespace SCREAM.Service.Restore
@@ -46,22 +45,22 @@ namespace SCREAM.Service.Restore
                 foreach (var backupJob in completedJobs)
                 {
                     // Retrieve all restore plans from the API.
-                    var restorePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>("plans/restore", stoppingToken);
+                    var restorePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>(
+                        $"plans/restore?sourceBackupPlanId={backupJob.BackupPlanId}&scheduleType=Triggered",
+                        stoppingToken);
                     if (restorePlans is null)
                         continue;
 
-                    // Find restore plans that are triggered by this backup job's plan.
-                    var matchingPlans = restorePlans.Where(r => r.SourceBackupPlanId == backupJob.BackupPlanId &&
-                    r.ScheduleType == ScheduleType.Triggered)
-                    .ToList();
-                    foreach (var restorePlan in matchingPlans)
+                    foreach (var restorePlan in restorePlans)
                     {
                         // Create a new restore job for this restore plan.
                         var response = await _httpClient.PostAsync(
-                            $"jobs/restore/{restorePlan.Id}/run", null, stoppingToken);
+                            $"plans/restore/{restorePlan.Id}/run", null, stoppingToken);
+
                         if (response.IsSuccessStatusCode)
                         {
-                            _logger.LogInformation("Created restore job for restore plan {RestorePlanId}", restorePlan.Id);
+                            _logger.LogInformation("Created restore job for restore plan {RestorePlanId}",
+                                restorePlan.Id);
                         }
                         else
                         {
@@ -87,25 +86,21 @@ namespace SCREAM.Service.Restore
         {
             try
             {
-                // Retrieve restore plans from the API.
-                var restorePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>("plans/restore", stoppingToken);
-                if (restorePlans is null)
+                var eligiblePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>(
+                    "plans/restore?isActive=true&excludeTriggered=true&nextRunIsNull=true", stoppingToken);
+                if (eligiblePlans is null || eligiblePlans.Count == 0)
                 {
-                    _logger.LogWarning("No restore plans received from API.");
+                    _logger.LogWarning("No eligible restore plans received from API.");
                     return;
                 }
-
-                // Filter for active restore plans that are not triggered and have no NextRun.
-                var eligiblePlans = restorePlans
-                    .Where(r => r.IsActive && r.ScheduleType != ScheduleType.Triggered && r.NextRun == null)
-                    .ToList();
 
                 foreach (var restorePlan in eligiblePlans)
                 {
                     // Check if there are active jobs for this restore plan.
                     // (Assuming the API returns a Jobs collection in the restore plan.)
                     if (restorePlan.Jobs != null &&
-                        restorePlan.Jobs.Any(j => j.Status >= TaskStatus.Created && j.Status < TaskStatus.RanToCompletion))
+                        restorePlan.Jobs.Any(j =>
+                            j.Status >= TaskStatus.Created && j.Status < TaskStatus.RanToCompletion))
                     {
                         continue;
                     }
@@ -116,39 +111,46 @@ namespace SCREAM.Service.Restore
                     {
                         restorePlan.NextRun = nextRun;
                         // Update the restore plan via API using POST (which handles both creation and update).
-                        var updateResponse = await _httpClient.PostAsJsonAsync("plans/restore", restorePlan, stoppingToken);
+                        var updateResponse =
+                            await _httpClient.PostAsJsonAsync("plans/restore", restorePlan, stoppingToken);
                         if (updateResponse.IsSuccessStatusCode)
                         {
-                            _logger.LogInformation("Restore plan {RestorePlanId} updated with NextRun {NextRun}", restorePlan.Id, restorePlan.NextRun);
+                            _logger.LogInformation("Restore plan {RestorePlanId} updated with NextRun {NextRun}",
+                                restorePlan.Id, restorePlan.NextRun);
                         }
                         else
                         {
                             var error = await updateResponse.Content.ReadAsStringAsync(stoppingToken);
-                            _logger.LogError("Error updating restore plan {RestorePlanId}: {Error}", restorePlan.Id, error);
+                            _logger.LogError("Error updating restore plan {RestorePlanId}: {Error}", restorePlan.Id,
+                                error);
                         }
                     }
 
                     // Create a new restore job for the plan.
                     try
                     {
-                        var response = await _httpClient.PostAsJsonAsync($"jobs/restore/{restorePlan.Id}/run", new { }, stoppingToken);
+                        var response = await _httpClient.PostAsJsonAsync($"jobs/restore/{restorePlan.Id}/run", new { },
+                            stoppingToken);
 
                         // Log full response details
                         var responseContent = await response.Content.ReadAsStringAsync(stoppingToken);
 
                         if (response.IsSuccessStatusCode)
                         {
-                            _logger.LogInformation("Created restore job for restore plan {RestorePlanId}", restorePlan.Id);
+                            _logger.LogInformation("Created restore job for restore plan {RestorePlanId}",
+                                restorePlan.Id);
                         }
                         else
                         {
-                            _logger.LogError("Failed to create restore job for plan {RestorePlanId}. Status: {StatusCode}, Content: {Content}",
+                            _logger.LogError(
+                                "Failed to create restore job for plan {RestorePlanId}. Status: {StatusCode}, Content: {Content}",
                                 restorePlan.Id, response.StatusCode, responseContent);
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Exception occurred while creating restore job for plan {RestorePlanId}", restorePlan.Id);
+                        _logger.LogError(ex, "Exception occurred while creating restore job for plan {RestorePlanId}",
+                            restorePlan.Id);
                     }
                 }
 
