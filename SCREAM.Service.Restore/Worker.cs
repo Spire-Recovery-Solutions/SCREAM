@@ -86,6 +86,7 @@ namespace SCREAM.Service.Restore
         {
             try
             {
+                // Retrieve only eligible restore plans via API filtering.
                 var eligiblePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>(
                     "plans/restore?isActive=true&excludeTriggered=true&nextRunIsNull=true", stoppingToken);
                 if (eligiblePlans is null || eligiblePlans.Count == 0)
@@ -96,10 +97,10 @@ namespace SCREAM.Service.Restore
 
                 foreach (var restorePlan in eligiblePlans)
                 {
-                    // Check if there are active jobs for this restore plan.
-                    // (Assuming the API returns a Jobs collection in the restore plan.)
-                    if (restorePlan.Jobs != null &&
-                        restorePlan.Jobs.Any(j =>
+                    // Retrieve active restore jobs for this plan via a separate API call.
+                    var activeJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>(
+                        $"jobs/restore?planId={restorePlan.Id}", stoppingToken);
+                    if (activeJobs != null && activeJobs.Any(j =>
                             j.Status >= TaskStatus.Created && j.Status < TaskStatus.RanToCompletion))
                     {
                         continue;
