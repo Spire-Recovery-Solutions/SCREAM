@@ -50,7 +50,7 @@ public static class BackupPlanEndpoints
             var backupPlans = await query.ToListAsync();
             return Results.Ok(backupPlans);
         });
-        
+
         // Run a backup plan
         group.MapPost("/{backupPlanId:long}/run", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
             long backupPlanId) =>
@@ -123,7 +123,7 @@ public static class BackupPlanEndpoints
                 .FirstOrDefaultAsync(x => x.Id == backupPlanId);
             return backupPlan == null ? Results.NotFound() : Results.Ok(backupPlan);
         });
-
+        
         // Create or update a backup plan
         group.MapPost("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
             BackupPlan backupPlan) =>
@@ -154,7 +154,20 @@ public static class BackupPlanEndpoints
                     .ToDictionary(i => i.Id);
 
                 foreach (var itemId in existingItemsDict.Keys.Except(newItemsDict.Keys))
-                    dbContext.Remove(existingItemsDict[itemId]);
+                {
+                    var backupItem = existingItemsDict[itemId];
+
+                    var dependentStatuses = await dbContext.BackupItemStatuses
+                        .Where(s => s.BackupItemId == backupItem.Id)
+                        .ToListAsync();
+
+                    foreach (var status in dependentStatuses)
+                    {
+                        dbContext.BackupItemStatuses.Remove(status);
+                    }
+
+                    dbContext.Remove(backupItem);
+                }
 
                 foreach (var newItem in backupPlan.Items)
                 {
