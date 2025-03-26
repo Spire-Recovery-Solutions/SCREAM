@@ -95,11 +95,11 @@ OnRowClick="RowClickEvent" T="RestoreJobViewModel" Elevation="0">
     protected override async Task OnInitializedAsync()
     {
         _httpClient = ClientFactory.CreateClient("SCREAM");
+
+        await RefreshData();
         _refreshTimer = new System.Timers.Timer(15000);
         _refreshTimer.Elapsed += async (sender, e) => await InvokeAsync(async () => await RefreshRunningJobs());
         _refreshTimer.Start();
-
-        await RefreshData();
     }
 
     public async Task RefreshData()

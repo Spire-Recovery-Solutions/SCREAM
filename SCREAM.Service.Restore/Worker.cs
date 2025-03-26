@@ -135,8 +135,6 @@ namespace SCREAM.Service.Restore
 
                         // Log full response details
                         var responseContent = await response.Content.ReadAsStringAsync(stoppingToken);
-                        _logger.LogInformation("Response Status: {StatusCode}", response.StatusCode);
-                        _logger.LogInformation("Response Content: {Content}", responseContent);
 
                         if (response.IsSuccessStatusCode)
                         {

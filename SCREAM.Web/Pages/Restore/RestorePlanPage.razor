@@ -40,7 +40,6 @@
         <MudTh>Name</MudTh>
         <MudTh>Database</MudTh>
         <MudTh>Source Backup Plan</MudTh>
-        <MudTh>Overwrite</MudTh>
         <MudTh>Status</MudTh>
         <MudTh>Schedule Type</MudTh>
         <MudTh>Next Run</MudTh>
@@ -51,12 +50,6 @@
         <MudTd>@context.Name</MudTd>
         <MudTd>@(context.DatabaseTarget?.HostName)</MudTd>
         <MudTd>@context.SourceBackupPlan?.Name</MudTd>
-        <MudTd>
-            <MudChip T="bool" Color="@(context.OverwriteExisting ? Color.Warning : Color.Info)"
-                     Size="Size.Small">
-                @(context.OverwriteExisting ? "Yes" : "No")
-            </MudChip>
-        </MudTd>
         <MudTd>
             <MudChip T="bool" Color="@(context.IsActive ? Color.Success : Color.Error)"
                      Size="Size.Small">

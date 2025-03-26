@@ -11,7 +11,13 @@
 @inject ISnackbar Snackbar
 @inject IHttpClientFactory ClientFactory
 
-@if (_job == null || _backupPlan == null)
+@if (_loading)
+{
+    <MudPaper Elevation="0" Class="pa-6 d-flex flex-column align-center">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" Class="mb-4" />
+    </MudPaper>
+}
+else if (_job == null || _backupPlan == null)
 {
     <MudAlert Severity="Severity.Error">Backup job or plan not found.</MudAlert>
 }
@@ -222,6 +228,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         _httpClient = ClientFactory.CreateClient("SCREAM");
+
         _refreshTimer = new System.Timers.Timer(5000);
         _refreshTimer.Elapsed += async (sender, e) => await InvokeAsync(async () => await RefreshIfRunning());
         _refreshTimer.Start();

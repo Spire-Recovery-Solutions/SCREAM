@@ -104,13 +104,16 @@
                             </MudItem>
                         }
                         @if (Id is > 0)
-                        {
-                            <MudItem xs="12" md="6">
-                                <MudSwitch T="bool" @bind-Value="_restorePlan.IsActive"
-                                           Color="Color.Primary"
-                                           Label="Active" />
-                            </MudItem>
-                        }
+                         {
+                                <MudItem xs="12" md="6">
+                                    <MudSwitch T="bool" @bind-Value="_restorePlan.IsActive"
+                                               Label="Active" Color="Color.Primary" />
+                                </MudItem>
+                                <MudItem xs="12" md="6">
+                                    <MudSwitch T="bool" @bind-Value="_restorePlan.OverwriteExisting"
+                                               Label="Overwrite Existing" Color="Color.Warning" />
+                                </MudItem>
+                         }
                     </MudGrid>
                 </MudItem>
             </MudGrid>
@@ -190,6 +193,7 @@
             }
         }
     }
+
 
     private async Task ScanBackupItems()
     {

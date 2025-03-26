@@ -11,7 +11,13 @@
 @inject ISnackbar Snackbar
 @inject IHttpClientFactory ClientFactory
 
-@if (_job == null)
+@if (_loading)
+{
+    <MudPaper Elevation="0" Class="pa-6 d-flex flex-column align-center">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" Class="mb-4" />
+    </MudPaper>
+}
+else if (_job == null || _restorePlan == null)
 {
     <MudAlert Severity="Severity.Error">Restore job not found.</MudAlert>
 }
