@@ -45,9 +45,7 @@ namespace SCREAM.Service.Restore
                 foreach (var backupJob in completedJobs)
                 {
                     // Retrieve all restore plans from the API.
-                    var restorePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>(
-     $"plans/restore?sourceBackupPlanId={backupJob.BackupPlanId}&scheduleType=Triggered",
-     stoppingToken);
+                    var restorePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>( $"plans/restore?sourceBackupPlanId={backupJob.BackupPlanId}&scheduleType=Triggered", stoppingToken);
 
 
                     if (restorePlans is null)
@@ -100,8 +98,8 @@ namespace SCREAM.Service.Restore
                 foreach (var restorePlan in eligiblePlans)
                 {
                     // Retrieve active restore jobs for this plan via a separate API call.
-                    var activeJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>(
-                        $"jobs/restore?planId={restorePlan.Id}", stoppingToken);
+                    var activeJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>($"jobs/restore?planId={restorePlan.Id}", stoppingToken);
+
 
                     if (activeJobs != null && activeJobs.Any(j =>
                             j.Status >= TaskStatus.Created && j.Status < TaskStatus.RanToCompletion))
@@ -133,7 +131,7 @@ namespace SCREAM.Service.Restore
                     // Create a new restore job for the plan.
                     try
                     {
-                        var response = await _httpClient.PostAsJsonAsync($"jobs/restore/{restorePlan.Id}/run", new { },
+                        var response = await _httpClient.PostAsJsonAsync($"plans/restore/{restorePlan.Id}/run", new { },
                             stoppingToken);
 
                         // Log full response details
