@@ -46,8 +46,10 @@ namespace SCREAM.Service.Restore
                 {
                     // Retrieve all restore plans from the API.
                     var restorePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>(
-                        $"plans/restore?sourceBackupPlanId={backupJob.BackupPlanId}&scheduleType=Triggered",
-                        stoppingToken);
+     $"plans/restore?sourceBackupPlanId={backupJob.BackupPlanId}&scheduleType=Triggered",
+     stoppingToken);
+
+
                     if (restorePlans is null)
                         continue;
 
@@ -100,6 +102,7 @@ namespace SCREAM.Service.Restore
                     // Retrieve active restore jobs for this plan via a separate API call.
                     var activeJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>(
                         $"jobs/restore?planId={restorePlan.Id}", stoppingToken);
+
                     if (activeJobs != null && activeJobs.Any(j =>
                             j.Status >= TaskStatus.Created && j.Status < TaskStatus.RanToCompletion))
                     {
