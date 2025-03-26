@@ -17,6 +17,7 @@ public static class RestorePlanEndpoints
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
             var restorePlans = await dbContext.RestorePlans
+                .Include(i => i.Items)
                 .Include(i => i.DatabaseTarget)
                 .Include(i => i.SourceBackupPlan)
                 .ToListAsync();
