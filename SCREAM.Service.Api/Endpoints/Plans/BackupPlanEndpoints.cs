@@ -52,7 +52,8 @@ public static class BackupPlanEndpoints
         });
 
         // Run a backup plan
-        group.MapPost("/{backupPlanId:long}/run", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+        group.MapPost("/{backupPlanId:long}/run", async (
+            IDbContextFactory<ScreamDbContext> dbContextFactory,
             long backupPlanId) =>
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
@@ -111,7 +112,8 @@ public static class BackupPlanEndpoints
         });
 
         // Get a backup plan by id
-        group.MapGet("/{backupPlanId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+        group.MapGet("/{backupPlanId:long}", async (
+            IDbContextFactory<ScreamDbContext> dbContextFactory,
             long backupPlanId) =>
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
@@ -123,9 +125,10 @@ public static class BackupPlanEndpoints
                 .FirstOrDefaultAsync(x => x.Id == backupPlanId);
             return backupPlan == null ? Results.NotFound() : Results.Ok(backupPlan);
         });
-        
+
         // Create or update a backup plan
-        group.MapPost("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+        group.MapPost("/", async (
+            IDbContextFactory<ScreamDbContext> dbContextFactory,
             BackupPlan backupPlan) =>
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
@@ -154,20 +157,7 @@ public static class BackupPlanEndpoints
                     .ToDictionary(i => i.Id);
 
                 foreach (var itemId in existingItemsDict.Keys.Except(newItemsDict.Keys))
-                {
-                    var backupItem = existingItemsDict[itemId];
-
-                    var dependentStatuses = await dbContext.BackupItemStatuses
-                        .Where(s => s.BackupItemId == backupItem.Id)
-                        .ToListAsync();
-
-                    foreach (var status in dependentStatuses)
-                    {
-                        dbContext.BackupItemStatuses.Remove(status);
-                    }
-
-                    dbContext.Remove(backupItem);
-                }
+                    dbContext.Remove(existingItemsDict[itemId]);
 
                 foreach (var newItem in backupPlan.Items)
                 {
@@ -183,7 +173,8 @@ public static class BackupPlanEndpoints
         });
 
         // Delete a backup plan
-        group.MapDelete("/{backupPlanId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+        group.MapDelete("/{backupPlanId:long}", async (
+            IDbContextFactory<ScreamDbContext> dbContextFactory,
             long backupPlanId) =>
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
