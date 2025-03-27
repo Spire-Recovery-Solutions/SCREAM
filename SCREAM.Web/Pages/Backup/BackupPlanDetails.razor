@@ -106,7 +106,7 @@
                                               HelperText="e.g., '0 0 * * *' for daily at midnight" />
                             </MudItem>
                         }
-                        @if (Id.HasValue)
+                        @if (Id is > 0)
                         {
                             <MudItem xs="12" md="6">
                                 <MudSwitch T="bool" @bind-Value="_backupPlan.IsActive"

@@ -9,6 +9,9 @@ using SCREAM.Service.Api.Endpoints.Jobs;
 using SCREAM.Service.Api.Endpoints.Plans;
 using SCREAM.Service.Api.Endpoints.Settings;
 using SCREAM.Service.Api.Endpoints.Targets;
+using SCREAM.Service.Api.Endpoints.BackupItemStatuses;
+using SCREAM.Service.Api.Endpoints.DatabaseItems;
+using SCREAM.Service.Api.Endpoints.Items;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,6 +63,10 @@ app.MapBackupJobEndpoints();
 app.MapRestoreJobEndpoints();
 app.MapRestoreSettingsEndpoints();
 app.MapBackupSettingsEndpoints(); 
+app.MapBackupItemStatusEndpoints();
+app.MapDatabaseItemEndpoints();
+app.MapBackupItemEndpoints(); 
+app.MapRestoreItemEndpoints();
 
 
 // Ensure database is created

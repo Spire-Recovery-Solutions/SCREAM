@@ -1,17 +1,23 @@
 ﻿@page "/jobs/restore/{JobId:long}"
 @using SCREAM.Data.Entities
+@using SCREAM.Data.Entities.Database
 @using SCREAM.Data.Entities.Restore
 @using SCREAM.Data.Entities.Backup
 @using SCREAM.Data.Entities.Backup.BackupItems
-@using SCREAM.Data.Entities.Database
 @using SCREAM.Data.Enums
-@using SCREAM.Web.Pages.Backup
 @using SCREAM.Web.Pages.Backup.Dialogs
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IHttpClientFactory ClientFactory
 
-@if (_job == null)
+@if (_loading)
+{
+    <MudPaper Elevation="0" Class="pa-6 d-flex flex-column align-center">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" Class="mb-4" />
+    </MudPaper>
+}
+else if (_job == null || _restorePlan == null)
 {
     <MudAlert Severity="Severity.Error">Restore job not found.</MudAlert>
 }
@@ -22,18 +28,20 @@ else
             <MudPaper Elevation="2" Class="pa-4">
                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                     <MudStack>
-                        <MudText Typo="Typo.h5">@_job.RestorePlan.Name</MudText>
+                        <MudText Typo="Typo.h5">@_restorePlan.Name</MudText>
                         <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                            @_job.RestorePlan.Description
+                            @_restorePlan.Description
                         </MudText>
                     </MudStack>
                     <MudStack Row>
                         <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack"
-                                   OnClick="GoBack">Back
+                                   OnClick="GoBack">
+                            Back
                         </MudButton>
                         <MudButton Variant="Variant.Filled" Color="Color.Primary"
                                    StartIcon="@Icons.Material.Filled.Refresh"
-                                   OnClick="RefreshData">Refresh
+                                   OnClick="RefreshData">
+                            Refresh
                         </MudButton>
                     </MudStack>
                 </MudStack>
@@ -43,43 +51,36 @@ else
         <MudItem xs="12" md="4">
             <MudPaper Elevation="2" Class="pa-4">
                 <MudText Typo="Typo.h6" Class="mb-3">Job Details</MudText>
-                <MudDivider Class="mb-4"/>
+                <MudDivider Class="mb-4" />
 
                 <MudList T="string">
                     <MudListItem>
                         <MudText Typo="Typo.body1">
-                            <MudIcon Icon="@Icons.Material.Filled.Badge" Class="mr-2"/>
+                            <MudIcon Icon="@Icons.Material.Filled.Badge" Class="mr-2" />
                             <strong>Job ID:</strong> @_job.Id
                         </MudText>
                     </MudListItem>
                     <MudListItem>
                         <MudText Typo="Typo.body1">
-                            <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2"/>
+                            <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2" />
                             <strong>Started:</strong> @_job.StartedAt.ToLocalTime().ToString("g")
                         </MudText>
                     </MudListItem>
                     <MudListItem>
                         <MudText Typo="Typo.body1">
-                            <MudIcon Icon="@Icons.Material.Filled.DoneAll" Class="mr-2"/>
-                            <strong>Completed:</strong>
-                            @(_job.CompletedAt.HasValue ? _job.CompletedAt.Value.ToLocalTime().ToString("g") : "Not completed")
+                            <MudIcon Icon="@Icons.Material.Filled.Storage" Class="mr-2" />
+                            <strong>Database:</strong> @_restorePlan.DatabaseTarget.HostName
                         </MudText>
                     </MudListItem>
                     <MudListItem>
                         <MudText Typo="Typo.body1">
-                            <MudIcon Icon="@Icons.Material.Filled.Storage" Class="mr-2"/>
-                            <strong>Database:</strong> @_job.RestorePlan.DatabaseTarget.HostName
+                            <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-2" />
+                            <strong>Source Backup:</strong> @_restorePlan.SourceBackupPlan.Name
                         </MudText>
                     </MudListItem>
                     <MudListItem>
                         <MudText Typo="Typo.body1">
-                            <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-2"/>
-                            <strong>Source Backup:</strong> @_job.RestorePlan.SourceBackupPlan.Name
-                        </MudText>
-                    </MudListItem>
-                    <MudListItem>
-                        <MudText Typo="Typo.body1">
-                            <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-2"/>
+                            <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-2" />
                             <strong>Status:</strong>
                             <MudChip T="string" Color="@GetStatusColor(_job.Status)" Size="Size.Small" Class="ml-2">
                                 @_job.Status.ToString()
@@ -87,12 +88,12 @@ else
                         </MudText>
                     </MudListItem>
                 </MudList>
-                <MudDivider Class="my-4"/>
+                <MudDivider Class="my-4" />
                 <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Overall Progress</MudText>
                 <MudProgressLinear Color="@GetProgressColor(_job.Status)"
                                    Value="@_overallProgress"
                                    Striped="@(_job.Status == TaskStatus.Running)"
-                                   Indeterminate="@(_job.Status == TaskStatus.Running && _overallProgress < 5)"/>
+                                   Indeterminate="@(_job.Status == TaskStatus.Running && _overallProgress < 5)" />
                 <MudText Typo="Typo.body2" Align="Align.Center">
                     @_overallProgress.ToString("0.#")%
                 </MudText>
@@ -147,7 +148,7 @@ else
                             <MudTd>
                                 <MudProgressLinear Color="@GetExecutionStatusColor(context.Status)"
                                                    Value="@GetItemProgressValue(context.Status)"
-                                                   Striped="@(context.Status == TaskStatus.Running)"/>
+                                                   Striped="@(context.Status == TaskStatus.Running)" />
                             </MudTd>
                             <MudTd>
                                 @GetItemDuration(context)
@@ -160,13 +161,13 @@ else
                                 {
                                     <MudIconButton Icon="@Icons.Material.Filled.Replay"
                                                    Color="Color.Warning"
-                                                   OnClick="@(() => RetryItem(context.Id))"/>
+                                                   OnClick="@(() => RetryItem(context.Id))" />
                                 }
                                 @if (!string.IsNullOrEmpty(context.ErrorMessage))
                                 {
                                     <MudIconButton Icon="@Icons.Material.Filled.Error"
                                                    Color="Color.Error"
-                                                   OnClick="@(() => ShowErrorDetails(context))"/>
+                                                   OnClick="@(() => ShowErrorDetails(context))" />
                                 }
                             </MudTd>
                         </RowTemplate>
@@ -188,14 +189,13 @@ else
                                           style="color: #8a8a8a; min-width: 130px; font-family: Consolas, monospace; font-size: 0.85rem;">@log.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")</span>
                                     <span class="mr-2"
                                           style="color: @GetLogLevelColorCode(log.Severity); min-width: 80px; font-weight: 600; font-family: Consolas, monospace;">@log.Severity</span>
-                                    <span
-                                        style="font-family: Consolas, monospace; color: #d4d4d4; overflow-wrap: anywhere;">
-                        @if (!string.IsNullOrEmpty(log.Title))
+                                    <span style="font-family: Consolas, monospace; color: #d4d4d4; overflow-wrap: anywhere;">
+                                        @if (!string.IsNullOrEmpty(log.Title))
                                         {
                                             <span style="color: #52b0ef; font-weight: 500;">[@log.Title] </span>
                                         }
                                         <span>@log.Message</span>
-                    </span>
+                                    </span>
                                 </div>
                             </MudVirtualize>
                         </MudPaper>
@@ -210,15 +210,19 @@ else
     [Parameter] public long JobId { get; set; }
 
     private RestoreJob? _job;
-    private List<RestoreItemStatusViewModel> _itemStatuses = [];
-    private List<RestoreJobLogViewModel> _jobLogs = [];
+    private RestorePlan? _restorePlan;
+    private List<RestoreItemStatusViewModel> _itemStatuses = new();
+    private List<RestoreJobLogViewModel> _jobLogs = new();
     private bool _loading = true;
     private string _searchString = "";
     private float _overallProgress = 0;
     private System.Timers.Timer? _refreshTimer;
+    private HttpClient _httpClient;
 
     protected override async Task OnInitializedAsync()
     {
+        _httpClient = ClientFactory.CreateClient("SCREAM");
+
         _refreshTimer = new System.Timers.Timer(5000);
         _refreshTimer.Elapsed += async (sender, e) => await InvokeAsync(async () => await RefreshIfRunning());
         _refreshTimer.Start();
@@ -232,47 +236,32 @@ else
 
         try
         {
-            var restorePlan = new RestorePlan
+            _job = await _httpClient.GetFromJsonAsync<RestoreJob>($"jobs/restore/{JobId}");
+            if (_job == null)
             {
-                Id = 1,
-                Name = "Daily Restore Plan",
-                Description = "Restores production DB daily",
-                DatabaseTarget = new()
-                {
-                    Id = 1,
-                    HostName = "prod-db-server.example.com",
-                    UserName = "admin",
-                    Password = "******",
-                    Port = 3306,
-                    Type = DatabaseType.MySQL
-                },
-                SourceBackupPlan = new()
-                {
-                    Id = 1,
-                    Name = "Daily Database Backup",
-                    Description = "Automated daily backup of production database"
-                },
-                DatabaseTargetId = 1,
-                SourceBackupPlanId = 1,
-                ScheduleCron = "0 0 * * *",
-                ScheduleType = ScheduleType.Repeating,
-                LastRun = DateTime.Now.AddHours(-1),
-                NextRun = DateTime.Now.AddHours(1),
-                Items = new List<BackupItem>()
-            };
-
-            _job = new()
+                Snackbar.Add("Restore job not found", Severity.Error);
+                return;
+            }
+            _restorePlan = await _httpClient.GetFromJsonAsync<RestorePlan>($"plans/restore/{_job.RestorePlanId}");
+            if (_restorePlan == null)
             {
-                Id = JobId,
-                RestorePlanId = restorePlan.Id,
-                RestorePlan = restorePlan,
-                Status = TaskStatus.Running,
-                StartedAt = DateTime.Now.AddMinutes(-35),
-                CompletedAt = null,
-                RestoreItems = new List<RestoreItem>()
-            };
+                Snackbar.Add("Restore plan not found", Severity.Error);
+                return;
+            }
+            _itemStatuses = _job.RestoreItems.Select(item => new RestoreItemStatusViewModel
+                {
+                    Id = item.Id,
+                    ItemId = item.DatabaseItemId,
+                    ItemName = GetItemName(item.DatabaseItem),
+                    ItemType = item.DatabaseItem.Type,
+                    Status = item.Status,
+                    RetryCount = item.RetryCount,
+                    StartedAt = item.StartedAt,
+                    CompletedAt = item.CompletedAt,
+                    ErrorMessage = item.ErrorMessage
+                }).ToList();
 
-            await LoadItemStatuses();
+            // Load job logs from the API.
             await LoadJobLogs();
             CalculateOverallProgress();
         }
@@ -287,134 +276,27 @@ else
         }
     }
 
-    private async Task LoadItemStatuses()
-    {
-        await Task.Delay(500);
-
-        var mockItems = new List<RestoreItem>
-        {
-            new()
-            {
-                Id = 1,
-                RestoreJobId = JobId,
-                DatabaseItem = new DatabaseTableStructureItems
-                {
-                    Schema = "dbo",
-                    Name = "Users",
-                    Type = DatabaseItemType.TableStructure
-                },
-                Status = TaskStatus.RanToCompletion,
-                RetryCount = 0,
-                StartedAt = DateTime.Now.AddMinutes(-30),
-                CompletedAt = DateTime.Now.AddMinutes(-25)
-            },
-            new()
-            {
-                Id = 2,
-                RestoreJobId = JobId,
-                DatabaseItem = new DatabaseTableDataItems
-                {
-                    Schema = "dbo",
-                    Name = "Users",
-                    Type = DatabaseItemType.TableData
-                },
-                Status = TaskStatus.RanToCompletion,
-                RetryCount = 0,
-                StartedAt = DateTime.Now.AddMinutes(-25),
-                CompletedAt = DateTime.Now.AddMinutes(-15)
-            },
-            new()
-            {
-                Id = 3,
-                RestoreJobId = JobId,
-                DatabaseItem = new DatabaseViewItems
-                {
-                    Schema = "dbo",
-                    Name = "UserOrderView",
-                    Type = DatabaseItemType.View
-                },
-                Status = TaskStatus.Faulted,
-                RetryCount = 2,
-                StartedAt = DateTime.Now.AddMinutes(-20),
-                CompletedAt = DateTime.Now.AddMinutes(-18),
-                ErrorMessage = "Failed to restore view: Object reference not set to an instance of an object."
-            },
-            new()
-            {
-                Id = 4,
-                RestoreJobId = JobId,
-                DatabaseItem = new DatabaseTriggerItems
-                {
-                    Schema = "app",
-                    Name = "OrderUpdatedTrigger",
-                    Type = DatabaseItemType.Trigger
-                },
-                Status = TaskStatus.WaitingToRun,
-                RetryCount = 1,
-                StartedAt = DateTime.Now.AddMinutes(-10),
-                CompletedAt = null
-            }
-        };
-
-        _itemStatuses = mockItems.Select(item => new RestoreItemStatusViewModel
-        {
-            Id = item.Id,
-            ItemId = item.DatabaseItemId,
-            ItemName = GetItemName(item.DatabaseItem),
-            ItemType = item.DatabaseItem.Type,
-            Status = item.Status,
-            RetryCount = item.RetryCount,
-            StartedAt = item.StartedAt,
-            CompletedAt = item.CompletedAt,
-            ErrorMessage = item.ErrorMessage
-        }).ToList();
-
-        await Task.CompletedTask;
-    }
-
     private async Task LoadJobLogs()
     {
-        await Task.Delay(500);
-
-        var fakeLogs = new List<RestoreJobLog>
+        try
         {
-            new()
-            {
-                Id = 1,
-                Timestamp = DateTime.Now.AddMinutes(-20),
-                Title = "Job Started",
-                Message = "The restore job started successfully.",
-                Severity = LogLevel.Information
-            },
-            new()
-            {
-                Id = 2,
-                Timestamp = DateTime.Now.AddMinutes(-5),
-                Title = "Item Failure",
-                Message = "Restore item 'UserOrderView' failed due to null reference.",
-                Severity = LogLevel.Error
-            },
-            new()
-            {
-                Id = 3,
-                Timestamp = DateTime.Now.AddMinutes(-2),
-                Title = "Job Completed",
-                Message = "The restore job completed with some errors.",
-                Severity = LogLevel.Warning
-            }
-        };
-
-        _jobLogs = fakeLogs
-            .Select(l => new RestoreJobLogViewModel
-            {
-                Id = l.Id,
-                Timestamp = l.Timestamp,
-                Title = l.Title,
-                Message = l.Message,
-                Severity = l.Severity
-            })
-            .OrderByDescending(l => l.Timestamp)
-            .ToList();
+            var logs = await _httpClient.GetFromJsonAsync<List<RestoreJobLog>>($"jobs/restore/{JobId}/logs");
+            _jobLogs = logs
+                ?.Select(l => new RestoreJobLogViewModel
+                    {
+                        Id = l.Id,
+                        Timestamp = l.Timestamp,
+                        Title = l.Title,
+                        Message = l.Message,
+                        Severity = l.Severity
+                    })
+                .OrderByDescending(l => l.Timestamp)
+                .ToList() ?? new List<RestoreJobLogViewModel>();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading job logs: {ex.Message}", Severity.Error);
+        }
     }
 
     private void CalculateOverallProgress()
@@ -495,8 +377,18 @@ else
         {
             try
             {
-                Snackbar.Add("Restore job retry initiated", Severity.Success);
-                await RefreshData();
+                // Call the API endpoint to retry the full job.
+                var retryResponse = await _httpClient.PostAsync($"jobs/restore/{JobId}/retry", null);
+                if (retryResponse.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Restore job retry initiated", Severity.Success);
+                    await LoadData();
+                }
+                else
+                {
+                    var error = await retryResponse.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Error retrying restore job: {error}", Severity.Error);
+                }
             }
             catch (Exception ex)
             {
@@ -521,9 +413,18 @@ else
         {
             try
             {
-                // Implement retry logic for restore item here.
-                Snackbar.Add("Restore item retry initiated", Severity.Success);
-                await RefreshData();
+                // Call the API endpoint to retry a specific restore item.
+                var retryResponse = await _httpClient.PostAsync($"jobs/restore/{JobId}/items/{itemId}/retry", null);
+                if (retryResponse.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Restore item retry initiated", Severity.Success);
+                    await LoadData();
+                }
+                else
+                {
+                    var error = await retryResponse.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Error retrying restore item: {error}", Severity.Error);
+                }
             }
             catch (Exception ex)
             {
@@ -651,14 +552,13 @@ else
     {
         return severity switch
         {
-            LogLevel.Error => "#ff5252",    // Red
-            LogLevel.Warning => "#fb8c00",  // Orange
-            LogLevel.Information => "#29b6f6",     // Light Blue
-            LogLevel.Debug => "#9e9e9e",    // Gray
-            _ => "#d4d4d4"                     // Default light gray
+            LogLevel.Error => "#ff5252",
+            LogLevel.Warning => "#fb8c00",
+            LogLevel.Information => "#29b6f6",
+            LogLevel.Debug => "#9e9e9e",
+            _ => "#d4d4d4"
         };
     }
-
 
     public void Dispose()
     {
@@ -687,5 +587,4 @@ else
         public string Message { get; set; } = string.Empty;
         public LogLevel Severity { get; set; }
     }
-
 }

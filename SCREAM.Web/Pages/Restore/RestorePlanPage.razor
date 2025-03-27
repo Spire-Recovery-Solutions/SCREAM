@@ -1,7 +1,6 @@
 ﻿@page "/plans/restore"
 @using System.Text.Json
 @using SCREAM.Data.Entities.Restore
-@using System.Text.Json.Serialization
 @using SCREAM.Data.Entities.Backup.BackupItems
 @using SCREAM.Data.Enums
 @using SCREAM.Web.Pages.Backup
@@ -41,7 +40,6 @@
         <MudTh>Name</MudTh>
         <MudTh>Database</MudTh>
         <MudTh>Source Backup Plan</MudTh>
-        <MudTh>Overwrite</MudTh>
         <MudTh>Status</MudTh>
         <MudTh>Schedule Type</MudTh>
         <MudTh>Next Run</MudTh>
@@ -52,12 +50,6 @@
         <MudTd>@context.Name</MudTd>
         <MudTd>@(context.DatabaseTarget?.HostName)</MudTd>
         <MudTd>@context.SourceBackupPlan?.Name</MudTd>
-        <MudTd>
-            <MudChip T="bool" Color="@(context.OverwriteExisting ? Color.Warning : Color.Info)"
-                     Size="Size.Small">
-                @(context.OverwriteExisting ? "Yes" : "No")
-            </MudChip>
-        </MudTd>
         <MudTd>
             <MudChip T="bool" Color="@(context.IsActive ? Color.Success : Color.Error)"
                      Size="Size.Small">
@@ -85,7 +77,7 @@
 </MudTable>
 
 @code {
-    private List<RestorePlan> _restorePlans = [];
+    private List<RestorePlan> _restorePlans = new();
     private HttpClient _httpClient;
     private bool _isLoading = true;
     private JsonSerializerOptions _jsonOptions;
@@ -97,7 +89,7 @@
             {
                 PropertyNameCaseInsensitive = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
             };
         await RefreshRestorePlans();
     }
@@ -112,83 +104,42 @@
         NavigationManager.NavigateTo($"/plans/restore/{restorePlan.Id}");
     }
 
-    private List<RestorePlan> GetSampleRestorePlans()
-    {
-        return
-        [
-            new()
-            {
-                Id = 1,
-                Name = "Production DB Restore",
-                Description = "Daily production database restore",
-                SourceBackupPlan = new()
-                {
-                    Name = "Test Backup",
-                    Description = "Test Description"
-                },
-                DatabaseTarget = new()
-                {
-                    HostName = "prod-db.example.com",
-                    Type = DatabaseType.MySQL,
-                    UserName = "admin",
-                    Password = "password123",
-                    Port = 3306
-                },
-                ScheduleType = ScheduleType.Repeating,
-                ScheduleCron = "0 0 * * *",
-                LastRun = DateTime.UtcNow.AddDays(-1),
-                NextRun = DateTime.UtcNow.AddHours(2),
-                IsActive = true,
-                OverwriteExisting = true,
-                Items = new List<BackupItem>()
-            },
-
-            new()
-            {
-                Id = 2,
-                Name = "Test Environment Restore",
-                Description = "Weekly test environment restoration",
-                SourceBackupPlan = new()
-                {
-                    Name = "Test2 Backup",
-                    Description = "Test Description"
-                },
-                DatabaseTarget = new()
-                {
-                    HostName = "test-db.example.com",
-                    Type = DatabaseType.MySQL,
-                    UserName = "test_user",
-                    Password = "test_pass",
-                    Port = 3306
-                },
-                ScheduleType = ScheduleType.OneTime,
-                ScheduleCron = "",
-                LastRun = null,
-                NextRun = DateTime.UtcNow.AddDays(1),
-                IsActive = false,
-                OverwriteExisting = false,
-                Items = new List<BackupItem>()
-            }
-        ];
-    }
-
     private async Task DeleteRestorePlan(RestorePlan restorePlan)
     {
         var parameters = new DialogParameters
-        {
-            { "ContentText", $"Are you sure you want to delete the restore plan '{restorePlan.Name}'?" },
-            { "ButtonText", "Delete" },
-            { "Color", Color.Error }
-        };
+    {
+        { "ContentText", $"Are you sure you want to delete the restore plan '{restorePlan.Name}'?" },
+        { "ButtonText", "Delete" },
+        { "Color", Color.Error }
+    };
 
         var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete Confirmation", parameters);
         var result = await dialog.Result;
 
         if (result is { Canceled: false } && result.Data is bool confirmed && confirmed)
         {
-            _restorePlans.RemoveAll(p => p.Id == restorePlan.Id);
-            Snackbar.Add("Restore plan deleted successfully.", Severity.Success);
-            StateHasChanged();
+            try
+            {
+                var response = await _httpClient.DeleteAsync($"plans/restore/{restorePlan.Id}");
+                if (response.IsSuccessStatusCode)
+                {
+                    _restorePlans.RemoveAll(p => p.Id == restorePlan.Id);
+                    Snackbar.Add("Restore plan deleted successfully.", Severity.Success);
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Error deleting restore plan: {error}", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error deleting restore plan: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                StateHasChanged();
+            }
         }
     }
 
@@ -197,9 +148,27 @@
         _isLoading = true;
         StateHasChanged();
 
-        _restorePlans = GetSampleRestorePlans();
-        Snackbar.Add("Using sample restore plans data.", Severity.Info);
-        _isLoading = false;
-        StateHasChanged();
+        try
+        {
+            var plans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>("plans/restore");
+            if (plans != null)
+            {
+                _restorePlans = plans;
+                Snackbar.Add("Restore plans loaded from API.", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("No restore plans found.", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error fetching restore plans: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
     }
 }

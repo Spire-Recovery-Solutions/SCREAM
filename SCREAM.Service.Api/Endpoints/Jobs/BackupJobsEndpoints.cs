@@ -16,7 +16,6 @@ public static class BackupJobEndpoints
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
             var backupJobs = await dbContext.BackupJobs
-                .Include(job => job.BackupPlan)
                 .OrderByDescending(job => job.StartedAt)
                 .ToListAsync();
             return Results.Ok(backupJobs);
@@ -27,10 +26,6 @@ public static class BackupJobEndpoints
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
             var backupJob = await dbContext.BackupJobs
-                .Include(job => job.BackupPlan)
-                .ThenInclude(plan => plan.DatabaseTarget)
-                .Include(job => job.BackupPlan)
-                .ThenInclude(plan => plan.StorageTarget)
                 .Include(job => job.BackupItemStatuses)
                 .ThenInclude(status => status.BackupItem)
                 .ThenInclude(item => item.DatabaseItem)
@@ -49,66 +44,6 @@ public static class BackupJobEndpoints
                 .ToListAsync();
 
             return Results.Ok(logs);
-        });
-
-        // Run a backup plan
-        group.MapPost("/{backupPlanId:long}/run", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
-            long backupPlanId) =>
-        {
-            await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-            var backupPlan = await dbContext.BackupPlans
-                .Include(plan => plan.DatabaseTarget)
-                .Include(plan => plan.StorageTarget)
-                .Include(plan => plan.Items)
-                .ThenInclude(item => item.DatabaseItem)
-                .FirstOrDefaultAsync(plan => plan.Id == backupPlanId);
-
-            if (backupPlan == null)
-                return Results.NotFound();
-
-            // Create a new backup job
-            var backupJob = new BackupJob
-            {
-                BackupPlanId = backupPlanId,
-                BackupPlan = backupPlan,
-                Status = TaskStatus.Created,
-                StartedAt = DateTime.UtcNow,
-                CompletedAt = null,
-                BackupItemStatuses = new List<BackupItemStatus>()
-            };
-
-            // Add backup item statuses from the plan - only the selected items
-            foreach (var planItem in backupPlan.Items.Where(i => i.IsSelected))
-            {
-                backupJob.BackupItemStatuses.Add(new BackupItemStatus
-                {
-                    BackupJobId = backupJob.Id,
-                    BackupItemId = planItem.Id,
-                    BackupItem = planItem,
-                    Status = TaskStatus.WaitingToRun,
-                    RetryCount = 0,
-                    StartedAt = null,
-                    CompletedAt = null
-                });
-            }
-
-            dbContext.BackupJobs.Add(backupJob);
-            await dbContext.SaveChangesAsync();
-
-            // Add initial log entry
-            var logEntry = new BackupJobLog
-            {
-                BackupJobId = backupJob.Id,
-                Timestamp = DateTime.UtcNow,
-                Title = "Job Created",
-                Message = $"Backup job created for plan: {backupPlan.Name}",
-                Severity = LogLevel.Information
-            };
-
-            dbContext.BackupJobLogs.Add(logEntry);
-            await dbContext.SaveChangesAsync();
-
-            return Results.Created($"/jobs/backup/{backupJob.Id}", backupJob);
         });
 
         // Retry a failed backup job

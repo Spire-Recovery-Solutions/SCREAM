@@ -51,7 +51,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             e.ToTable("BackupPlans");
 
             e.HasMany(p => p.Jobs)
-                .WithOne(j => j.BackupPlan)
+                .WithOne()
                 .HasForeignKey(j => j.BackupPlanId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -225,7 +225,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             e.Property(p => p.Name).IsRequired();
 
             e.HasMany(p => p.Jobs)
-                .WithOne(j => j.RestorePlan)
+                .WithOne()
                 .HasForeignKey(j => j.RestorePlanId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -259,7 +259,7 @@ public class ScreamDbContext(DbContextOptions<ScreamDbContext> options) : DbCont
             e.Property(p => p.IsEncrypted).HasDefaultValue(false);
 
             e.HasMany(j => j.RestoreItems)
-                .WithOne(i => i.RestoreJob)
+                .WithOne()
                 .HasForeignKey(i => i.RestoreJobId)
                 .OnDelete(DeleteBehavior.Cascade);
 

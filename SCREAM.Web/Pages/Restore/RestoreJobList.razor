@@ -6,25 +6,27 @@
 @using SCREAM.Data.Enums
 @using SCREAM.Web.Pages.Backup
 @using SCREAM.Web.Pages.Backup.Dialogs
+@using System.Text.Json
 @inject NavigationManager NavigationManager
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IHttpClientFactory ClientFactory
 
 <MudText Align="Align.Center" Typo="Typo.h4" Class="mb-4">Restore Jobs</MudText>
 
 <MudTable Items="@_restoreJobs" Dense="true" Hover="true" Loading="@_loading" LoadingProgressColor="Color.Info"
-          Filter="new Func<RestoreJobViewModel, bool>(FilterFunc)" @bind-SelectedItem="_selectedJob"
-          OnRowClick="RowClickEvent" T="RestoreJobViewModel" Elevation="0">
+Filter="new Func<RestoreJobViewModel, bool>(FilterFunc)" @bind-SelectedItem="_selectedJob"
+OnRowClick="RowClickEvent" T="RestoreJobViewModel" Elevation="0">
     <ToolBarContent>
         <MudGrid>
             <MudItem xs="12" md="9">
                 <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start"
-                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
-                              Class="mt-0"></MudTextField>
+                AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                Class="mt-0"></MudTextField>
             </MudItem>
             <MudItem xs="12" md="3" Class="d-flex justify-end">
                 <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.Refresh"
-                           OnClick="RefreshData">
+                OnClick="RefreshData">
                     Refresh
                 </MudButton>
             </MudItem>
@@ -48,10 +50,10 @@
         </MudTd>
         <MudTd DataLabel="Progress">
             <MudProgressLinear Color="@GetProgressColor(context.Status)"
-                               Value="@context.ProgressPercentage"
-                               Class="my-2"
-                               Striped="@(context.Status == TaskStatus.Running)"
-                               Indeterminate="@(context.Status == TaskStatus.Running && context.ProgressPercentage < 5)" />
+            Value="@context.ProgressPercentage"
+            Class="my-2"
+            Striped="@(context.Status == TaskStatus.Running)"
+            Indeterminate="@(context.Status == TaskStatus.Running && context.ProgressPercentage < 5)" />
             @context.ProgressPercentage.ToString("0.#")%
         </MudTd>
         <MudTd DataLabel="Started">@context.StartedAt.ToLocalTime().ToString("g")</MudTd>
@@ -63,11 +65,11 @@
         </MudTd>
         <MudTd DataLabel="Actions">
             <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info"
-                           OnClick="@(() => ViewJob(context.Id))" />
+            OnClick="@(() => ViewJob(context.Id))" />
             @if (context.Status == TaskStatus.Faulted)
             {
                 <MudIconButton Icon="@Icons.Material.Filled.Replay" Color="Color.Warning"
-                               OnClick="@(() => RetryJob(context.Id))" />
+                OnClick="@(() => RetryJob(context.Id))" />
             }
         </MudTd>
     </RowTemplate>
@@ -88,14 +90,16 @@
     private string _searchString = "";
     private RestoreJobViewModel? _selectedJob;
     private System.Timers.Timer? _refreshTimer;
+    private HttpClient _httpClient;
 
     protected override async Task OnInitializedAsync()
     {
+        _httpClient = ClientFactory.CreateClient("SCREAM");
+
+        await RefreshData();
         _refreshTimer = new System.Timers.Timer(15000);
         _refreshTimer.Elapsed += async (sender, e) => await InvokeAsync(async () => await RefreshRunningJobs());
         _refreshTimer.Start();
-
-        await RefreshData();
     }
 
     public async Task RefreshData()
@@ -105,22 +109,29 @@
 
         try
         {
-            var jobs = await GetAllJobsAsync();
+            var jobsTask = _httpClient.GetFromJsonAsync<List<RestoreJob>>("jobs/restore");
+            var plansTask = _httpClient.GetFromJsonAsync<List<RestorePlan>>("plans/restore");
 
-            _restoreJobs = jobs
+            await Task.WhenAll(jobsTask, plansTask);
+
+            var jobs = await jobsTask;
+            var plans = await plansTask;
+            var planDict = plans?.ToDictionary(p => p.Id, p => p) ?? new Dictionary<long, RestorePlan>();
+
+            _restoreJobs = jobs?
                 .OrderByDescending(j => GetStatusPriority(j.Status))
                 .ThenByDescending(j => j.StartedAt)
                 .Select(j => new RestoreJobViewModel
                     {
                         Id = j.Id,
                         PlanId = j.RestorePlanId,
-                        PlanName = j.RestorePlan.Name,
+                        PlanName = planDict.TryGetValue(j.RestorePlanId, out var plan) ? plan.Name : "N/A",
                         Status = j.Status,
                         StartedAt = j.StartedAt,
                         CompletedAt = j.CompletedAt,
                         ProgressPercentage = CalculateProgress(j)
                     })
-                .ToList();
+                .ToList() ?? new List<RestoreJobViewModel>();
         }
         catch (Exception ex)
         {
@@ -131,56 +142,6 @@
             _loading = false;
             StateHasChanged();
         }
-    }
-
-    public Task<List<RestoreJob>> GetAllJobsAsync()
-    {
-        var restorePlan = new RestorePlan
-            {
-                Id = 1,
-                Name = "Daily Restore Plan",
-                Description = "Restores production DB daily",
-                DatabaseTarget = new DatabaseTarget
-                {
-                    Id = 1,
-                    HostName = "prod-db-server.example.com",
-                    UserName = "admin",
-                    Password = "******",
-                    Port = 3306,
-                    Type = DatabaseType.MySQL
-                },
-                SourceBackupPlan = new BackupPlan
-                {
-                    Id = 1,
-                    Name = "Daily Database Backup",
-                    Description = "Automated daily backup of production database"
-                },
-                DatabaseTargetId = 1,
-                SourceBackupPlanId = 1,
-                ScheduleCron = "0 0 * * *",
-                ScheduleType = ScheduleType.Repeating,
-                LastRun = DateTime.Now.AddHours(-1),
-                NextRun = DateTime.Now.AddHours(1),
-                Items = new List<BackupItem>()
-            };
-
-        var jobs = new List<RestoreJob>
-        {
-            new RestoreJob
-            {
-                Id = 1,
-                RestorePlanId = restorePlan.Id,
-                RestorePlan = restorePlan,
-                Status = TaskStatus.Running,
-                StartedAt = DateTime.Now.AddMinutes(-30),
-                CompletedAt = null,
-                IsCompressed = false,
-                IsEncrypted = false,
-                RestoreItems = new List<RestoreItem>()
-            }
-        };
-
-        return Task.FromResult(jobs);
     }
 
     private async Task RefreshRunningJobs()
@@ -292,16 +253,13 @@
     {
         if (job.Status == TaskStatus.RanToCompletion)
             return 100;
-
         if (job.Status == TaskStatus.WaitingToRun)
             return 0;
-
         if (job.Status == TaskStatus.Running)
         {
-            // Placeholder: Calculate progress based on actual restore item statuses.
+            // Placeholder: Implement actual progress calculation based on restore item statuses if available.
             return 50;
         }
-
         return 0;
     }
 
@@ -321,4 +279,4 @@
         public DateTime? CompletedAt { get; set; }
         public float ProgressPercentage { get; set; }
     }
-}
+ }

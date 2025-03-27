@@ -8,11 +8,6 @@
         public long RestorePlanId { get; set; }
 
         /// <summary>
-        /// The restore plan associated with this job.
-        /// </summary>
-        public RestorePlan RestorePlan { get; set; } = null!;
-
-        /// <summary>
         /// The status of the restore job (e.g., Pending, Running, Completed, Failed).
         /// </summary>
         public required TaskStatus Status { get; set; }

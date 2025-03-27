@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SCREAM.Data;
 using SCREAM.Data.Entities.Backup.BackupItems;
 using SCREAM.Data.Entities.Restore;
+using SCREAM.Data.Enums;
 
 namespace SCREAM.Service.Api.Endpoints.Plans;
 
@@ -13,15 +14,104 @@ public static class RestorePlanEndpoints
             .WithTags("Plans/Restore");
 
         // Get a list of all restore plans
-        group.MapGet("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
+        group.MapGet("/", async (
+            IDbContextFactory<ScreamDbContext> dbContextFactory,
+            bool? isActive = null,
+            ScheduleType? scheduleType = null,
+            string? name = null,
+            long? databaseTargetId = null,
+            long? sourceBackupPlanId = null,
+            bool? nextRunIsNull = null) =>
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-            var restorePlans = await dbContext.RestorePlans
+
+            IQueryable<RestorePlan> query = dbContext.RestorePlans
+                .Include(i => i.Items)
                 .Include(i => i.DatabaseTarget)
-                .Include(i => i.SourceBackupPlan)
-                .ToListAsync();
+                .Include(i => i.SourceBackupPlan);
+
+            if (isActive.HasValue)
+                query = query.Where(rp => rp.IsActive == isActive.Value);
+
+            if (scheduleType.HasValue)
+                query = query.Where(rp => rp.ScheduleType == scheduleType.Value);
+
+            if (!string.IsNullOrEmpty(name))
+                query = query.Where(rp => rp.Name.Contains(name));
+
+            if (databaseTargetId.HasValue)
+                query = query.Where(rp => rp.DatabaseTargetId == databaseTargetId.Value);
+
+            if (sourceBackupPlanId.HasValue)
+                query = query.Where(rp => rp.SourceBackupPlanId == sourceBackupPlanId.Value);
+
+            if (nextRunIsNull.HasValue && nextRunIsNull.Value)
+                query = query.Where(rp => rp.NextRun == null);
+
+            var restorePlans = await query.ToListAsync();
             return Results.Ok(restorePlans);
         });
+
+        // Run a restore plan
+       group.MapPost("/{restorePlanId:long}/run", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
+     long restorePlanId) =>
+ {
+     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+     var restorePlan = await dbContext.RestorePlans
+         .Include(plan => plan.DatabaseTarget)
+         .Include(plan => plan.SourceBackupPlan)
+         .Include(plan => plan.Items)
+         .ThenInclude(item => item.DatabaseItem)
+         .FirstOrDefaultAsync(plan => plan.Id == restorePlanId);
+     
+     if (restorePlan == null)
+         return Results.NotFound();
+
+     // Create a new restore job
+     var restoreJob = new RestoreJob
+     {
+         RestorePlanId = restorePlanId,
+         Status = TaskStatus.Created,
+         StartedAt = DateTime.UtcNow,
+         CompletedAt = null,
+         IsCompressed = false,
+         IsEncrypted = false,
+         RestoreItems = new List<RestoreItem>()
+     };
+
+     // Add restore items from the plan - only the selected items
+     foreach (var planItem in restorePlan.Items.Where(i => i.IsSelected))
+     {
+         restoreJob.RestoreItems.Add(new RestoreItem
+         {
+             RestoreJobId = restoreJob.Id,
+             DatabaseItemId = planItem.DatabaseItemId,
+             DatabaseItem = planItem.DatabaseItem,
+             Status = TaskStatus.WaitingToRun,
+             RetryCount = 0,
+             StartedAt = null,
+             CompletedAt = null
+         });
+     }
+
+     dbContext.RestoreJobs.Add(restoreJob);
+     await dbContext.SaveChangesAsync();
+
+     // Add initial log entry
+     var logEntry = new RestoreJobLog
+     {
+         RestoreJobId = restoreJob.Id,
+         Timestamp = DateTime.UtcNow,
+         Title = "Job Created",
+         Message = $"Restore job created for plan: {restorePlan.Name}",
+         Severity = LogLevel.Information
+     };
+
+     dbContext.RestoreJobLogs.Add(logEntry);
+     await dbContext.SaveChangesAsync();
+
+     return Results.Created($"/jobs/restore/{restoreJob.Id}", restoreJob);
+ });
 
         // Get a restore plan by id
         group.MapGet("/{restorePlanId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory,
