@@ -32,7 +32,8 @@ namespace SCREAM.Service.Restore
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             LoadConfiguration();
-            await EnsureDirectoriesExist();
+            Directory.CreateDirectory(_backupRootPath);
+            _logger.LogInformation("Verified backup directory exists at: {path}", _backupRootPath);
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -63,12 +64,6 @@ namespace SCREAM.Service.Restore
             _userName = GetConfigValue("MYSQL_BACKUP_USERNAME", "MySqlBackup:UserName");
             _password = GetConfigValue("MYSQL_BACKUP_PASSWORD", "MySqlBackup:Password");
 
-        }
-
-        private async Task EnsureDirectoriesExist()
-        {
-            Directory.CreateDirectory(_backupRootPath);
-            _logger.LogInformation("Verified backup directory exists at: {path}", _backupRootPath);
         }
 
         private async Task<bool> ExecuteRestoreForItemAsync(RestoreItem restoreItem, Tuple<string, string, string> connectionString, CancellationToken ct)
@@ -180,7 +175,7 @@ namespace SCREAM.Service.Restore
         {
             DirectoryInfo directoryInfo = new(_backupRootPath);
             _logger.LogInformation("Found {fileCount} files in directory: {path}",
-                directoryInfo.GetFiles("*").Length, directoryInfo.FullName);
+            directoryInfo.GetFiles("*").Length, directoryInfo.FullName);
 
             var tasks = new List<Task>();
             var semaphore = new SemaphoreSlim(_maxRetries);
