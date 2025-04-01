@@ -76,7 +76,8 @@ namespace SCREAM.Service.Restore
                     restoreItem.DatabaseItem.Schema, restoreItem.DatabaseItem.Name);
                 return false;
             }
-
+            
+            await UpdateRestoreItemStatusAsync(restoreItem, TaskStatus.Running);
             var argsBuilder = new ArgumentsBuilder()
                 .Add("--max_allowed_packet=1073741824")
                 .Add($"--host={connectionString.Item1}")
@@ -210,7 +211,7 @@ namespace SCREAM.Service.Restore
             {
                 _logger.LogInformation("Restoring pending files...");
 
-                var pendingItems = restoreItems.Where(r => r.Status == TaskStatus.Created).ToList();
+                var pendingItems = restoreItems.Where(r => r.Status == TaskStatus.WaitingToRun).ToList();
                 var restoreTasks = pendingItems.Select(item =>
                     ExecuteRestoreForItemAsync(
                         item,
@@ -387,8 +388,46 @@ namespace SCREAM.Service.Restore
 
         private async Task<List<RestoreItem>> GetRestoreItemsFromApiAsync(CancellationToken ct)
         {
-            var items = await _httpClient.GetFromJsonAsync<List<RestoreItem>>("jobs/restore/items", ct);
-            return items ?? new List<RestoreItem>();
+            try
+            {
+                var activeJobs =
+                    await _httpClient.GetFromJsonAsync<List<RestoreJob>>($"jobs/restore?status={TaskStatus.Created}", ct);
+
+                if (activeJobs == null || activeJobs.Count == 0)
+                    return new List<RestoreItem>();
+
+                var activeJob = activeJobs.First();
+
+                var updatedJob = new RestoreJob
+                {
+                    Id = activeJob.Id,
+                    Status = TaskStatus.Running,
+                    IsCompressed = activeJob.IsCompressed,
+                    IsEncrypted = activeJob.IsEncrypted,
+                    RestorePlanId = activeJob.RestorePlanId,
+                    StartedAt = activeJob.StartedAt != default ? activeJob.StartedAt : DateTime.UtcNow,
+                    CreatedAt = activeJob.CreatedAt
+                };
+
+                var response = await _httpClient.PutAsJsonAsync($"jobs/restore/{activeJob.Id}", updatedJob, ct);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var responseBody = await response.Content.ReadAsStringAsync(ct);
+                    _logger.LogWarning("Failed to update restore job {JobId} status: {StatusCode}. Response: {ResponseBody}",
+                        activeJob.Id, response.StatusCode, responseBody);
+
+                    response.EnsureSuccessStatusCode();
+                }
+
+                var items = await _httpClient.GetFromJsonAsync<List<RestoreItem>>($"jobs/restore/items/{activeJob.Id}", ct);
+                return items ?? new List<RestoreItem>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve restore items: {Message}", ex.Message);
+                return new List<RestoreItem>();
+            }
         }
 
         private async Task GenerateRestoreJobs(CancellationToken stoppingToken)
@@ -439,7 +478,6 @@ namespace SCREAM.Service.Restore
                         }
                     }
 
-                    // Create a new restore job for the plan.
                     try
                     {
                         var response = await _httpClient.PostAsJsonAsync($"plans/restore/{restorePlan.Id}/run", new { },

@@ -12,12 +12,32 @@ public static class RestoreJobEndpoints
             .WithTags("Jobs/Restore");
 
         // Get all restore jobs
-        group.MapGet("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
+        group.MapGet("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory, TaskStatus? status,
+            bool? isCompressed,
+            bool? isEncrypted
+        ) =>
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-            var restoreJobs = await dbContext.RestoreJobs
-                .OrderByDescending(job => job.StartedAt)
-                .ToListAsync();
+
+            IQueryable<RestoreJob> query = dbContext.RestoreJobs;
+
+            if (status.HasValue)
+            {
+                query = query.Where(job => job.Status == status.Value);
+            }
+
+            if (isCompressed.HasValue)
+            {
+                query = query.Where(job => job.IsCompressed == isCompressed.Value);
+            }
+
+            if (isEncrypted.HasValue)
+            {
+                query = query.Where(job => job.IsEncrypted == isEncrypted.Value);
+            }
+
+            var restoreJobs = await query.OrderByDescending(job => job.StartedAt).ToListAsync();
+
             return Results.Ok(restoreJobs);
         });
 
@@ -143,6 +163,57 @@ public static class RestoreJobEndpoints
             await dbContext.SaveChangesAsync();
 
             return Results.Ok(restoreItem);
+        });
+
+        group.MapPut("/{jobId:long}", async (
+            IDbContextFactory<ScreamDbContext> dbContextFactory,
+            long jobId,
+            RestoreJob updateJob) =>
+        {
+            await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+            var existingJob = await dbContext.RestoreJobs
+                .FirstOrDefaultAsync(job => job.Id == jobId);
+
+            if (existingJob == null)
+                return Results.NotFound();
+
+            var previousStatus = existingJob.Status;
+            
+            existingJob.Status = updateJob.Status;
+            existingJob.IsCompressed = updateJob.IsCompressed;
+            existingJob.IsEncrypted = updateJob.IsEncrypted;
+            existingJob.RestorePlanId = updateJob.RestorePlanId;
+            
+            if (updateJob.Status == TaskStatus.RanToCompletion ||
+                updateJob.Status == TaskStatus.Faulted ||
+                updateJob.Status == TaskStatus.Canceled)
+            {
+                existingJob.CompletedAt = DateTime.UtcNow;
+            }
+            else if (previousStatus is TaskStatus.RanToCompletion or TaskStatus.Faulted or TaskStatus.Canceled &&
+                     updateJob.Status is not TaskStatus.RanToCompletion and not TaskStatus.Faulted and not TaskStatus.Canceled)
+            {
+                existingJob.CompletedAt = null;
+            }
+
+            await dbContext.SaveChangesAsync();
+
+            if (previousStatus != updateJob.Status)
+            {
+                var logEntry = new RestoreJobLog
+                {
+                    RestoreJobId = existingJob.Id,
+                    Timestamp = DateTime.UtcNow,
+                    Title = "Status Change",
+                    Message = $"Job status changed from {previousStatus} to {updateJob.Status}",
+                    Severity = LogLevel.Information
+                };
+
+                dbContext.RestoreJobLogs.Add(logEntry);
+                await dbContext.SaveChangesAsync();
+            }
+
+            return Results.Ok(existingJob);
         });
     }
 }
