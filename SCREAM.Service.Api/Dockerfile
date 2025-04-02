@@ -5,7 +5,6 @@ WORKDIR /app
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0-noble AS build
 ARG BUILD_CONFIGURATION=Release
-ARG GITHUB_TOKEN
 WORKDIR /src
 COPY . .
 RUN dotnet restore "./SCREAM.Service.Api/SCREAM.Service.Api.csproj"
