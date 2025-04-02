@@ -27,9 +27,9 @@ services:
       dockerfile: SCREAM.Service.Api/Dockerfile
     environment:
       ConnectionStrings__DefaultConnection: "Server=mysql;Database=SCREAM;User=user;Password=userpassword;"
-      CONTAINER_APP_PORT: "8080"
+      CONTAINER_APP_PORT: "8000"
     ports:
-      - "5102:8080"
+      - "8000:8000"
     networks:
       - scream1
     depends_on:
@@ -41,11 +41,13 @@ services:
       context: .
       dockerfile: SCREAM.Service.Restore/Dockerfile
     environment:
-      - API_URL=http://scream-api:8080
+      - API_URL=http://scream-api:8000
       - MYSQL_BACKUP_ENCRYPTION_KEY=your-encryption-key-here
       - MYSQL_BACKUP_HOSTNAME=mysql
       - MYSQL_BACKUP_USERNAME=user
       - MYSQL_BACKUP_PASSWORD=userpassword
+    ports:
+      - "8002:8002"
     networks:
       - scream1
     restart: on-failure
@@ -60,11 +62,13 @@ services:
       context: .
       dockerfile: SCREAM.Service.Backup/Dockerfile
     environment:
-      - API_URL=http://scream-api:8080
+      - API_URL=http://scream-api:8000
       - MYSQL_BACKUP_HOSTNAME=mysql
       - MYSQL_BACKUP_USERNAME=user
       - MYSQL_BACKUP_PASSWORD=userpassword
       - MYSQL_BACKUP_DATABASE=SCREAM
+    ports:
+      - "8001:8001"
     networks:
       - scream1
     restart: on-failure
