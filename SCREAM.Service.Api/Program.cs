@@ -1,27 +1,35 @@
 using Microsoft.EntityFrameworkCore;
 using SCREAM.Data;
 using SCREAM.Data.Entities;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using Microsoft.OpenApi.Models;
 using SCREAM.Data.Enums;
+using SCREAM.Service.Api.Endpoints.BackupItemStatuses;
+using SCREAM.Service.Api.Endpoints.DatabaseItems;
+using SCREAM.Service.Api.Endpoints.Items;
 using SCREAM.Service.Api.Endpoints.Jobs;
 using SCREAM.Service.Api.Endpoints.Plans;
 using SCREAM.Service.Api.Endpoints.Settings;
 using SCREAM.Service.Api.Endpoints.Targets;
-using SCREAM.Service.Api.Endpoints.BackupItemStatuses;
-using SCREAM.Service.Api.Endpoints.DatabaseItems;
-using SCREAM.Service.Api.Endpoints.Items;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
+
+if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CONTAINER_APP_PORT")))
+{
+    builder.WebHost.ConfigureKestrel(serverOptions =>
+    {
+        var port = int.Parse(Environment.GetEnvironmentVariable("CONTAINER_APP_PORT") ?? "80");
+        serverOptions.ListenAnyIP(port);
+    });
+}
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowBlazorClient", policy =>
     {
         policy.AllowAnyOrigin()
-            .AllowAnyHeader()
-            .AllowAnyMethod();
+              .AllowAnyHeader()
+              .AllowAnyMethod();
     });
 });
 
@@ -62,12 +70,11 @@ app.MapRestorePlanEndpoints();
 app.MapBackupJobEndpoints();
 app.MapRestoreJobEndpoints();
 app.MapRestoreSettingsEndpoints();
-app.MapBackupSettingsEndpoints(); 
+app.MapBackupSettingsEndpoints();
 app.MapBackupItemStatusEndpoints();
 app.MapDatabaseItemEndpoints();
-app.MapBackupItemEndpoints(); 
+app.MapBackupItemEndpoints();
 app.MapRestoreItemEndpoints();
-
 
 // Ensure database is created
 using (var scope = app.Services.CreateScope())
@@ -76,7 +83,7 @@ using (var scope = app.Services.CreateScope())
     var dbContext = dbContextFactory.CreateDbContext();
     dbContext.Database.EnsureDeleted();
     dbContext.Database.Migrate();
-    
+
     // Add a sample database target for development
     dbContext.DatabaseTargets.Add(new DatabaseTarget
     {
@@ -87,7 +94,7 @@ using (var scope = app.Services.CreateScope())
         Password = "Here!Lives@A#Happy4Little%Password^",
         Type = DatabaseType.MySQL
     });
-    
+
     dbContext.SaveChanges();
 }
 
