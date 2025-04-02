@@ -11,47 +11,43 @@ namespace SCREAM.Service.Restore
 {
     public class Worker(ILogger<Worker> logger, IHttpClientFactory httpClientFactory, IConfiguration configuration) : BackgroundService
     {
-
-        private readonly ILogger<Worker> _logger = logger;
         private readonly HttpClient _httpClient = httpClientFactory.CreateClient("SCREAM");
-        private readonly IConfiguration _configuration = configuration;
         private string? _encryptionKey;
-        private int _maxRetries = 3;
-        private readonly string _backupRootPath = "/backups";
+        private readonly int _maxRetries = 3;
+        private readonly string _backupDirectory = "/backups";
 
-        private string _hostName = "";
-        private string _userName = "";
-        private string _password = "";
+        private string _mysqlHost = "";
+        private string _mysqlUser = "";
+        private string _mysqlPassword = "";
 
         private string GetConfigValue(string envKey, string configKey, string defaultValue = "")
         {
             var value = Environment.GetEnvironmentVariable(envKey);
-            return !string.IsNullOrEmpty(value) ? value : _configuration[configKey] ?? defaultValue;
+            return !string.IsNullOrEmpty(value) ? value : configuration[configKey] ?? defaultValue;
         }
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        protected override async Task ExecuteAsync(CancellationToken cancellationToken)
         {
             LoadConfiguration();
-            Directory.CreateDirectory(_backupRootPath);
-            _logger.LogInformation("Verified backup directory exists at: {path}", _backupRootPath);
+            Directory.CreateDirectory(_backupDirectory);
+            logger.LogInformation("Verified backup directory exists at: {Directory}", _backupDirectory);
 
-            while (!stoppingToken.IsCancellationRequested)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 try
                 {
-                    _logger.LogInformation("Restore Worker cycle started at: {time}", DateTimeOffset.Now);
+                    logger.LogInformation("Restore Worker cycle started at: {Time}", DateTimeOffset.Now);
 
-                    await ProcessCompletedBackupJobs(stoppingToken);
-                    await GenerateRestoreJobs(stoppingToken);
-
-                    await ProcessRestoreFiles(stoppingToken);
+                    await ProcessCompletedBackupJobsAsync(cancellationToken);
+                    await GenerateRestoreJobsAsync(cancellationToken);
+                    await ProcessRestoreFilesAsync(cancellationToken);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Critical error in main execution loop");
+                    logger.LogError(ex, "Critical error in main execution loop");
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
             }
         }
 
@@ -59,25 +55,30 @@ namespace SCREAM.Service.Restore
         {
             _encryptionKey = GetConfigValue("MYSQL_BACKUP_ENCRYPTION_KEY", "MySqlBackup:EncryptionKey");
 
-            // Load connection parameters
-            _hostName = GetConfigValue("MYSQL_BACKUP_HOSTNAME", "MySqlBackup:HostName");
-            _userName = GetConfigValue("MYSQL_BACKUP_USERNAME", "MySqlBackup:UserName");
-            _password = GetConfigValue("MYSQL_BACKUP_PASSWORD", "MySqlBackup:Password");
+            // Load connection parameters.
+            _mysqlHost = GetConfigValue("MYSQL_BACKUP_HOSTNAME", "MySqlBackup:HostName");
+            _mysqlUser = GetConfigValue("MYSQL_BACKUP_USERNAME", "MySqlBackup:UserName");
+            _mysqlPassword = GetConfigValue("MYSQL_BACKUP_PASSWORD", "MySqlBackup:Password");
 
+            logger.LogInformation("Configuration loaded: Host={Host}, User={User}", _mysqlHost, _mysqlUser);
         }
+
+        #region Restore Execution
 
         private async Task<bool> ExecuteRestoreForItemAsync(RestoreItem restoreItem, Tuple<string, string, string> connectionString, CancellationToken ct)
         {
-            string filePath = Path.Combine(_backupRootPath, $"{restoreItem.DatabaseItem.Schema}.{restoreItem.DatabaseItem.Name}.sql");
+            string filePath = Path.Combine(_backupDirectory, $"{restoreItem.DatabaseItem.Schema}.{restoreItem.DatabaseItem.Name}.sql");
 
             if (!File.Exists(filePath))
             {
-                _logger.LogWarning("{Schema}.{Name}: Restore file not found; skipping restore.",
+                logger.LogWarning("{Schema}.{Name}: Restore file not found; skipping restore.",
                     restoreItem.DatabaseItem.Schema, restoreItem.DatabaseItem.Name);
                 return false;
             }
-            
+
+            // Update restore item status to Running
             await UpdateRestoreItemStatusAsync(restoreItem, TaskStatus.Running);
+
             var argsBuilder = new ArgumentsBuilder()
                 .Add("--max_allowed_packet=1073741824")
                 .Add($"--host={connectionString.Item1}")
@@ -85,6 +86,7 @@ namespace SCREAM.Service.Restore
                 .Add($"--password={connectionString.Item3}")
                 .Add("--init-command=\"SET SESSION innodb_strict_mode=OFF;\"", false);
 
+            // Append schema parameter based on DatabaseItem type
             switch (restoreItem.DatabaseItem.Type)
             {
                 case DatabaseItemType.TableStructure:
@@ -96,13 +98,16 @@ namespace SCREAM.Service.Restore
                     argsBuilder.Add(restoreItem.DatabaseItem.Schema);
                     break;
                 default:
-                    throw new ArgumentOutOfRangeException();
+                    throw new ArgumentOutOfRangeException(nameof(restoreItem.DatabaseItem.Type), "Unsupported database item type");
             }
 
             var args = argsBuilder.Build();
 
             try
             {
+                logger.LogInformation("Starting restore for {Schema}.{Name} using file: {FilePath}",
+                    restoreItem.DatabaseItem.Schema, restoreItem.DatabaseItem.Name, filePath);
+
                 var result = await Cli.Wrap("/usr/bin/mysql")
                     .WithArguments(args)
                     .WithStandardInputPipe(PipeSource.FromFile(filePath))
@@ -110,30 +115,27 @@ namespace SCREAM.Service.Restore
 
                 if (result.ExitCode != 0)
                 {
-                    _logger.LogError("MySQL restore failed for {Schema}.{Name}: {Error}",
+                    logger.LogError("MySQL restore failed for {Schema}.{Name}: {Error}",
                         restoreItem.DatabaseItem.Schema, restoreItem.DatabaseItem.Name, result.StandardError);
-
                     await UpdateRestoreItemStatusAsync(restoreItem, TaskStatus.Faulted, result.StandardError);
                     return false;
                 }
 
-                _logger.LogInformation("Successfully restored {Schema}.{Name}",
+                logger.LogInformation("Successfully restored {Schema}.{Name}",
                     restoreItem.DatabaseItem.Schema, restoreItem.DatabaseItem.Name);
-
                 await UpdateRestoreItemStatusAsync(restoreItem, TaskStatus.RanToCompletion);
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception restoring {Schema}.{Name}: {Error}",
+                logger.LogError(ex, "Exception restoring {Schema}.{Name}: {Error}",
                     restoreItem.DatabaseItem.Schema, restoreItem.DatabaseItem.Name, ex.Message);
-
                 await UpdateRestoreItemStatusAsync(restoreItem, TaskStatus.Faulted, ex.Message);
                 return false;
             }
         }
 
-        private async Task UpdateRestoreItemStatusAsync(RestoreItem restoreItem, TaskStatus status, string errorMessage = null)
+        private async Task UpdateRestoreItemStatusAsync(RestoreItem restoreItem, TaskStatus status, string? errorMessage = null)
         {
             try
             {
@@ -154,250 +156,254 @@ namespace SCREAM.Service.Restore
                 if (!response.IsSuccessStatusCode)
                 {
                     var responseBody = await response.Content.ReadAsStringAsync();
-                    _logger.LogWarning("Failed to update restore item {ItemId} status: {StatusCode}. Response: {ResponseBody}",
-                        restoreItem.Id, response.StatusCode, responseBody);
-
+                    logger.LogWarning("Failed to update restore item {ItemId} status to {Status}: {StatusCode}. Response: {ResponseBody}",
+                        restoreItem.Id, status, response.StatusCode, responseBody);
                     response.EnsureSuccessStatusCode();
+                }
+                else
+                {
+                    logger.LogInformation("Updated restore item {ItemId} status to {Status}", restoreItem.Id, status);
                 }
             }
             catch (HttpRequestException ex)
             {
-                _logger.LogError(ex, "HTTP request failed when updating restore item {ItemId} status", restoreItem.Id);
+                logger.LogError(ex, "HTTP request failed when updating restore item {ItemId} status", restoreItem.Id);
                 throw;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception updating restore item {ItemId} status", restoreItem.Id);
+                logger.LogError(ex, "Exception updating restore item {ItemId} status", restoreItem.Id);
                 throw;
             }
         }
 
-        private async Task ProcessRestoreFiles(CancellationToken stoppingToken)
+        #endregion
+
+        #region File Processing
+
+        private async Task ProcessRestoreFilesAsync(CancellationToken cancellationToken)
         {
-            DirectoryInfo directoryInfo = new(_backupRootPath);
-            _logger.LogInformation("Found {fileCount} files in directory: {path}",
-            directoryInfo.GetFiles("*").Length, directoryInfo.FullName);
+            var backupDirectoryInfo = new DirectoryInfo(_backupDirectory);
+            logger.LogInformation("Found {FileCount} files in directory: {Directory}", backupDirectoryInfo.GetFiles("*").Length, backupDirectoryInfo.FullName);
+
+            // Process decryption and decompression first.
+            await ProcessDecryptionAsync(cancellationToken, backupDirectoryInfo);
+            await ProcessDecompressionAsync(cancellationToken, backupDirectoryInfo);
+
+            var stopwatch = Stopwatch.StartNew();
+            var restoreItems = await GetRestoreItemsFromApiAsync(cancellationToken);
+            var sqlFiles = backupDirectoryInfo.GetFiles("*.sql");
+            logger.LogInformation("Found {FileCount} SQL files in directory", sqlFiles.Length);
+            logger.LogInformation("Running cleanup commands on the SQL files...");
+
+            // Ensure target databases exist.
+            foreach (var group in restoreItems.GroupBy(item => item.DatabaseItem.Schema))
+            {
+                logger.LogInformation("Schema {Schema}: Creating database if not exists...", group.Key);
+                try
+                {
+                    await Cli.Wrap("/usr/bin/mysql")
+                        .WithArguments(args => args
+                            .Add($"--host={_mysqlHost}")
+                            .Add($"--user={_mysqlUser}")
+                            .Add($"--password={_mysqlPassword}")
+                            .Add($"--execute=\"CREATE DATABASE IF NOT EXISTS {group.Key};\"", false)
+                        )
+                        .ExecuteBufferedAsync(cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to create database for schema {Schema}", group.Key);
+                }
+            }
+
+            int retryCount = 0;
+            while (restoreItems.Any(item => item.Status != TaskStatus.RanToCompletion))
+            {
+                logger.LogInformation("Restoring pending files (Retry attempt {RetryCount})...", retryCount);
+
+                var pendingItems = restoreItems.Where(item => item.Status == TaskStatus.WaitingToRun || item.Status == TaskStatus.Faulted).ToList();
+
+                if (pendingItems.Count == 0)
+                {
+                    logger.LogInformation("No items left to restore. Exiting loop.");
+                    break;
+                }
+
+                logger.LogInformation("Processing {PendingCount} pending restore items.", pendingItems.Count);
+
+                // Process each item sequentially to avoid deadlocks
+                foreach (var item in pendingItems)
+                {
+                    await ExecuteRestoreForItemAsync(item, Tuple.Create(_mysqlHost, _mysqlUser, _mysqlPassword), cancellationToken);
+                }
+
+                // Check for failed items
+                var failedItems = restoreItems.Where(item => item.Status == TaskStatus.Faulted).ToList();
+                if (failedItems.Count > 0)
+                {
+                    if (retryCount < _maxRetries)
+                    {
+                        // Exponential backoff delay
+                        int delaySeconds = (int)Math.Pow(2, retryCount);
+                        logger.LogInformation("Waiting {DelaySeconds} seconds before retry...", delaySeconds);
+                        await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
+
+                        retryCount++;
+                        logger.LogWarning("Retrying {FailedCount} failed items (Attempt {RetryCount})", failedItems.Count, retryCount);
+
+                        foreach (var item in failedItems)
+                        {
+                            await UpdateRestoreItemStatusAsync(item, TaskStatus.WaitingToRun);
+                        }
+                    }
+                    else
+                    {
+                        logger.LogError("Max retries reached. {FailedCount} restore items permanently failed.", failedItems.Count);
+                        break;
+                    }
+                }
+            }
+        }
+
+        private async Task ProcessDecompressionAsync(CancellationToken cancellationToken, DirectoryInfo backupDirectoryInfo)
+        {
+            // Start stopwatch for overall decompression timing.
+            var decompSw = Stopwatch.StartNew();
+
+            var compressedFiles = backupDirectoryInfo.GetFiles().Where(file => file.Extension == ".xz").ToList();
+            if (!compressedFiles.Any())
+                return;
+
+            logger.LogInformation("Found {Count} compressed files to decompress.", compressedFiles.Count);
 
             var tasks = new List<Task>();
             var semaphore = new SemaphoreSlim(_maxRetries);
 
-            await DecryptFiles(stoppingToken, directoryInfo, semaphore, tasks);
-            await DecompressFiles(stoppingToken, directoryInfo, semaphore, tasks);
-
-            var sw = Stopwatch.StartNew();
-
-            var restoreItems = await GetRestoreItemsFromApiAsync(stoppingToken);
-            var files = directoryInfo.GetFiles("*.sql");
-            _logger.LogInformation("Found {fileCount} SQL files in directory...", files.Length);
-
-            _logger.LogInformation("Running cleanup commands on the SQL Files...");
-
-            // Ensure target databases exist
-            foreach (var group in restoreItems.GroupBy(r => r.DatabaseItem.Schema))
+            foreach (var compressedFile in compressedFiles)
             {
-                _logger.LogInformation("Schema {schemaName}: Creating Database if not exist...", group.Key);
-                await Cli.Wrap("/usr/bin/mysql")
-                    .WithArguments(args => args
-                        .Add($"--host={_hostName}")
-                        .Add($"--user={_userName}")
-                        .Add($"--password={_password}")
-                        .Add($"--execute=\"CREATE DATABASE IF NOT EXISTS {group.Key};\"", false)
-                    )
-                    .ExecuteBufferedAsync(stoppingToken);
+                await semaphore.WaitAsync(cancellationToken);
+                tasks.Add(Task.Run(async () =>
+                {
+                    try
+                    {
+                        await ProcessCompressedFileAsync(compressedFile, backupDirectoryInfo, cancellationToken);
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                }, cancellationToken));
             }
 
-            int retryCount = 0;
-            while (restoreItems.Any(r => r.Status != TaskStatus.RanToCompletion))
+            await Task.WhenAll(tasks);
+            logger.LogInformation("Completed decompression of files in {TotalMilliseconds}ms.", decompSw.ElapsedMilliseconds);
+            await Task.Delay(10000, cancellationToken);
+        }
+
+        private async Task ProcessCompressedFileAsync(FileInfo compressedFile, DirectoryInfo backupDirectoryInfo, CancellationToken ct)
+        {
+            // Start stopwatch to time the decompression for this individual file.
+            var localStopwatch = Stopwatch.StartNew();
+            try
             {
-                _logger.LogInformation("Restoring pending files...");
+                logger.LogInformation("Decompressing file: {FileName}", compressedFile.Name);
 
-                var pendingItems = restoreItems.Where(r => r.Status == TaskStatus.WaitingToRun).ToList();
-                var restoreTasks = pendingItems.Select(item =>
-                    ExecuteRestoreForItemAsync(
-                        item,
-                        new Tuple<string, string, string>(_hostName, _userName, _password),
-                        stoppingToken
-                    )
-                ).ToList();
+                var command = $"7z e {compressedFile.FullName} -o{backupDirectoryInfo.FullName} -aoa";
+                var result = await Cli.Wrap("/bin/bash")
+                    .WithArguments(new[] { "-c", command })
+                    .ExecuteBufferedAsync(ct);
 
-                await Task.WhenAll(restoreTasks);
-
-                var failedItems = restoreItems.Where(r => r.Status == TaskStatus.Faulted).ToList();
-                if (failedItems.Count > 0 && retryCount < _maxRetries)
+                if (result.ExitCode != 0)
                 {
-                    retryCount++;
-                    _logger.LogWarning("Retrying {count} failed items (Attempt {retryCount})", failedItems.Count, retryCount);
-
-                    foreach (var item in failedItems)
-                    {
-                        await UpdateRestoreItemStatusAsync(item, TaskStatus.Created);
-                    }
+                    logger.LogError("Decompression failed for {FileName}: {Error}", compressedFile.Name, result.StandardError);
                 }
                 else
                 {
-                    if (failedItems.Count > 0)
-                    {
-                        _logger.LogError("Max retries reached. {count} restore items permanently failed.", failedItems.Count);
-                    }
-                    break;
-                }
-            }
-
-            sw.Stop();
-            _logger.LogInformation("Total Restore Process: {minutes} minutes.", sw.Elapsed.TotalMinutes);
-        }
-
-        private async Task DecompressFiles(CancellationToken stoppingToken, DirectoryInfo directoryInfo, SemaphoreSlim semaphore, List<Task> tasks)
-        {
-            var decompSw = Stopwatch.StartNew();
-            if (directoryInfo.GetFiles().Any(f => f.Extension == ".xz"))
-            {
-                foreach (var compressedFile in directoryInfo.GetFiles().Where(f => f.Extension == ".xz"))
-                {
-                    await semaphore.WaitAsync(stoppingToken);
-                    tasks.Add(Task.Run(async () =>
-                    {
-                        try
-                        {
-                            await ProcessCompressedFileAsync(compressedFile);
-                        }
-                        finally
-                        {
-                            semaphore.Release();
-                        }
-                    }, stoppingToken));
-                }
-                await Task.WhenAll(tasks);
-
-                async Task ProcessCompressedFileAsync(FileInfo compressedFile)
-                {
-                    var localSw = Stopwatch.StartNew();
-                    var command = $"7z e {compressedFile.FullName} -o{directoryInfo.FullName} -aoa";
-                    var result = await Cli.Wrap("/bin/bash")
-                        .WithArguments(new[] { "-c", command })
-                        .ExecuteBufferedAsync();
+                    // Delete the compressed file after successful decompression.
                     File.Delete(compressedFile.FullName);
-                    localSw.Stop();
-                    _logger.LogInformation("Took {ms}ms to decompress {file}", localSw.ElapsedMilliseconds, compressedFile.Name);
-                }
-
-                decompSw.Stop();
-                _logger.LogInformation("Took {ms}ms to decompress all files", decompSw.ElapsedMilliseconds);
-                Thread.Sleep(10000);
-            }
-            tasks.Clear();
-        }
-
-        private async Task DecryptFiles(CancellationToken stoppingToken, DirectoryInfo directoryInfo, SemaphoreSlim semaphore, List<Task> tasks)
-        {
-            var decryptSw = Stopwatch.StartNew();
-            if (directoryInfo.GetFiles().Any(f => f.Extension == ".enc"))
-            {
-                foreach (var encryptedFile in directoryInfo.GetFiles().Where(f => f.Extension == ".enc"))
-                {
-                    await semaphore.WaitAsync(stoppingToken);
-                    tasks.Add(Task.Run(async () =>
-                    {
-                        try
-                        {
-                            await ProcessEncryptedFileAsync(encryptedFile);
-                        }
-                        finally
-                        {
-                            semaphore.Release();
-                        }
-                    }, stoppingToken));
-                }
-                await Task.WhenAll(tasks);
-
-                async Task ProcessEncryptedFileAsync(FileInfo encryptedFile)
-                {
-                    var localSw = Stopwatch.StartNew();
-                    var command = $"/usr/bin/openssl enc -d -aes-256-cbc -pbkdf2 -iter 20000 -in {encryptedFile.FullName} -out {encryptedFile.FullName.Replace(".enc", "")} -k {_encryptionKey}";
-                    var result = await Cli.Wrap("/bin/bash")
-                        .WithArguments(new[] { "-c", command })
-                        .ExecuteBufferedAsync();
-                    File.Delete(encryptedFile.FullName);
-                    localSw.Stop();
-                    _logger.LogInformation("Took {ms}ms to decrypt {file}", localSw.ElapsedMilliseconds, encryptedFile.Name);
-                }
-
-                decryptSw.Stop();
-                _logger.LogInformation("Took {ms}ms to decrypt all files", decryptSw.ElapsedMilliseconds);
-                Thread.Sleep(10000);
-            }
-            tasks.Clear();
-        }
-
-        private async Task ProcessCompletedBackupJobs(CancellationToken stoppingToken)
-        {
-            try
-            {
-                // Retrieve backup jobs from the API.
-                var backupJobs = await _httpClient.GetFromJsonAsync<List<BackupJob>>("jobs/backup", stoppingToken);
-                if (backupJobs is null)
-                {
-                    _logger.LogWarning("No backup jobs received from API.");
-                    return;
-                }
-
-                // Filter backup jobs that have RanToCompletion and haven't triggered a restore.
-                var completedJobs = backupJobs
-                    .Where(j => j.Status == TaskStatus.RanToCompletion && !j.HasTriggeredRestore)
-                    .ToList();
-
-                foreach (var backupJob in completedJobs)
-                {
-                    // Retrieve all restore plans from the API.
-                    var restorePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>($"plans/restore?sourceBackupPlanId={backupJob.BackupPlanId}&scheduleType=Triggered", stoppingToken);
-
-
-                    if (restorePlans is null)
-                        continue;
-
-                    foreach (var restorePlan in restorePlans)
-                    {
-                        // Create a new restore job for this restore plan.
-                        var response = await _httpClient.PostAsync(
-                            $"plans/restore/{restorePlan.Id}/run", null, stoppingToken);
-
-                        if (response.IsSuccessStatusCode)
-                        {
-                            _logger.LogInformation("Created restore job for restore plan {RestorePlanId}",
-                                restorePlan.Id);
-                        }
-                        else
-                        {
-                            var error = await response.Content.ReadAsStringAsync(stoppingToken);
-                            _logger.LogError("Failed to create restore job for plan {RestorePlanId}: {Error}",
-                                restorePlan.Id, error);
-                        }
-                    }
-
-                    // Mark backup job as having triggered a restore.
-                    backupJob.HasTriggeredRestore = true;
-                    // Optionally update the backup job via API (if you have an endpoint for that):
-                    await _httpClient.PutAsJsonAsync($"jobs/backup/{backupJob.Id}", backupJob, stoppingToken);
+                    logger.LogInformation("Successfully decompressed {FileName} in {Milliseconds}ms",
+                        compressedFile.Name, localStopwatch.ElapsedMilliseconds);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing completed backup jobs via API.");
+                logger.LogError(ex, "Exception decompressing file {FileName}", compressedFile.Name);
             }
         }
+
+
+        private async Task ProcessDecryptionAsync(CancellationToken cancellationToken, DirectoryInfo backupDirectoryInfo)
+        {
+            var encryptedFiles = backupDirectoryInfo.GetFiles().Where(file => file.Extension == ".enc").ToList();
+            if (!encryptedFiles.Any())
+                return;
+
+            logger.LogInformation("Found {Count} encrypted files to decrypt.", encryptedFiles.Count);
+            var tasks = new List<Task>();
+            var semaphore = new SemaphoreSlim(_maxRetries);
+
+            foreach (var encryptedFile in encryptedFiles)
+            {
+                await semaphore.WaitAsync(cancellationToken);
+                tasks.Add(Task.Run(async () =>
+                {
+                    try
+                    {
+                        await ProcessEncryptedFileAsync(encryptedFile, backupDirectoryInfo, cancellationToken);
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                }, cancellationToken));
+            }
+            await Task.WhenAll(tasks);
+            logger.LogInformation("Completed decryption of files.");
+            await Task.Delay(10000, cancellationToken);
+        }
+
+        private async Task ProcessEncryptedFileAsync(FileInfo encryptedFile, DirectoryInfo backupDirectoryInfo, CancellationToken ct)
+        {
+            var localStopwatch = Stopwatch.StartNew();
+            try
+            {
+                logger.LogInformation("Decrypting file: {FileName}", encryptedFile.Name);
+                var outputFile = encryptedFile.FullName.Replace(".enc", "");
+                var command = $"/usr/bin/openssl enc -d -aes-256-cbc -pbkdf2 -iter 20000 -in {encryptedFile.FullName} -out {outputFile} -k {_encryptionKey}";
+                var result = await Cli.Wrap("/bin/bash")
+                    .WithArguments(new[] { "-c", command })
+                    .ExecuteBufferedAsync(ct);
+
+                if (result.ExitCode != 0)
+                {
+                    logger.LogError("Decryption failed for {FileName}: {Error}", encryptedFile.Name, result.StandardError);
+                }
+                else
+                {
+                    File.Delete(encryptedFile.FullName);
+                    logger.LogInformation("Successfully decrypted {FileName} in {Milliseconds}ms", encryptedFile.Name, localStopwatch.ElapsedMilliseconds);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Exception decrypting file {FileName}", encryptedFile.Name);
+            }
+        }
+
+        #endregion
+
+        #region API Integration
 
         private async Task<List<RestoreItem>> GetRestoreItemsFromApiAsync(CancellationToken ct)
         {
             try
             {
-                var activeJobs =
-                    await _httpClient.GetFromJsonAsync<List<RestoreJob>>($"jobs/restore?status={TaskStatus.Created}", ct);
-
+                var activeJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>($"jobs/restore?status={TaskStatus.Created}", ct);
                 if (activeJobs == null || activeJobs.Count == 0)
                     return new List<RestoreItem>();
 
                 var activeJob = activeJobs.First();
-
                 var updatedJob = new RestoreJob
                 {
                     Id = activeJob.Id,
@@ -410,13 +416,11 @@ namespace SCREAM.Service.Restore
                 };
 
                 var response = await _httpClient.PutAsJsonAsync($"jobs/restore/{activeJob.Id}", updatedJob, ct);
-
                 if (!response.IsSuccessStatusCode)
                 {
                     var responseBody = await response.Content.ReadAsStringAsync(ct);
-                    _logger.LogWarning("Failed to update restore job {JobId} status: {StatusCode}. Response: {ResponseBody}",
+                    logger.LogWarning("Failed to update restore job {JobId} status: {StatusCode}. Response: {ResponseBody}",
                         activeJob.Id, response.StatusCode, responseBody);
-
                     response.EnsureSuccessStatusCode();
                 }
 
@@ -425,90 +429,128 @@ namespace SCREAM.Service.Restore
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to retrieve restore items: {Message}", ex.Message);
+                logger.LogError(ex, "Failed to retrieve restore items: {Message}", ex.Message);
                 return new List<RestoreItem>();
             }
         }
 
-        private async Task GenerateRestoreJobs(CancellationToken stoppingToken)
+        private async Task GenerateRestoreJobsAsync(CancellationToken ct)
         {
             try
             {
-                // Retrieve only eligible restore plans via API filtering.
                 var eligiblePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>(
-                    "plans/restore?isActive=true&excludeTriggered=true&nextRunIsNull=true", stoppingToken);
-                if (eligiblePlans is null || eligiblePlans.Count == 0)
+                    "plans/restore?isActive=true&excludeTriggered=true&nextRunIsNull=true", ct);
+                if (eligiblePlans == null || eligiblePlans.Count == 0)
                 {
-                    _logger.LogWarning("No eligible restore plans received from API.");
+                    logger.LogWarning("No eligible restore plans received from API.");
                     return;
                 }
 
-                foreach (var restorePlan in eligiblePlans)
+                foreach (var plan in eligiblePlans)
                 {
-                    // Retrieve active restore jobs for this plan via a separate API call.
-                    var activeJobs =
-                        await _httpClient.GetFromJsonAsync<List<RestoreJob>>($"jobs/restore?planId={restorePlan.Id}",
-                            stoppingToken);
-
-
-                    if (activeJobs != null && activeJobs.Any(j =>
-                            j.Status >= TaskStatus.Created && j.Status < TaskStatus.RanToCompletion))
-                    {
+                    var activeJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>($"jobs/restore?planId={plan.Id}", ct);
+                    if (activeJobs != null && activeJobs.Any(job => job.Status >= TaskStatus.Created && job.Status < TaskStatus.RanToCompletion))
                         continue;
-                    }
 
-                    // Calculate NextRun using the plan's logic.
-                    var nextRun = restorePlan.GetNextRun(DateTime.UtcNow);
+                    var nextRun = plan.GetNextRun(DateTime.UtcNow);
                     if (nextRun != null)
                     {
-                        restorePlan.NextRun = nextRun;
-                        // Update the restore plan via API using POST (which handles both creation and update).
-                        var updateResponse =
-                            await _httpClient.PostAsJsonAsync("plans/restore", restorePlan, stoppingToken);
+                        plan.NextRun = nextRun;
+                        var updateResponse = await _httpClient.PostAsJsonAsync("plans/restore", plan, ct);
                         if (updateResponse.IsSuccessStatusCode)
                         {
-                            _logger.LogInformation("Restore plan {RestorePlanId} updated with NextRun {NextRun}",
-                                restorePlan.Id, restorePlan.NextRun);
+                            logger.LogInformation("Restore plan {PlanId} updated with NextRun {NextRun}", plan.Id, plan.NextRun);
                         }
                         else
                         {
-                            var error = await updateResponse.Content.ReadAsStringAsync(stoppingToken);
-                            _logger.LogError("Error updating restore plan {RestorePlanId}: {Error}", restorePlan.Id,
-                                error);
+                            var error = await updateResponse.Content.ReadAsStringAsync(ct);
+                            logger.LogError("Error updating restore plan {PlanId}: {Error}", plan.Id, error);
                         }
                     }
 
                     try
                     {
-                        var response = await _httpClient.PostAsJsonAsync($"plans/restore/{restorePlan.Id}/run", new { },
-                            stoppingToken);
-
+                        var response = await _httpClient.PostAsJsonAsync($"plans/restore/{plan.Id}/run", new { }, ct);
                         if (response.IsSuccessStatusCode)
                         {
-                            _logger.LogInformation("Created restore job for restore plan {RestorePlanId}",
-                                restorePlan.Id);
+                            logger.LogInformation("Created restore job for restore plan {PlanId}", plan.Id);
                         }
                         else
                         {
-                            var responseContent = await response.Content.ReadAsStringAsync(stoppingToken);
-                            _logger.LogError(
-                                "Failed to create restore job for plan {RestorePlanId}. Status: {StatusCode}, Content: {Content}",
-                                restorePlan.Id, response.StatusCode, responseContent);
+                            var responseContent = await response.Content.ReadAsStringAsync(ct);
+                            logger.LogError("Failed to create restore job for plan {PlanId}. Status: {StatusCode}, Content: {Content}",
+                                plan.Id, response.StatusCode, responseContent);
                         }
-
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Exception occurred while creating restore job for plan {RestorePlanId}",
-                            restorePlan.Id);
+                        logger.LogError(ex, "Exception occurred while creating restore job for plan {PlanId}", plan.Id);
                     }
                 }
-
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error generating restore jobs via API.");
+                logger.LogError(ex, "Error generating restore jobs via API.");
             }
         }
+
+        private async Task ProcessCompletedBackupJobsAsync(CancellationToken ct)
+        {
+            try
+            {
+                var backupJobs = await _httpClient.GetFromJsonAsync<List<BackupJob>>("jobs/backup", ct);
+                if (backupJobs == null)
+                {
+                    logger.LogWarning("No backup jobs received from API.");
+                    return;
+                }
+
+                // Process only backup jobs that completed and haven't been processed for restore yet.
+                var completedJobs = backupJobs
+                    .Where(job => job.Status == TaskStatus.RanToCompletion && !job.HasTriggeredRestore)
+                    .ToList();
+
+                foreach (var backupJob in completedJobs)
+                {
+                    logger.LogInformation("Processing backup job {BackupJobId} for backup plan {BackupPlanId}", backupJob.Id, backupJob.BackupPlanId);
+
+                    // Query restore plans with schedule type "Triggered"
+                    var restorePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>(
+                        $"plans/restore?sourceBackupPlanId={backupJob.BackupPlanId}&scheduleType=Triggered", ct);
+
+                    // If there are no restore plans with schedule type "Triggered", skip this backup job.
+                    if (restorePlans == null || !restorePlans.Any())
+                    {
+                        logger.LogInformation("Backup job {BackupJobId} does not have any restore plans with schedule type 'Triggered'. Skipping.", backupJob.Id);
+                        continue;
+                    }
+
+                    foreach (var plan in restorePlans)
+                    {
+                        var response = await _httpClient.PostAsync($"plans/restore/{plan.Id}/run", null, ct);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            logger.LogInformation("Created restore job for restore plan {PlanId}", plan.Id);
+                        }
+                        else
+                        {
+                            var error = await response.Content.ReadAsStringAsync(ct);
+                            logger.LogError("Failed to create restore job for plan {PlanId}: {Error}", plan.Id, error);
+                        }
+                    }
+
+                    // Mark backup job as processed only if at least one restore plan was processed.
+                    backupJob.HasTriggeredRestore = true;
+                    await _httpClient.PutAsJsonAsync($"jobs/backup/{backupJob.Id}", backupJob, ct);
+                    logger.LogInformation("Backup job {BackupJobId} marked as having triggered a restore.", backupJob.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error processing completed backup jobs via API.");
+            }
+        }
+
+        #endregion
     }
 }
