@@ -381,6 +381,13 @@ namespace SCREAM.Service.Restore
                                 bool ok = await ProcessItemWithRetriesAsync(item, connectionString, token);
                                 if (!ok) { allOk = false; Interlocked.Increment(ref failedCount); }
                             }
+                            catch (Exception ex)
+                            {
+                                logger.LogError(ex, "Unhandled exception in parallel processing for item {ItemId}: {Error}",
+                                    item.Id, ex.Message);
+                                allOk = false;
+                                Interlocked.Increment(ref failedCount);
+                            }
                             finally
                             {
                                 _restoreSemaphore.Release();
