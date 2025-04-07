@@ -46,6 +46,7 @@ services:
       - MYSQL_BACKUP_HOSTNAME=mysql
       - MYSQL_BACKUP_USERNAME=user
       - MYSQL_BACKUP_PASSWORD=userpassword
+      - MYSQL_BACKUP_THREADS=4
     ports:
       - "8002:8002"
     networks:

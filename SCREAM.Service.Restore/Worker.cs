@@ -1,4 +1,4 @@
-using CliWrap;
+﻿using CliWrap;
 using CliWrap.Buffered;
 using CliWrap.Builders;
 using Cronos;
@@ -20,7 +20,8 @@ namespace SCREAM.Service.Restore
         private string _mysqlHost = "";
         private string _mysqlUser = "";
         private string _mysqlPassword = "";
-
+        private int _restoreThreads;
+        private SemaphoreSlim _restoreSemaphore;
         private string GetConfigValue(string envKey, string configKey, string defaultValue = "")
         {
             var value = Environment.GetEnvironmentVariable(envKey);
@@ -60,6 +61,8 @@ namespace SCREAM.Service.Restore
             _mysqlHost = GetConfigValue("MYSQL_BACKUP_HOSTNAME", "MySqlBackup:HostName");
             _mysqlUser = GetConfigValue("MYSQL_BACKUP_USERNAME", "MySqlBackup:UserName");
             _mysqlPassword = GetConfigValue("MYSQL_BACKUP_PASSWORD", "MySqlBackup:Password");
+            _restoreThreads = int.Parse(GetConfigValue("MYSQL_BACKUP_THREADS", "MySqlBackup:Threads", Environment.ProcessorCount.ToString()));
+            _restoreSemaphore = new SemaphoreSlim(_restoreThreads);
 
             logger.LogInformation("Configuration loaded: Host={Host}, User={User}", _mysqlHost, _mysqlUser);
         }
@@ -222,6 +225,7 @@ namespace SCREAM.Service.Restore
 
             try
             {
+                // 1) Scan directory
                 var directoryStopwatch = Stopwatch.StartNew();
                 var backupDirectoryInfo = new DirectoryInfo(_backupDirectory);
                 int totalFiles = backupDirectoryInfo.GetFiles("*").Length;
@@ -229,6 +233,7 @@ namespace SCREAM.Service.Restore
                 directoryStopwatch.Stop();
                 logger.LogDebug("Directory scan completed in {ElapsedMs}ms", directoryStopwatch.ElapsedMilliseconds);
 
+                // 2) Decrypt & decompress
                 var fileProcessingStopwatch = Stopwatch.StartNew();
                 try
                 {
@@ -244,43 +249,46 @@ namespace SCREAM.Service.Restore
                     logger.LogInformation("File decryption and decompression completed in {ElapsedSec:F2} seconds", fileProcessingStopwatch.Elapsed.TotalSeconds);
                 }
 
+                // 3) Find SQL files
                 var sqlFiles = backupDirectoryInfo.GetFiles("*.sql");
                 logger.LogInformation("Found {FileCount} SQL files in directory", sqlFiles.Length);
 
+                // 4) Fetch restore items
                 var apiStopwatch = Stopwatch.StartNew();
                 logger.LogInformation("Retrieving restore items from API...");
                 var (jobId, restoreItems) = await GetRestoreItemsFromApiAsync(cancellationToken);
+                apiStopwatch.Stop();
+
                 if (jobId == 0 || !restoreItems.Any())
                 {
-                    apiStopwatch.Stop();
-                    logger.LogWarning("No active restore job and items to process. API check completed in {ElapsedMs}ms",
-                        apiStopwatch.ElapsedMilliseconds);
-                    totalStopwatch.Stop();
-                    logger.LogInformation("ProcessRestoreFilesAsync completed with no items to process in {TotalSec:F2} seconds",
-                        totalStopwatch.Elapsed.TotalSeconds);
+                    logger.LogWarning("No active restore job or items to process. API check completed in {ElapsedMs}ms", apiStopwatch.ElapsedMilliseconds);
+                    logger.LogInformation("ProcessRestoreFilesAsync completed with no items to process in {TotalSec:F2} seconds", totalStopwatch.Elapsed.TotalSeconds);
                     return;
                 }
-                apiStopwatch.Stop();
+
                 logger.LogInformation("Retrieved {ItemCount} restore items for job {JobId} in {ElapsedMs}ms",
                     restoreItems.Count, jobId, apiStopwatch.ElapsedMilliseconds);
 
+                // 5) Prepare databases
                 var schemaStopwatch = Stopwatch.StartNew();
                 logger.LogInformation("Preparing target databases...");
                 await PrepareTargetDatabasesAsync(restoreItems, cancellationToken);
                 schemaStopwatch.Stop();
                 logger.LogInformation("Database preparation completed in {ElapsedSec:F2} seconds", schemaStopwatch.Elapsed.TotalSeconds);
 
+                // 6) Process with dependencies (including parallel data phase)
                 var connectionString = Tuple.Create(_mysqlHost, _mysqlUser, _mysqlPassword);
-                var processingResult = await ProcessItemsWithDependenciesAsync(restoreItems, connectionString, cancellationToken);
+                var (allSuccessful, failedCount) = await ProcessItemsWithDependenciesAsync(restoreItems, connectionString, cancellationToken);
 
+                // 7) Final logging & job update
                 totalStopwatch.Stop();
                 logger.LogInformation("Total restore process took {Minutes:F2} minutes ({TotalSec:F2} seconds)",
                     totalStopwatch.Elapsed.TotalMinutes, totalStopwatch.Elapsed.TotalSeconds);
 
-                var statusMessage = processingResult.allSuccessful
+                var statusMessage = allSuccessful
                     ? "All items restored successfully"
-                    : $"Some items failed after maximum retry attempts: {processingResult.failedCount} of {restoreItems.Count} items failed";
-                var finalStatus = processingResult.allSuccessful ? TaskStatus.RanToCompletion : TaskStatus.Faulted;
+                    : $"Some items failed after maximum retry attempts: {failedCount} of {restoreItems.Count} items failed";
+                var finalStatus = allSuccessful ? TaskStatus.RanToCompletion : TaskStatus.Faulted;
 
                 logger.LogInformation("Updating job {JobId} status to {Status} with message: {Message}",
                     jobId, finalStatus, statusMessage);
@@ -294,7 +302,8 @@ namespace SCREAM.Service.Restore
             }
         }
 
-        private async Task PrepareDatabase(string schema,Tuple<string, string, string> connectionString,
+
+        private async Task PrepareDatabase(string schema, Tuple<string, string, string> connectionString,
             CancellationToken ct)
         {
             try
@@ -320,90 +329,79 @@ namespace SCREAM.Service.Restore
         #endregion
 
         private async Task<(bool allSuccessful, int failedCount)> ProcessItemsWithDependenciesAsync(
-            List<RestoreItem> restoreItems,
-            Tuple<string, string, string> connectionString,
-            CancellationToken cancellationToken)
+     List<RestoreItem> restoreItems,
+      Tuple<string, string, string> connectionString,
+     CancellationToken cancellationToken)
         {
-            var processSw = Stopwatch.StartNew();
-            logger.LogInformation("Starting restore item processing with dependency management...");
-
-            int successCount = 0;
-            int failedCount = 0;
-            bool allSuccessful = true;
-
             var processingOrder = new[]
             {
-                DatabaseItemType.TableStructure,    // Must come first - tables need to exist
-                DatabaseItemType.TableData,         // Requires tables to be created
-                DatabaseItemType.FunctionProcedure, // Functions/procs used by triggers/views
-                DatabaseItemType.Trigger,           // Depends on tables and possibly functions
-                DatabaseItemType.Event,             // Generally standalone but after tables
-                DatabaseItemType.View               // Often depends on all previous items
-            };
+        DatabaseItemType.TableStructure,    // single‐threaded
+        DatabaseItemType.FunctionProcedure, // single‐threaded
+        DatabaseItemType.Trigger,           // single‐threaded
+        DatabaseItemType.Event,             // single‐threaded
+        DatabaseItemType.View,              // single‐threaded
+        DatabaseItemType.TableData          // multi‐threaded
+    };
 
-            // Group items by schema for isolated processing
+            bool allOk = true;
+            int failedCount = 0;
+
+            // Group items by schema
             var itemsBySchema = restoreItems
-                .GroupBy(item => item.DatabaseItem.Schema)
+                .GroupBy(i => i.DatabaseItem.Schema)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            logger.LogInformation("Processing items for {SchemaCount} schemas", itemsBySchema.Count);
-
-            foreach (var (schema, schemaItems) in itemsBySchema)
+            foreach (var (schema, items) in itemsBySchema)
             {
-                var schemaSw = Stopwatch.StartNew();
-                logger.LogInformation("Processing schema: {Schema} with {ItemCount} items",
-                    schema, schemaItems.Count);
+                await PrepareDatabase(schema, connectionString, cancellationToken);
 
-                try
+                foreach (var type in processingOrder)
                 {
-                    await PrepareDatabase(schema, connectionString, cancellationToken);
+                    var batch = items
+                        .Where(i => i.DatabaseItem.Type == type)
+                        .OrderBy(i => i.DatabaseItem.Name)
+                        .ToList();
 
-                    foreach (var itemType in processingOrder)
+                    if (batch.Count == 0) continue;
+
+                    logger.LogInformation("Processing {Count} {Type} items for schema {Schema}",
+                        batch.Count, type, schema);
+
+                    if (type == DatabaseItemType.TableData)
                     {
-                        var itemsToProcess = schemaItems
-                            .Where(i => i.DatabaseItem.Type == itemType)
-                            .OrderBy(i => i.DatabaseItem.Name)
-                            .ToList();
-
-                        if (!itemsToProcess.Any()) continue;
-
-                        logger.LogInformation("Processing {Count} {Type} items for {Schema}",
-                            itemsToProcess.Count, itemType, schema);
-
-                        foreach (var item in itemsToProcess)
+                        await Parallel.ForEachAsync(batch, new ParallelOptions
                         {
-                            var itemSuccess = await ProcessItemWithRetriesAsync(
-                                item, connectionString, cancellationToken);
-
-                            if (itemSuccess) successCount++;
-                            else
+                            MaxDegreeOfParallelism = _restoreThreads,
+                            CancellationToken = cancellationToken
+                        }, async (item, token) =>
+                        {
+                            await _restoreSemaphore.WaitAsync(token);
+                            try
                             {
-                                failedCount++;
-                                allSuccessful = false;
+                                bool ok = await ProcessItemWithRetriesAsync(item, connectionString, token);
+                                if (!ok) { allOk = false; Interlocked.Increment(ref failedCount); }
                             }
+                            finally
+                            {
+                                _restoreSemaphore.Release();
+                            }
+                        });
+                    }
+                    else
+                    {
+                        foreach (var item in batch)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            bool ok = await ProcessItemWithRetriesAsync(item, connectionString, cancellationToken);
+                            if (!ok) { allOk = false; failedCount++; }
                         }
                     }
                 }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Failed to process schema {Schema}", schema);
-                    allSuccessful = false;
-                    failedCount += schemaItems.Count;
-                }
-                finally
-                {
-                    schemaSw.Stop();
-                    logger.LogInformation("Completed processing schema {Schema} in {ElapsedSec:F2}s",
-                        schema, schemaSw.Elapsed.TotalSeconds);
-                }
             }
 
-            processSw.Stop();
-            logger.LogInformation("Completed all schemas in {TotalSec:F2}s. Success: {Success}, Failed: {Failed}",
-                processSw.Elapsed.TotalSeconds, successCount, failedCount);
-
-            return (allSuccessful, failedCount);
+            return (allOk, failedCount);
         }
+
 
         private async Task<bool> ProcessItemWithRetriesAsync(RestoreItem item, Tuple<string, string, string> connectionString, CancellationToken cancellationToken)
         {
