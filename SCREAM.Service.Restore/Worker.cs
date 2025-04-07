@@ -398,9 +398,19 @@ namespace SCREAM.Service.Restore
                     {
                         foreach (var item in batch)
                         {
-                            cancellationToken.ThrowIfCancellationRequested();
-                            bool ok = await ProcessItemWithRetriesAsync(item, connectionString, cancellationToken);
-                            if (!ok) { allOk = false; failedCount++; }
+                            try
+                            {
+                                cancellationToken.ThrowIfCancellationRequested();
+                                bool ok = await ProcessItemWithRetriesAsync(item, connectionString, cancellationToken);
+                                if (!ok) { allOk = false; failedCount++; }
+                            }
+                            catch (Exception ex)
+                            {
+                                logger.LogError(ex, "Unhandled exception processing item {ItemId}: {Error}",
+                                    item.Id, ex.Message);
+                                allOk = false;
+                                failedCount++;
+                            }
                         }
                     }
                 }
