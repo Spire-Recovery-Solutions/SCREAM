@@ -554,20 +554,23 @@ namespace SCREAM.Service.Restore
             logger.LogInformation("Found {Count} compressed files to decompress.", compressedFiles.Count);
 
             var tasks = new List<Task>();
-            var semaphore = new SemaphoreSlim(_maxRetries);
 
             foreach (var compressedFile in compressedFiles)
             {
-                await semaphore.WaitAsync(cancellationToken);
+                await _restoreSemaphore.WaitAsync(cancellationToken);
                 tasks.Add(Task.Run(async () =>
                 {
                     try
                     {
                         await ProcessCompressedFileAsync(compressedFile, backupDirectoryInfo, cancellationToken);
                     }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Error decompressing file {FileName}", compressedFile.Name);
+                    }
                     finally
                     {
-                        semaphore.Release();
+                        _restoreSemaphore.Release();
                     }
                 }, cancellationToken));
             }
@@ -614,24 +617,29 @@ namespace SCREAM.Service.Restore
                 return;
 
             logger.LogInformation("Found {Count} encrypted files to decrypt.", encryptedFiles.Count);
+
             var tasks = new List<Task>();
-            var semaphore = new SemaphoreSlim(_maxRetries);
 
             foreach (var encryptedFile in encryptedFiles)
             {
-                await semaphore.WaitAsync(cancellationToken);
+                await _restoreSemaphore.WaitAsync(cancellationToken);
                 tasks.Add(Task.Run(async () =>
                 {
                     try
                     {
                         await ProcessEncryptedFileAsync(encryptedFile, backupDirectoryInfo, cancellationToken);
                     }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Error decrypting file {FileName}", encryptedFile.Name);
+                    }
                     finally
                     {
-                        semaphore.Release();
+                        _restoreSemaphore.Release();
                     }
                 }, cancellationToken));
             }
+
             await Task.WhenAll(tasks);
             logger.LogInformation("Completed decryption of files.");
             await Task.Delay(10000, cancellationToken);
