@@ -767,7 +767,7 @@ namespace SCREAM.Service.Restore
                     var existingJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>(
                         $"jobs/restore?planId={plan.Id}", ct) ?? new List<RestoreJob>();
 
-                    if (plan.ScheduleType == ScheduleType.OneTime)
+                    if (plan.ScheduleType == ScheduleType.OneTime && plan.LastRun.HasValue)
                     {
                         if (plan.LastRun.HasValue || existingJobs.Any())
                         {
