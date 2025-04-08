@@ -5,6 +5,7 @@ using Cronos;
 using SCREAM.Data.Entities;
 using SCREAM.Data.Entities.Backup;
 using SCREAM.Data.Entities.Restore;
+using SCREAM.Data.Enums;
 using System.Diagnostics;
 using System.Net.Http.Json;
 
@@ -316,10 +317,7 @@ namespace SCREAM.Service.Restore
 
         #endregion
 
-        private async Task<(bool allSuccessful, int failedCount)> ProcessItemsWithDependenciesAsync(
-    List<RestoreItem> restoreItems,
-    Tuple<string, string, string> connectionString,
-    CancellationToken cancellationToken)
+        private async Task<(bool allSuccessful, int failedCount)> ProcessItemsWithDependenciesAsync(List<RestoreItem> restoreItems, Tuple<string, string, string> connectionString, CancellationToken cancellationToken)
         {
             var processingOrder = new[]
             {
@@ -759,7 +757,8 @@ namespace SCREAM.Service.Restore
         {
             try
             {
-                var eligiblePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>("plans/restore?isActive=true&excludeTriggered=true&nextRunIsNull=true", ct);
+                // Get all active restore plans that don't have already triggered jobs
+                var eligiblePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>("plans/restore?isActive=true&excludeTriggered=true", ct);
                 if (eligiblePlans == null || eligiblePlans.Count == 0)
                 {
                     logger.LogWarning("No eligible restore plans received from API.");
@@ -768,49 +767,113 @@ namespace SCREAM.Service.Restore
 
                 foreach (var plan in eligiblePlans)
                 {
+                    // Check if there are any active jobs for this plan
                     var activeJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>($"jobs/restore?planId={plan.Id}", ct);
                     if (activeJobs != null && activeJobs.Any(job => job.Status >= TaskStatus.Created && job.Status < TaskStatus.RanToCompletion))
+                    {
+                        logger.LogInformation("Plan {PlanId} already has active jobs. Skipping job creation.", plan.Id);
                         continue;
-
-                    var nextRun = plan.GetNextRun(DateTime.UtcNow);
-                    if (nextRun != null)
-                    {
-                        plan.NextRun = nextRun;
-                        var updateResponse = await _httpClient.PostAsJsonAsync("plans/restore", plan, ct);
-                        if (updateResponse.IsSuccessStatusCode)
-                        {
-                            logger.LogInformation("Restore plan {PlanId} updated with NextRun {NextRun}", plan.Id, plan.NextRun);
-                        }
-                        else
-                        {
-                            var error = await updateResponse.Content.ReadAsStringAsync(ct);
-                            logger.LogError("Error updating restore plan {PlanId}: {Error}", plan.Id, error);
-                        }
                     }
 
-                    try
+                    switch (plan.ScheduleType)
                     {
-                        var response = await _httpClient.PostAsJsonAsync($"plans/restore/{plan.Id}/run", new { }, ct);
-                        if (response.IsSuccessStatusCode)
-                        {
-                            logger.LogInformation("Created restore job for restore plan {PlanId}", plan.Id);
-                        }
-                        else
-                        {
-                            var responseContent = await response.Content.ReadAsStringAsync(ct);
-                            logger.LogError("Failed to create restore job for plan {PlanId}. Status: {StatusCode}, Content: {Content}",
-                                plan.Id, response.StatusCode, responseContent);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "Exception occurred while creating restore job for plan {PlanId}", plan.Id);
+                        case ScheduleType.OneTime:
+                            if (plan.LastRun == null)
+                            {
+                                await CreateRestoreJob(plan, ct);
+                            }
+                            break;
+
+                        case ScheduleType.Repeating:
+                            var nextRun = plan.GetNextRun(DateTime.UtcNow);
+
+                            if (nextRun.HasValue && nextRun <= DateTime.UtcNow)
+                            {
+                                logger.LogInformation("Creating job for repeating plan {PlanId} based on schedule {Cron}. Next run was: {NextRun}",
+                                    plan.Id, plan.ScheduleCron, nextRun);
+
+                                await CreateRestoreJob(plan, ct);
+
+                                var cronExpression = CronExpression.Parse(plan.ScheduleCron);
+                                plan.LastRun = DateTime.UtcNow;
+                                plan.NextRun = cronExpression.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
+
+                                await UpdateRestorePlan(plan, ct);
+                            }
+                            else if (plan.NextRun == null)
+                            {
+                                var cronExpression = CronExpression.Parse(plan.ScheduleCron);
+                                plan.NextRun = cronExpression.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
+
+                                await UpdateRestorePlan(plan, ct);
+                                logger.LogInformation("Updated Repeating plan {PlanId} with NextRun: {NextRun}",
+                                    plan.Id, plan.NextRun);
+                            }
+                            break;
+
+                        case ScheduleType.Triggered:
+                            if (plan.NextRun != null)
+                            {
+                                plan.NextRun = null;
+                                await UpdateRestorePlan(plan, ct);
+                                logger.LogInformation("Reset NextRun to null for Triggered plan {PlanId}", plan.Id);
+                            }
+                            break;
                     }
                 }
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error generating restore jobs via API.");
+            }
+        }
+
+        private async Task<bool> CreateRestoreJob(RestorePlan plan, CancellationToken ct)
+        {
+            try
+            {
+                var response = await _httpClient.PostAsJsonAsync($"plans/restore/{plan.Id}/run", new { }, ct);
+                if (response.IsSuccessStatusCode)
+                {
+                    logger.LogInformation("Successfully created restore job for plan {PlanId}", plan.Id);
+                    return true;
+                }
+                else
+                {
+                    var responseContent = await response.Content.ReadAsStringAsync(ct);
+                    logger.LogError("Failed to create restore job for plan {PlanId}. Status: {StatusCode}, Content: {Content}",
+                        plan.Id, response.StatusCode, responseContent);
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Exception occurred while creating restore job for plan {PlanId}", plan.Id);
+                return false;
+            }
+        }
+
+        private async Task<bool> UpdateRestorePlan(RestorePlan plan, CancellationToken ct)
+        {
+            try
+            {
+                var updateResponse = await _httpClient.PutAsJsonAsync($"plans/restore/{plan.Id}", plan, ct);
+                if (updateResponse.IsSuccessStatusCode)
+                {
+                    logger.LogInformation("Updated restore plan {PlanId}", plan.Id);
+                    return true;
+                }
+                else
+                {
+                    var error = await updateResponse.Content.ReadAsStringAsync(ct);
+                    logger.LogError("Error updating restore plan {PlanId}: {Error}", plan.Id, error);
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Exception updating restore plan {PlanId}: {Error}", plan.Id, ex.Message);
+                return false;
             }
         }
 
@@ -833,7 +896,6 @@ namespace SCREAM.Service.Restore
                 {
                     logger.LogInformation("Processing backup job {BackupJobId} for restore triggering", backupJob.Id);
 
-                    // Get all triggered restore plans for this backup plan
                     var restorePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>(
                         $"plans/restore?sourceBackupPlanId={backupJob.BackupPlanId}&scheduleType=Triggered", ct);
 
@@ -843,55 +905,42 @@ namespace SCREAM.Service.Restore
                         continue;
                     }
 
-                    foreach (var plan in restorePlans)
+                    foreach (var plan in restorePlans.Where(p => p.IsActive))
                     {
                         try
                         {
-                            // Calculate next valid occurrence using cron schedule
-                            var cronExpression = CronExpression.Parse(plan.ScheduleCron);
-                            var baseTime = plan.LastRun ?? backupJob.CompletedAt ?? DateTime.UtcNow;
+                            logger.LogInformation("Triggering restore for plan {PlanId} based on completed backup job {BackupJobId}",
+                                plan.Id, backupJob.Id);
 
-                            // Get next occurrence in UTC
-                            var nextRun = cronExpression.GetNextOccurrence(baseTime, TimeZoneInfo.Utc);
+                            bool success = await CreateRestoreJob(plan, ct);
 
-                            if (nextRun.HasValue && nextRun <= DateTime.UtcNow)
+                            if (success)
                             {
-                                logger.LogInformation("Triggering restore for plan {PlanId} based on cron {Cron}",
-                                    plan.Id, plan.ScheduleCron);
-
-                                // Create restore job
-                                var response = await _httpClient.PostAsJsonAsync(
-                                    $"plans/restore/{plan.Id}/run", new { }, ct);
-
-                                if (response.IsSuccessStatusCode)
+                                if (!string.IsNullOrEmpty(plan.ScheduleCron))
                                 {
-                                    logger.LogInformation("Successfully triggered restore job for plan {PlanId}", plan.Id);
-
-                                    // Update plan with new run times
-                                    var updatedPlan = new RestorePlan
+                                    try
                                     {
-                                        // Required properties
-                                        Name = plan.Name,
-                                        Description = plan.Description,
-                                        Id = plan.Id,
-                                        LastRun = DateTime.UtcNow,
-                                        NextRun = cronExpression.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc),
-                                        DatabaseTargetId = plan.DatabaseTargetId,
-                                        SourceBackupPlanId = plan.SourceBackupPlanId,
-                                        ScheduleCron = plan.ScheduleCron,
-                                        ScheduleType = plan.ScheduleType,
-                                        IsActive = plan.IsActive,
-                                        OverwriteExisting = plan.OverwriteExisting,
-                                        Items = plan.Items.ToList()
-                                    };
+                                        var cronExpression = CronExpression.Parse(plan.ScheduleCron);
 
-                                    await _httpClient.PutAsJsonAsync($"plans/restore/{plan.Id}", updatedPlan, ct);
+                                        plan.LastRun = DateTime.UtcNow;
+
+                                        plan.NextRun = cronExpression.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
+
+                                        await UpdateRestorePlan(plan, ct);
+
+                                        logger.LogInformation(
+                                            "Updated triggered plan {PlanId} with LastRun={LastRun}, NextRun={NextRun}",
+                                            plan.Id, plan.LastRun, plan.NextRun);
+                                    }
+                                    catch (Exception cronEx)
+                                    {
+                                        logger.LogError(cronEx, "Error processing cron schedule for triggered plan {PlanId}", plan.Id);
+                                    }
                                 }
                                 else
                                 {
-                                    var error = await response.Content.ReadAsStringAsync(ct);
-                                    logger.LogError("Failed to trigger restore for plan {PlanId}: {Error}",
-                                        plan.Id, error);
+                                    plan.LastRun = DateTime.UtcNow;
+                                    await UpdateRestorePlan(plan, ct);
                                 }
                             }
                         }
