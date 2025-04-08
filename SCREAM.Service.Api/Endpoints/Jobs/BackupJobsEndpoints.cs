@@ -146,5 +146,28 @@ public static class BackupJobEndpoints
 
             return Results.Ok(backupItemStatus);
         });
+
+        group.MapPut("/{jobId:long}", async (
+            IDbContextFactory<ScreamDbContext> dbContextFactory,
+            long jobId,
+            BackupJob updatedJob) =>
+        {
+            await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+
+            var existingJob = await dbContext.BackupJobs
+                .FirstOrDefaultAsync(j => j.Id == jobId);
+
+            if (existingJob == null)
+                return Results.NotFound();
+
+            existingJob.Status = updatedJob.Status;
+            existingJob.CompletedAt = updatedJob.CompletedAt;
+            existingJob.HasTriggeredRestore = updatedJob.HasTriggeredRestore;
+
+            await dbContext.SaveChangesAsync();
+
+            return Results.Ok(existingJob);
+        });
+
     }
 }
