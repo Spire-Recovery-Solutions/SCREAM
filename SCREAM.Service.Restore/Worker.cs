@@ -760,7 +760,7 @@ namespace SCREAM.Service.Restore
             try
             {
                 var eligiblePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>(
-                    "plans/restore?isActive=true&excludeTriggered=true", ct) ?? new List<RestorePlan>();
+                    "plans/restore?isActive=true", ct) ?? new List<RestorePlan>();
 
                 foreach (var plan in eligiblePlans)
                 {
