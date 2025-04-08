@@ -341,11 +341,10 @@ namespace SCREAM.Service.Restore
             foreach (var itemType in processingOrder)
             {
                 var itemsOfType = restoreItems
-                    .Where(i => i.DatabaseItem.Type == itemType)
-                    .OrderBy(i => i.DatabaseItem.Schema)
-                    .ThenBy(i => i.DatabaseItem.Name)
-                    .ToList();
-
+             .Where(i => i.DatabaseItem.Type == itemType && i.Status != TaskStatus.RanToCompletion)
+             .OrderBy(i => i.DatabaseItem.Schema)
+         .ThenBy(i => i.DatabaseItem.Name)
+         .ToList();
                 if (!itemsOfType.Any()) continue;
 
                 logger.LogInformation("Processing {Count} {Type} items across all schemas",
