@@ -317,88 +317,93 @@ namespace SCREAM.Service.Restore
         #endregion
 
         private async Task<(bool allSuccessful, int failedCount)> ProcessItemsWithDependenciesAsync(
-     List<RestoreItem> restoreItems,
-      Tuple<string, string, string> connectionString,
-     CancellationToken cancellationToken)
+    List<RestoreItem> restoreItems,
+    Tuple<string, string, string> connectionString,
+    CancellationToken cancellationToken)
         {
             var processingOrder = new[]
             {
-        DatabaseItemType.TableStructure,    // single‐threaded
-        DatabaseItemType.FunctionProcedure, // single‐threaded
-        DatabaseItemType.Trigger,           // single‐threaded
-        DatabaseItemType.Event,             // single‐threaded
-        DatabaseItemType.View,              // single‐threaded
-        DatabaseItemType.TableData          // multi‐threaded
+        DatabaseItemType.TableStructure,
+        DatabaseItemType.FunctionProcedure,
+        DatabaseItemType.Trigger,
+        DatabaseItemType.Event,
+        DatabaseItemType.View,
+        DatabaseItemType.TableData
     };
 
             bool allOk = true;
             int failedCount = 0;
 
-            // Group items by schema
-            var itemsBySchema = restoreItems
-                .GroupBy(i => i.DatabaseItem.Schema)
-                .ToDictionary(g => g.Key, g => g.ToList());
-
-            foreach (var (schema, items) in itemsBySchema)
+            var schemas = restoreItems.Select(i => i.DatabaseItem.Schema).Distinct();
+            foreach (var schema in schemas)
             {
                 await PrepareDatabase(schema, connectionString, cancellationToken);
+            }
 
-                foreach (var type in processingOrder)
+            foreach (var itemType in processingOrder)
+            {
+                var itemsOfType = restoreItems
+                    .Where(i => i.DatabaseItem.Type == itemType)
+                    .OrderBy(i => i.DatabaseItem.Schema)
+                    .ThenBy(i => i.DatabaseItem.Name)
+                    .ToList();
+
+                if (!itemsOfType.Any()) continue;
+
+                logger.LogInformation("Processing {Count} {Type} items across all schemas",
+                    itemsOfType.Count, itemType);
+
+                if (itemType == DatabaseItemType.TableData)
                 {
-                    var batch = items
-                        .Where(i => i.DatabaseItem.Type == type)
-                        .OrderBy(i => i.DatabaseItem.Name)
-                        .ToList();
-
-                    if (batch.Count == 0) continue;
-
-                    logger.LogInformation("Processing {Count} {Type} items for schema {Schema}",
-                        batch.Count, type, schema);
-
-                    if (type == DatabaseItemType.TableData)
+                    await Parallel.ForEachAsync(itemsOfType, new ParallelOptions
                     {
-                        await Parallel.ForEachAsync(batch, new ParallelOptions
+                        MaxDegreeOfParallelism = _restoreThreads,
+                        CancellationToken = cancellationToken
+                    }, async (item, token) =>
+                    {
+                        await _restoreSemaphore.WaitAsync(token);
+                        try
                         {
-                            MaxDegreeOfParallelism = _restoreThreads,
-                            CancellationToken = cancellationToken
-                        }, async (item, token) =>
-                        {
-                            await _restoreSemaphore.WaitAsync(token);
-                            try
+                            bool ok = await ProcessItemWithRetriesAsync(item, connectionString, token);
+                            if (!ok)
                             {
-                                bool ok = await ProcessItemWithRetriesAsync(item, connectionString, token);
-                                if (!ok) { allOk = false; Interlocked.Increment(ref failedCount); }
-                            }
-                            catch (Exception ex)
-                            {
-                                logger.LogError(ex, "Unhandled exception in parallel processing for item {ItemId}: {Error}",
-                                    item.Id, ex.Message);
                                 allOk = false;
                                 Interlocked.Increment(ref failedCount);
                             }
-                            finally
-                            {
-                                _restoreSemaphore.Release();
-                            }
-                        });
-                    }
-                    else
-                    {
-                        foreach (var item in batch)
+                        }
+                        catch (Exception ex)
                         {
-                            try
+                            logger.LogError(ex, "Unhandled exception in parallel processing for item {ItemId}: {Error}",
+                                item.Id, ex.Message);
+                            allOk = false;
+                            Interlocked.Increment(ref failedCount);
+                        }
+                        finally
+                        {
+                            _restoreSemaphore.Release();
+                        }
+                    });
+                }
+                else
+                {
+                    foreach (var item in itemsOfType)
+                    {
+                        try
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            bool ok = await ProcessItemWithRetriesAsync(item, connectionString, cancellationToken);
+                            if (!ok)
                             {
-                                cancellationToken.ThrowIfCancellationRequested();
-                                bool ok = await ProcessItemWithRetriesAsync(item, connectionString, cancellationToken);
-                                if (!ok) { allOk = false; failedCount++; }
-                            }
-                            catch (Exception ex)
-                            {
-                                logger.LogError(ex, "Unhandled exception processing item {ItemId}: {Error}",
-                                    item.Id, ex.Message);
                                 allOk = false;
                                 failedCount++;
                             }
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(ex, "Unhandled exception processing item {ItemId}: {Error}",
+                                item.Id, ex.Message);
+                            allOk = false;
+                            failedCount++;
                         }
                     }
                 }
@@ -406,6 +411,7 @@ namespace SCREAM.Service.Restore
 
             return (allOk, failedCount);
         }
+
 
 
         private async Task<bool> ProcessItemWithRetriesAsync(RestoreItem item, Tuple<string, string, string> connectionString, CancellationToken cancellationToken)
