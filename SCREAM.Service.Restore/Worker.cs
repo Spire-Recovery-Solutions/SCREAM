@@ -71,19 +71,7 @@ namespace SCREAM.Service.Restore
 
         private async Task<bool> ExecuteRestoreForItemAsync(RestoreItem restoreItem, Tuple<string, string, string> connectionString, CancellationToken ct)
         {
-            string fileSuffix = restoreItem.DatabaseItem.Type switch
-            {
-                DatabaseItemType.TableStructure => ".structure.sql",
-                DatabaseItemType.TableData => ".data.sql",
-                DatabaseItemType.View => ".view.sql",
-                DatabaseItemType.Trigger => ".triggers.sql",
-                DatabaseItemType.Event => ".events.sql",
-                DatabaseItemType.FunctionProcedure => ".funcs.sql",
-                _ => throw new ArgumentOutOfRangeException(nameof(restoreItem.DatabaseItem.Type))
-            };
-
-            string filePath = Path.Combine(_backupDirectory,
-                $"{restoreItem.DatabaseItem.Schema}.{restoreItem.DatabaseItem.Name}{fileSuffix}");
+            string filePath = GetRestoreFilePath(restoreItem);
 
             if (!File.Exists(filePath))
             {
