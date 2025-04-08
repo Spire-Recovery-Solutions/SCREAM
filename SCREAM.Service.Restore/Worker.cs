@@ -341,10 +341,10 @@ namespace SCREAM.Service.Restore
             foreach (var itemType in processingOrder)
             {
                 var itemsOfType = restoreItems
-             .Where(i => i.DatabaseItem.Type == itemType && i.Status != TaskStatus.RanToCompletion)
-             .OrderBy(i => i.DatabaseItem.Schema)
-         .ThenBy(i => i.DatabaseItem.Name)
-         .ToList();
+                            .Where(i => i.DatabaseItem.Type == itemType)
+                            .OrderBy(i => i.DatabaseItem.Schema)
+                            .ThenBy(i => i.DatabaseItem.Name)
+                            .ToList();
 
                 if (!itemsOfType.Any()) continue;
 
@@ -695,11 +695,13 @@ namespace SCREAM.Service.Restore
                     await UpdateJobStatusAsync(activeJob.Id, TaskStatus.Running);
                 }
 
-                var items = await _httpClient.GetFromJsonAsync<List<RestoreItem>>($"jobs/restore/items/{activeJob.Id}", ct);
+                var items = await _httpClient.GetFromJsonAsync<List<RestoreItem>>(
+                    $"jobs/restore/items/{activeJob.Id}?excludeTaskStatus={TaskStatus.RanToCompletion}", ct);
+
                 logger.LogInformation("Retrieved {ItemCount} restore items for job {JobId}. Items: {ItemDetails}",
                     items?.Count ?? 0,
                     activeJob.Id,
-                    string.Join("; ", items?.Select(i => $"Id:{i.Id}, Status:{i.Status}, Retry:{i.RetryCount}") ?? new string[0])
+                    string.Join("; ", items?.Select(i => $"Id:{i.Id}, Status:{i.Status}, Retry:{i.RetryCount}") ?? Array.Empty<string>())
                 );
 
                 return (activeJob.Id, items?.ToList() ?? new List<RestoreItem>());
@@ -757,57 +759,46 @@ namespace SCREAM.Service.Restore
         {
             try
             {
-                // Get all active restore plans that don't have already triggered jobs
-                var eligiblePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>("plans/restore?isActive=true&excludeTriggered=true", ct);
-                if (eligiblePlans == null || eligiblePlans.Count == 0)
-                {
-                    logger.LogWarning("No eligible restore plans received from API.");
-                    return;
-                }
+                var eligiblePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>(
+                    "plans/restore?isActive=true&excludeTriggered=true", ct) ?? new List<RestorePlan>();
 
                 foreach (var plan in eligiblePlans)
                 {
-                    // Check if there are any active jobs for this plan
-                    var activeJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>($"jobs/restore?planId={plan.Id}", ct);
-                    if (activeJobs != null && activeJobs.Any(job => job.Status >= TaskStatus.Created && job.Status < TaskStatus.RanToCompletion))
+                    var existingJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>(
+                        $"jobs/restore?planId={plan.Id}", ct) ?? new List<RestoreJob>();
+
+                    if (plan.ScheduleType == ScheduleType.OneTime)
                     {
-                        logger.LogInformation("Plan {PlanId} already has active jobs. Skipping job creation.", plan.Id);
+                        if (plan.LastRun.HasValue || existingJobs.Any())
+                        {
+                            logger.LogInformation("Skipping OneTime plan {PlanId} - already executed", plan.Id);
+                            continue;
+                        }
+                    }
+                    else if (existingJobs.Any(j => j.Status >= TaskStatus.Created && j.Status < TaskStatus.RanToCompletion))
+                    {
+                        logger.LogInformation("Skipping plan {PlanId} - active job exists", plan.Id);
                         continue;
                     }
+
+                    bool shouldCreate = false;
 
                     switch (plan.ScheduleType)
                     {
                         case ScheduleType.OneTime:
-                            if (plan.LastRun == null)
-                            {
-                                await CreateRestoreJob(plan, ct);
-                            }
+                            shouldCreate = true;
                             break;
 
                         case ScheduleType.Repeating:
                             var nextRun = plan.GetNextRun(DateTime.UtcNow);
+                            shouldCreate = nextRun <= DateTime.UtcNow;
 
-                            if (nextRun.HasValue && nextRun <= DateTime.UtcNow)
+                            if (!shouldCreate && plan.NextRun == null)
                             {
-                                logger.LogInformation("Creating job for repeating plan {PlanId} based on schedule {Cron}. Next run was: {NextRun}",
-                                    plan.Id, plan.ScheduleCron, nextRun);
-
-                                await CreateRestoreJob(plan, ct);
-
-                                var cronExpression = CronExpression.Parse(plan.ScheduleCron);
-                                plan.LastRun = DateTime.UtcNow;
-                                plan.NextRun = cronExpression.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
-
+                                // Initialize next run time for new repeating plans
+                                plan.NextRun = CronExpression.Parse(plan.ScheduleCron)
+                                    .GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
                                 await UpdateRestorePlan(plan, ct);
-                            }
-                            else if (plan.NextRun == null)
-                            {
-                                var cronExpression = CronExpression.Parse(plan.ScheduleCron);
-                                plan.NextRun = cronExpression.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
-
-                                await UpdateRestorePlan(plan, ct);
-                                logger.LogInformation("Updated Repeating plan {PlanId} with NextRun: {NextRun}",
-                                    plan.Id, plan.NextRun);
                             }
                             break;
 
@@ -816,15 +807,36 @@ namespace SCREAM.Service.Restore
                             {
                                 plan.NextRun = null;
                                 await UpdateRestorePlan(plan, ct);
-                                logger.LogInformation("Reset NextRun to null for Triggered plan {PlanId}", plan.Id);
                             }
                             break;
+                    }
+
+                    if (!shouldCreate) continue;
+
+                    if (await CreateRestoreJob(plan, ct))
+                    {
+                        // Update plan state after successful job creation
+                        switch (plan.ScheduleType)
+                        {
+                            case ScheduleType.OneTime:
+                                plan.LastRun = DateTime.UtcNow;
+                                break;
+
+                            case ScheduleType.Repeating:
+                                plan.LastRun = DateTime.UtcNow;
+                                plan.NextRun = CronExpression.Parse(plan.ScheduleCron)
+                                    .GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
+                                break;
+                        }
+
+                        await UpdateRestorePlan(plan, ct);
+                        logger.LogInformation("Updated plan {PlanId} after job creation", plan.Id);
                     }
                 }
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error generating restore jobs via API.");
+                logger.LogError(ex, "Error generating restore jobs");
             }
         }
 

@@ -1,5 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SCREAM.Data;
+using SCREAM.Data.Entities;
 using SCREAM.Data.Entities.Restore;
 
 namespace SCREAM.Service.Api.Endpoints.Items
@@ -10,11 +12,17 @@ namespace SCREAM.Service.Api.Endpoints.Items
         {
             var group = app.MapGroup("/jobs/restore/items")
                 .WithTags("Jobs/RestoreItems");
-
-            // GET: List all restore items for a specific restore job
+            
+            // GET: List all restore items for a specific restore job based on filter
             group.MapGet("/{jobId:long}", async (
                 IDbContextFactory<ScreamDbContext> dbContextFactory,
-                long jobId) =>
+                long jobId,
+                [FromQuery] TaskStatus? status = null,
+                [FromQuery] string? schema = null,
+                [FromQuery] string? name = null,
+                [FromQuery] DatabaseItemType? type = null,
+                [FromQuery] int? maxRetryCount = null,
+                [FromQuery] TaskStatus? excludeTaskStatus = null) =>
             {
                 await using var dbContext = await dbContextFactory.CreateDbContextAsync();
                 var restoreJob = await dbContext.RestoreJobs
@@ -25,7 +33,27 @@ namespace SCREAM.Service.Api.Endpoints.Items
                 if (restoreJob == null)
                     return Results.NotFound("Restore job not found");
 
-                return Results.Ok(restoreJob.RestoreItems);
+                var filteredItems = restoreJob.RestoreItems.AsQueryable();
+
+                if (status.HasValue)
+                    filteredItems = filteredItems.Where(ri => ri.Status == status.Value);
+
+                if (!string.IsNullOrEmpty(schema))
+                    filteredItems = filteredItems.Where(ri => ri.DatabaseItem.Schema.Contains(schema));
+
+                if (!string.IsNullOrEmpty(name))
+                    filteredItems = filteredItems.Where(ri => ri.DatabaseItem.Name.Contains(name));
+
+                if (type.HasValue)
+                    filteredItems = filteredItems.Where(ri => ri.DatabaseItem.Type == type.Value);
+
+                if (maxRetryCount.HasValue)
+                    filteredItems = filteredItems.Where(ri => ri.RetryCount <= maxRetryCount.Value);
+
+                if (excludeTaskStatus.HasValue)
+                    filteredItems = filteredItems.Where(ri => ri.Status != excludeTaskStatus.Value);
+
+                return Results.Ok(filteredItems.ToList());
             });
 
             // GET: Get a specific restore item for a specific restore job
