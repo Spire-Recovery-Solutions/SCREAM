@@ -790,14 +790,15 @@ namespace SCREAM.Service.Restore
                             break;
 
                         case ScheduleType.Repeating:
-                            var nextRun = plan.GetNextRun(DateTime.UtcNow);
-                            shouldCreate = nextRun <= DateTime.UtcNow;
+                            var repeatingCron = CronExpression.Parse(plan.ScheduleCron);
+                            var repeatingNextRun = plan.NextRun ??
+                                repeatingCron.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
+
+                            shouldCreate = repeatingNextRun <= DateTime.UtcNow;
 
                             if (!shouldCreate && plan.NextRun == null)
                             {
-                                // Initialize next run time for new repeating plans
-                                plan.NextRun = CronExpression.Parse(plan.ScheduleCron)
-                                    .GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
+                                plan.NextRun = repeatingCron.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
                                 await UpdateRestorePlan(plan, ct);
                             }
                             break;
