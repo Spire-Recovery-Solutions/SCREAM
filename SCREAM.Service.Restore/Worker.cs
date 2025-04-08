@@ -345,6 +345,7 @@ namespace SCREAM.Service.Restore
              .OrderBy(i => i.DatabaseItem.Schema)
          .ThenBy(i => i.DatabaseItem.Name)
          .ToList();
+
                 if (!itemsOfType.Any()) continue;
 
                 logger.LogInformation("Processing {Count} {Type} items across all schemas",
@@ -856,7 +857,8 @@ namespace SCREAM.Service.Restore
         {
             try
             {
-                var updateResponse = await _httpClient.PutAsJsonAsync($"plans/restore/{plan.Id}", plan, ct);
+                var updateResponse = await _httpClient.PostAsJsonAsync("plans/restore", plan, ct);
+
                 if (updateResponse.IsSuccessStatusCode)
                 {
                     logger.LogInformation("Updated restore plan {PlanId}", plan.Id);
