@@ -682,22 +682,26 @@ namespace SCREAM.Service.Restore
         {
             try
             {
-                var activeJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>($"jobs/restore?status={TaskStatus.Created}", ct);
+                var activeJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>($"jobs/restore?statuses={TaskStatus.Created}&statuses={TaskStatus.Running}&statuses={TaskStatus.WaitingToRun}", ct);
                 if (activeJobs == null || activeJobs.Count == 0)
                 {
-                    logger.LogWarning("No active restore jobs with status 'Created' found.");
+                    logger.LogWarning("No active restore jobs found (including WaitingToRun).");
                     return (0, new List<RestoreItem>());
                 }
 
                 var activeJob = activeJobs.First();
-                if (activeJob.Status == TaskStatus.Created)
+                if (activeJob.Status == TaskStatus.Created || activeJob.Status == TaskStatus.WaitingToRun)
                 {
                     await UpdateJobStatusAsync(activeJob.Id, TaskStatus.Running);
                 }
 
-                var items = await _httpClient.GetFromJsonAsync<List<RestoreItem>>(
-                    $"jobs/restore/items/{activeJob.Id}?excludeTaskStatus={TaskStatus.RanToCompletion}", ct);
 
+                var itemsUrl = $"jobs/restore/items/{activeJob.Id}?statuses={TaskStatus.Created}" +
+                        $"&statuses={TaskStatus.Running}" +
+                        $"&statuses={TaskStatus.Faulted}" +
+                        $"&statuses={TaskStatus.WaitingToRun}";
+
+                var items = await _httpClient.GetFromJsonAsync<List<RestoreItem>>(itemsUrl, ct);
                 logger.LogInformation("Retrieved {ItemCount} restore items for job {JobId}. Items: {ItemDetails}",
                     items?.Count ?? 0,
                     activeJob.Id,
@@ -759,26 +763,26 @@ namespace SCREAM.Service.Restore
         {
             try
             {
-                var eligiblePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>(
-                    "plans/restore?isActive=true", ct) ?? new List<RestorePlan>();
+                var eligiblePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>("plans/restore?isActive=true", ct) ?? new List<RestorePlan>();
 
                 foreach (var plan in eligiblePlans)
                 {
-                    if (plan.ScheduleType == ScheduleType.Triggered)
-                        continue;
+                    if (plan.ScheduleType == ScheduleType.Triggered) continue;
 
                     var existingJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>(
                         $"jobs/restore?planId={plan.Id}", ct) ?? new List<RestoreJob>();
 
-                    if (plan.ScheduleType == ScheduleType.OneTime && plan.LastRun.HasValue)
-                    {
-                        logger.LogInformation("Skipping OneTime plan {PlanId} - already executed", plan.Id);
-                        continue;
-                    }
+                    var lastJob = existingJobs
+                        .OrderByDescending(j => j.CreatedAt)
+                        .FirstOrDefault();
 
-                    if (existingJobs.Any(j => j.Status >= TaskStatus.Created && j.Status < TaskStatus.RanToCompletion))
+                    if ((lastJob != null && (lastJob.Status == TaskStatus.Faulted || lastJob.Status == TaskStatus.Canceled)) || existingJobs.Any(j => j.Status < TaskStatus.RanToCompletion))
                     {
-                        logger.LogInformation("Skipping plan {PlanId} - active job exists", plan.Id);
+                        string reason = lastJob != null && (lastJob.Status == TaskStatus.Faulted || lastJob.Status == TaskStatus.Canceled)
+                            ? $"last job {lastJob.Id} is in {lastJob.Status} state"
+                            : "active job exists";
+
+                        logger.LogInformation("Skipping plan {PlanId} - {Reason}", plan.Id, reason);
                         continue;
                     }
 
@@ -892,10 +896,8 @@ namespace SCREAM.Service.Restore
             try
             {
                 var allBackupJobs = await _httpClient.GetFromJsonAsync<List<BackupJob>>("jobs/backup", ct);
-
                 var backupJobs = allBackupJobs?
-                    .Where(job => job.Status == TaskStatus.RanToCompletion &&
-                                   job.HasTriggeredRestore == false)
+                    .Where(job => job.Status == TaskStatus.RanToCompletion && !job.HasTriggeredRestore)
                     .ToList();
 
                 if (backupJobs == null || !backupJobs.Any())
@@ -904,25 +906,46 @@ namespace SCREAM.Service.Restore
                     return;
                 }
 
-                logger.LogInformation("Found {Count} completed backup jobs that haven't triggered restores", backupJobs.Count);
+                logger.LogInformation("Found {Count} completed backup jobs needing restore triggers", backupJobs.Count);
 
                 foreach (var backup in backupJobs)
                 {
-                    logger.LogInformation("Processing backup job {BackupJobId} for restore triggering", backup.Id);
+                    logger.LogInformation("Processing backup job {BackupJobId} for restore triggers", backup.Id);
 
                     var plans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>(
-                        $"plans/restore?sourceBackupPlanId={backup.BackupPlanId}&scheduleType=Triggered&isActive=true", ct);
+                        $"plans/restore?sourceBackupPlanId={backup.BackupPlanId}&scheduleType=Triggered&isActive=true", ct)
+                        ?? new List<RestorePlan>();
 
-                    if (plans == null || !plans.Any())
+                    if (!plans.Any())
                     {
-                        logger.LogInformation("No eligible triggered restore plans found for backup job {BackupJobId}", backup.Id);
+                        logger.LogInformation("No triggered restore plans found for backup {BackupJobId}", backup.Id);
                         continue;
                     }
 
                     bool anySuccess = false;
                     foreach (var plan in plans)
                     {
-                        // Check cron schedule if present
+                        // Check existing restore jobs for this plan
+                        var existingJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>(
+                            $"jobs/restore?planId={plan.Id}", ct) ?? new List<RestoreJob>();
+
+                        var lastJob = existingJobs
+                            .OrderByDescending(j => j.CreatedAt)
+                            .FirstOrDefault();
+
+                        // Combined skip condition
+                        if ((lastJob != null && (lastJob.Status == TaskStatus.Faulted || lastJob.Status == TaskStatus.Canceled)) ||
+                            existingJobs.Any(j => j.Status < TaskStatus.RanToCompletion))
+                        {
+                            string reason = lastJob != null && (lastJob.Status == TaskStatus.Faulted || lastJob.Status == TaskStatus.Canceled)
+                                ? $"last job {lastJob.Id} is in {lastJob.Status} state"
+                                : "active job exists";
+
+                            logger.LogInformation("Skipping plan {PlanId} - {Reason}", plan.Id, reason);
+                            continue;
+                        }
+
+                        // Cron schedule validation
                         if (!string.IsNullOrEmpty(plan.ScheduleCron))
                         {
                             try
@@ -932,33 +955,33 @@ namespace SCREAM.Service.Restore
 
                                 if (DateTime.UtcNow < nextRun)
                                 {
-                                    logger.LogInformation("Skipping plan {PlanId} as current time is before next scheduled run.", plan.Id);
+                                    logger.LogInformation("Skipping plan {PlanId} - before scheduled time", plan.Id);
                                     continue;
                                 }
                             }
                             catch (CronFormatException ex)
                             {
-                                logger.LogError(ex, "Invalid cron format for plan {PlanId}", plan.Id);
+                                logger.LogError(ex, "Invalid cron in plan {PlanId}", plan.Id);
                                 continue;
                             }
                         }
 
-                        logger.LogInformation("Triggering restore for plan {PlanId} based on backup job {BackupJobId}",
-                            plan.Id, backup.Id);
+                        // Attempt to create restore job
+                        logger.LogInformation("Triggering restore for plan {PlanId} (Backup: {BackupId})", plan.Id, backup.Id);
 
                         if (await CreateRestoreJob(plan, ct))
                         {
+                            // Update plan timestamps
                             plan.LastRun = DateTime.UtcNow;
                             if (!string.IsNullOrEmpty(plan.ScheduleCron))
                             {
                                 var cron = CronExpression.Parse(plan.ScheduleCron);
                                 plan.NextRun = cron.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
                             }
-
                             await UpdateRestorePlan(plan, ct);
+
                             anySuccess = true;
-                            logger.LogInformation("Successfully created restore job for plan {PlanId} from backup {BackupJobId}",
-                                plan.Id, backup.Id);
+                            logger.LogInformation("Successfully triggered restore job for plan {PlanId}", plan.Id);
                         }
                     }
 
@@ -966,7 +989,7 @@ namespace SCREAM.Service.Restore
                     {
                         backup.HasTriggeredRestore = true;
                         await _httpClient.PutAsJsonAsync($"jobs/backup/{backup.Id}", backup, ct);
-                        logger.LogInformation("Marked backup job {BackupJobId} as having triggered restore", backup.Id);
+                        logger.LogInformation("Marked backup {BackupId} as having triggered restores", backup.Id);
                     }
                 }
             }

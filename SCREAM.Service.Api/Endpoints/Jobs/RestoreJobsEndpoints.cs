@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SCREAM.Data;
 using SCREAM.Data.Entities.Restore;
@@ -12,32 +13,28 @@ public static class RestoreJobEndpoints
             .WithTags("Jobs/Restore");
 
         // Get all restore jobs
-        group.MapGet("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory, TaskStatus? status,
+        group.MapGet("/", async (
+            IDbContextFactory<ScreamDbContext> dbContextFactory,
+            [FromQuery] TaskStatus[]? statuses,
             bool? isCompressed,
             bool? isEncrypted
         ) =>
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-
             IQueryable<RestoreJob> query = dbContext.RestoreJobs;
-
-            if (status.HasValue)
+            if (statuses != null && statuses.Any())
             {
-                query = query.Where(job => job.Status == status.Value);
+                query = query.Where(job => statuses.Contains(job.Status));
             }
-
             if (isCompressed.HasValue)
             {
                 query = query.Where(job => job.IsCompressed == isCompressed.Value);
             }
-
             if (isEncrypted.HasValue)
             {
                 query = query.Where(job => job.IsEncrypted == isEncrypted.Value);
             }
-
             var restoreJobs = await query.OrderByDescending(job => job.StartedAt).ToListAsync();
-
             return Results.Ok(restoreJobs);
         });
 
@@ -178,12 +175,12 @@ public static class RestoreJobEndpoints
                 return Results.NotFound();
 
             var previousStatus = existingJob.Status;
-            
+
             existingJob.Status = updateJob.Status;
             existingJob.IsCompressed = updateJob.IsCompressed;
             existingJob.IsEncrypted = updateJob.IsEncrypted;
             existingJob.RestorePlanId = updateJob.RestorePlanId;
-            
+
             if (updateJob.Status == TaskStatus.RanToCompletion ||
                 updateJob.Status == TaskStatus.Faulted ||
                 updateJob.Status == TaskStatus.Canceled)
