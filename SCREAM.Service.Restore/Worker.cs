@@ -764,18 +764,19 @@ namespace SCREAM.Service.Restore
 
                 foreach (var plan in eligiblePlans)
                 {
+                    if (plan.ScheduleType == ScheduleType.Triggered)
+                        continue;
+
                     var existingJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>(
                         $"jobs/restore?planId={plan.Id}", ct) ?? new List<RestoreJob>();
 
                     if (plan.ScheduleType == ScheduleType.OneTime && plan.LastRun.HasValue)
                     {
-                        if (plan.LastRun.HasValue || existingJobs.Any())
-                        {
-                            logger.LogInformation("Skipping OneTime plan {PlanId} - already executed", plan.Id);
-                            continue;
-                        }
+                        logger.LogInformation("Skipping OneTime plan {PlanId} - already executed", plan.Id);
+                        continue;
                     }
-                    else if (existingJobs.Any(j => j.Status >= TaskStatus.Created && j.Status < TaskStatus.RanToCompletion))
+
+                    if (existingJobs.Any(j => j.Status >= TaskStatus.Created && j.Status < TaskStatus.RanToCompletion))
                     {
                         logger.LogInformation("Skipping plan {PlanId} - active job exists", plan.Id);
                         continue;
@@ -790,24 +791,32 @@ namespace SCREAM.Service.Restore
                             break;
 
                         case ScheduleType.Repeating:
-                            var repeatingCron = CronExpression.Parse(plan.ScheduleCron);
-                            var repeatingNextRun = plan.NextRun ??
-                                repeatingCron.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
-
-                            shouldCreate = repeatingNextRun <= DateTime.UtcNow;
-
-                            if (!shouldCreate && plan.NextRun == null)
+                            if (string.IsNullOrEmpty(plan.ScheduleCron))
                             {
-                                plan.NextRun = repeatingCron.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
-                                await UpdateRestorePlan(plan, ct);
+                                logger.LogWarning("Repeating plan {PlanId} has no cron expression", plan.Id);
+                                continue;
                             }
-                            break;
 
-                        case ScheduleType.Triggered:
-                            if (plan.NextRun != null)
+                            try
                             {
-                                plan.NextRun = null;
-                                await UpdateRestorePlan(plan, ct);
+                                var cron = CronExpression.Parse(plan.ScheduleCron);
+                                var nextRun = plan.NextRun ?? cron.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
+
+                                if (DateTime.UtcNow >= nextRun)
+                                {
+                                    shouldCreate = true;
+                                    plan.NextRun = cron.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
+                                }
+                                else if (plan.NextRun == null)
+                                {
+                                    plan.NextRun = nextRun;
+                                    await UpdateRestorePlan(plan, ct);
+                                }
+                            }
+                            catch (CronFormatException ex)
+                            {
+                                logger.LogError(ex, "Invalid cron format for plan {PlanId}", plan.Id);
+                                continue;
                             }
                             break;
                     }
@@ -816,22 +825,9 @@ namespace SCREAM.Service.Restore
 
                     if (await CreateRestoreJob(plan, ct))
                     {
-                        // Update plan state after successful job creation
-                        switch (plan.ScheduleType)
-                        {
-                            case ScheduleType.OneTime:
-                                plan.LastRun = DateTime.UtcNow;
-                                break;
-
-                            case ScheduleType.Repeating:
-                                plan.LastRun = DateTime.UtcNow;
-                                plan.NextRun = CronExpression.Parse(plan.ScheduleCron)
-                                    .GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
-                                break;
-                        }
-
+                        plan.LastRun = DateTime.UtcNow;
                         await UpdateRestorePlan(plan, ct);
-                        logger.LogInformation("Updated plan {PlanId} after job creation", plan.Id);
+                        logger.LogInformation("Successfully created restore job for plan {PlanId}", plan.Id);
                     }
                 }
             }
@@ -895,83 +891,88 @@ namespace SCREAM.Service.Restore
         {
             try
             {
-                var backupJobs = await _httpClient.GetFromJsonAsync<List<BackupJob>>("jobs/backup", ct);
-                if (backupJobs == null)
+                var allBackupJobs = await _httpClient.GetFromJsonAsync<List<BackupJob>>("jobs/backup", ct);
+
+                var backupJobs = allBackupJobs?
+                    .Where(job => job.Status == TaskStatus.RanToCompletion &&
+                                   job.HasTriggeredRestore == false)
+                    .ToList();
+
+                if (backupJobs == null || !backupJobs.Any())
                 {
-                    logger.LogWarning("No backup jobs received from API.");
+                    logger.LogInformation("No completed backup jobs pending restore trigger found");
                     return;
                 }
 
-                var completedJobs = backupJobs
-                    .Where(job => job.Status == TaskStatus.RanToCompletion && !job.HasTriggeredRestore)
-                    .ToList();
+                logger.LogInformation("Found {Count} completed backup jobs that haven't triggered restores", backupJobs.Count);
 
-                foreach (var backupJob in completedJobs)
+                foreach (var backup in backupJobs)
                 {
-                    logger.LogInformation("Processing backup job {BackupJobId} for restore triggering", backupJob.Id);
+                    logger.LogInformation("Processing backup job {BackupJobId} for restore triggering", backup.Id);
 
-                    var restorePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>(
-                        $"plans/restore?sourceBackupPlanId={backupJob.BackupPlanId}&scheduleType=Triggered", ct);
+                    var plans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>(
+                        $"plans/restore?sourceBackupPlanId={backup.BackupPlanId}&scheduleType=Triggered&isActive=true", ct);
 
-                    if (restorePlans == null || !restorePlans.Any())
+                    if (plans == null || !plans.Any())
                     {
-                        logger.LogInformation("No triggered restore plans found for backup job {BackupJobId}", backupJob.Id);
+                        logger.LogInformation("No eligible triggered restore plans found for backup job {BackupJobId}", backup.Id);
                         continue;
                     }
 
-                    foreach (var plan in restorePlans.Where(p => p.IsActive))
+                    bool anySuccess = false;
+                    foreach (var plan in plans)
                     {
-                        try
+                        // Check cron schedule if present
+                        if (!string.IsNullOrEmpty(plan.ScheduleCron))
                         {
-                            logger.LogInformation("Triggering restore for plan {PlanId} based on completed backup job {BackupJobId}",
-                                plan.Id, backupJob.Id);
-
-                            bool success = await CreateRestoreJob(plan, ct);
-
-                            if (success)
+                            try
                             {
-                                if (!string.IsNullOrEmpty(plan.ScheduleCron))
+                                var cron = CronExpression.Parse(plan.ScheduleCron);
+                                var nextRun = plan.NextRun ?? cron.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
+
+                                if (DateTime.UtcNow < nextRun)
                                 {
-                                    try
-                                    {
-                                        var cronExpression = CronExpression.Parse(plan.ScheduleCron);
-
-                                        plan.LastRun = DateTime.UtcNow;
-
-                                        plan.NextRun = cronExpression.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
-
-                                        await UpdateRestorePlan(plan, ct);
-
-                                        logger.LogInformation(
-                                            "Updated triggered plan {PlanId} with LastRun={LastRun}, NextRun={NextRun}",
-                                            plan.Id, plan.LastRun, plan.NextRun);
-                                    }
-                                    catch (Exception cronEx)
-                                    {
-                                        logger.LogError(cronEx, "Error processing cron schedule for triggered plan {PlanId}", plan.Id);
-                                    }
-                                }
-                                else
-                                {
-                                    plan.LastRun = DateTime.UtcNow;
-                                    await UpdateRestorePlan(plan, ct);
+                                    logger.LogInformation("Skipping plan {PlanId} as current time is before next scheduled run.", plan.Id);
+                                    continue;
                                 }
                             }
+                            catch (CronFormatException ex)
+                            {
+                                logger.LogError(ex, "Invalid cron format for plan {PlanId}", plan.Id);
+                                continue;
+                            }
                         }
-                        catch (Exception ex)
+
+                        logger.LogInformation("Triggering restore for plan {PlanId} based on backup job {BackupJobId}",
+                            plan.Id, backup.Id);
+
+                        if (await CreateRestoreJob(plan, ct))
                         {
-                            logger.LogError(ex, "Error processing restore plan {PlanId} for backup job {BackupJobId}",
-                                plan.Id, backupJob.Id);
+                            plan.LastRun = DateTime.UtcNow;
+                            if (!string.IsNullOrEmpty(plan.ScheduleCron))
+                            {
+                                var cron = CronExpression.Parse(plan.ScheduleCron);
+                                plan.NextRun = cron.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
+                            }
+
+                            await UpdateRestorePlan(plan, ct);
+                            anySuccess = true;
+                            logger.LogInformation("Successfully created restore job for plan {PlanId} from backup {BackupJobId}",
+                                plan.Id, backup.Id);
                         }
                     }
 
-                    backupJob.HasTriggeredRestore = true;
-                    await _httpClient.PutAsJsonAsync($"jobs/backup/{backupJob.Id}", backupJob, ct);
+                    if (anySuccess)
+                    {
+                        backup.HasTriggeredRestore = true;
+                        await _httpClient.PutAsJsonAsync($"jobs/backup/{backup.Id}", backup, ct);
+                        logger.LogInformation("Marked backup job {BackupJobId} as having triggered restore", backup.Id);
+                    }
                 }
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Critical error in ProcessCompletedBackupJobsAsync");
+                logger.LogError(ex, "Error processing completed backups");
             }
         }
 
