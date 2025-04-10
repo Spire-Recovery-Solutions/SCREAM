@@ -299,7 +299,7 @@ namespace SCREAM.Service.Restore
             {
                 logger.LogInformation("Preparing database {Schema}", schema);
 
-                await Cli.Wrap("/usr/bin/mysql")
+        var result = await Cli.Wrap("/usr/bin/mysql")
                     .WithArguments(args => args
                         .Add($"--host={connectionString.Item1}")
                         .Add($"--user={connectionString.Item2}")
@@ -307,6 +307,12 @@ namespace SCREAM.Service.Restore
                         .Add($"--execute=CREATE DATABASE IF NOT EXISTS `{schema}`")
                     )
                     .ExecuteBufferedAsync(ct);
+
+        if (result.ExitCode != 0)
+        {
+            logger.LogError("Failed to create {Schema}: {Error}", schema, result.StandardError);
+            throw new Exception($"MySQL error: {result.StandardError}");
+        }
             }
             catch (Exception ex)
             {
@@ -333,6 +339,7 @@ namespace SCREAM.Service.Restore
             int failedCount = 0;
 
             var schemas = restoreItems.Select(i => i.DatabaseItem.Schema).Distinct();
+              logger.LogInformation("Schemas to process: {Schemas}", string.Join(", ", schemas));
             foreach (var schema in schemas)
             {
                 await PrepareDatabase(schema, connectionString, cancellationToken);
