@@ -1,0 +1,215 @@
+@page "/Logs"
+@using SCREAM.Data.Enums
+@using SCREAM.Data.Entities.Backup
+@using SCREAM.Data.Entities.Restore
+@using System.Net.Http.Json
+@using SCREAM.Web.Pages.Logs.Dialogs
+@inject IHttpClientFactory ClientFactory
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Logs - SCREAM</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4" Align="Align.Center">Logs</MudText>
+
+<MudDataGrid T="LogEntry" Items="@FilteredLogs" Filterable="true" FilterMode="DataGridFilterMode.Simple"
+             Loading="@_loading" LoadingProgressColor="Color.Info" Hover="true" Dense="true">
+    <ToolBarContent>
+        <MudGrid>
+            <MudItem xs="12" md="9">
+                <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" />
+            </MudItem>
+            <MudItem xs="12" md="3" Class="d-flex justify-end">
+                <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.Refresh"
+                           OnClick="RefreshLogs">
+                    Refresh
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </ToolBarContent>
+    <Columns>
+        <PropertyColumn Property="x => x.Timestamp" Title="Timestamp" Filterable="true" Sortable="true">
+            <CellTemplate>
+                @context.Item.Timestamp.ToLocalTime().ToString("g")
+            </CellTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="x => x.LogType" Title="Type" Filterable="true" Sortable="true">
+            <CellTemplate>
+                <MudChip Color="@GetLogTypeColor(context.Item.LogType)" Size="Size.Small">
+                    @context.Item.LogType.ToString()
+                </MudChip>
+            </CellTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="x => x.Title" Title="Title" Filterable="true" Sortable="true" />
+        <PropertyColumn Property="x => x.Severity" Title="Severity" Filterable="true" Sortable="true">
+            <CellTemplate>
+                <MudChip Color="@GetSeverityColor(context.Item.Severity)" Size="Size.Small">
+                    @context.Item.Severity.ToString()
+                </MudChip>
+            </CellTemplate>
+        </PropertyColumn>
+        <PropertyColumn Property="x => x.Message" Title="Message" Filterable="false" Sortable="false">
+            <CellTemplate>
+                @if (context.Item.Message.Length > 50)
+                {
+                    @context.Item.Message.Substring(0, 50)
+                    <text>...</text>
+                }
+                else
+                {
+                    @context.Item.Message
+                }
+            </CellTemplate>
+        </PropertyColumn>
+        <TemplateColumn Title="Actions" Sortable="false">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info"
+                               OnClick="@(() => ViewLogDetails(context.Item))" />
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <PagerContent>
+        <MudDataGridPager T="LogEntry" PageSizeOptions="new int[] { 10, 25, 50, 100 }" />
+    </PagerContent>
+    <NoRecordsContent>
+        <MudText>No logs found</MudText>
+    </NoRecordsContent>
+    <LoadingContent>
+        <MudText>Loading logs...</MudText>
+    </LoadingContent>
+</MudDataGrid>
+
+@code {
+    private List<LogEntry> _logs = new();
+    private bool _loading = true;
+    private string _searchString = "";
+    private System.Timers.Timer? _refreshTimer;
+    private HttpClient _httpClient;
+
+    IEnumerable<LogEntry> FilteredLogs =>
+        _logs.Where(FilterFunc);
+
+    private bool FilterFunc(LogEntry log)
+    {
+        if (!string.IsNullOrWhiteSpace(_searchString))
+        {
+            return (log.Title?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ?? false)
+                   || (log.Message?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ?? false)
+                   || log.Timestamp.ToString("g").Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+        }
+        return true;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _refreshTimer = new System.Timers.Timer(30000);
+        _refreshTimer.Elapsed += async (sender, e) => await InvokeAsync(RefreshLogs);
+        _refreshTimer.Start();
+
+        _httpClient = ClientFactory.CreateClient("SCREAM");
+        await LoadLogs();
+    }
+
+    async Task RefreshLogs()
+    {
+        _loading = true;
+        StateHasChanged();
+        await LoadLogs();
+    }
+
+    async Task LoadLogs()
+    {
+        try
+        {
+            var backupLogsResponse = await _httpClient.GetFromJsonAsync<List<BackupJobLog>>("jobs/backup/logs");
+            var backupLogs = backupLogsResponse?.Select(log => new LogEntry
+                {
+                    LogType = LogTypeEnum.Backup,
+                    Timestamp = log.Timestamp,
+                    Title = log.Title,
+                    Message = log.Message,
+                    Severity = log.Severity
+                }) ?? Enumerable.Empty<LogEntry>();
+
+            var restoreLogsResponse = await _httpClient.GetFromJsonAsync<List<RestoreJobLog>>("jobs/restore/logs");
+            var restoreLogs = restoreLogsResponse?.Select(log => new LogEntry
+                {
+                    LogType = LogTypeEnum.Restore,
+                    Timestamp = log.Timestamp,
+                    Title = log.Title,
+                    Message = log.Message,
+                    Severity = log.Severity
+                }) ?? Enumerable.Empty<LogEntry>();
+
+            _logs = backupLogs.Concat(restoreLogs)
+                              .OrderByDescending(x => x.Timestamp)
+                              .ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading logs: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private Color GetLogTypeColor(LogTypeEnum logType) =>
+        logType switch
+        {
+            LogTypeEnum.Backup => Color.Primary,
+            LogTypeEnum.Restore => Color.Secondary,
+            _ => Color.Default
+        };
+
+    private Color GetSeverityColor(LogLevel severity) =>
+        severity switch
+        {
+            LogLevel.Critical or LogLevel.Error => Color.Error,
+            LogLevel.Warning => Color.Warning,
+            LogLevel.Information => Color.Info,
+            LogLevel.Debug or LogLevel.Trace or LogLevel.None => Color.Default,
+            _ => Color.Default
+        };
+
+    private async Task ViewLogDetails(LogEntry log)
+    {
+        var parameters = new DialogParameters
+            {
+                { "Log", log }
+            };
+        var options = new DialogOptions
+            {
+                CloseButton = true,
+                MaxWidth = MaxWidth.Medium,
+                FullWidth = true
+            };
+
+        var dialog = await DialogService.ShowAsync<LogsDetailsDialog>("Log Details", parameters, options);
+        await dialog.Result;
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Stop();
+        _refreshTimer?.Dispose();
+    }
+
+    public enum LogTypeEnum
+    {
+        Backup,
+        Restore
+    }
+
+    public class LogEntry
+    {
+        public LogTypeEnum LogType { get; set; }
+        public DateTime Timestamp { get; set; }
+        public string Title { get; set; } = "";
+        public string Message { get; set; } = "";
+        public LogLevel Severity { get; set; }
+    }
+}

@@ -212,5 +212,45 @@ public static class RestoreJobEndpoints
 
             return Results.Ok(existingJob);
         });
+
+        group.MapGet("/logs", async (
+           IDbContextFactory<ScreamDbContext> dbContextFactory,
+           long? restoreJobId = null,
+           DateTime? dateFrom = null,
+           DateTime? dateTo = null,
+           LogLevel? severity = null,
+           string? title = null) =>
+       {
+           await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+
+           IQueryable<RestoreJobLog> query = dbContext.RestoreJobLogs;
+
+           if (restoreJobId.HasValue)
+           {
+               query = query.Where(log => log.RestoreJobId == restoreJobId.Value);
+           }
+           if (dateFrom.HasValue)
+           {
+               query = query.Where(log => log.Timestamp >= dateFrom.Value);
+           }
+           if (dateTo.HasValue)
+           {
+               query = query.Where(log => log.Timestamp <= dateTo.Value);
+           }
+           if (severity.HasValue)
+           {
+               query = query.Where(log => log.Severity == severity.Value);
+           }
+           if (!string.IsNullOrEmpty(title))
+           {
+               query = query.Where(log => log.Title.Contains(title));
+           }
+
+           var restoreLogs = await query
+               .OrderByDescending(log => log.Timestamp)
+               .ToListAsync();
+
+           return Results.Ok(restoreLogs);
+       });
     }
 }

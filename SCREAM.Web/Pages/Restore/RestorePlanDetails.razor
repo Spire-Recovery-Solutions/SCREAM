@@ -39,20 +39,14 @@
                                Label="Database Connection"
                                Variant="Variant.Outlined"
                                Required="true"
+                               ToStringFunc="@(id => GetDatabaseTargetDisplayName(id))"
                                HelperText="Select the target database for restoration">
-                        @if (_databaseConnections == null || _databaseConnections.Count == 0)
+                        <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
+                        @foreach (var conn in _databaseConnections)
                         {
-                            <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
-                        }
-                        else
-                        {
-                            <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
-                            @foreach (var conn in _databaseConnections)
-                            {
-                                <MudSelectItem Value="@conn.Id">
-                                    @conn.HostName (@conn.Type)
-                                </MudSelectItem>
-                            }
+                            <MudSelectItem Value="@conn.Id">
+                                @conn.HostName (@conn.Type)
+                            </MudSelectItem>
                         }
                     </MudSelect>
                 </MudItem>
@@ -61,20 +55,14 @@
                                Label="Source Backup Plan"
                                Variant="Variant.Outlined"
                                Required="true"
+                               ToStringFunc="@(id => GetBackupPlanDisplayName(id))"
                                HelperText="Select the backup plan to restore from">
-                        @if (_backupPlans == null || _backupPlans.Count == 0)
+                        <MudSelectItem T="long" Value="0">Select Backup Plan</MudSelectItem>
+                        @foreach (var plan in _backupPlans)
                         {
-                            <MudSelectItem T="long" Value="0">Select Backup Plan</MudSelectItem>
-                        }
-                        else
-                        {
-                            <MudSelectItem T="long" Value="0">Select Backup Plan</MudSelectItem>
-                            @foreach (var plan in _backupPlans)
-                            {
-                                <MudSelectItem Value="@plan.Id">
-                                    @plan.Name
-                                </MudSelectItem>
-                            }
+                            <MudSelectItem Value="@plan.Id">
+                                @plan.Name
+                            </MudSelectItem>
                         }
                     </MudSelect>
                 </MudItem>
@@ -309,5 +297,21 @@
         {
             dialog?.Close();
         }
+    }
+
+    private string GetDatabaseTargetDisplayName(long id)
+    {
+        if (id == 0)
+            return "Select Database Connection";
+        var target = _databaseConnections?.FirstOrDefault(t => t.Id == id);
+        return target != null ? $"{target.HostName} ({target.Type})" : id.ToString();
+    }
+
+    private string GetBackupPlanDisplayName(long id)
+    {
+        if (id == 0)
+            return "Select Backup Plan";
+        var backupPlan = _backupPlans?.FirstOrDefault(b => b.Id == id);
+        return backupPlan != null ? backupPlan.Name : id.ToString();
     }
 }

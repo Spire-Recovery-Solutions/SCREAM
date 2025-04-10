@@ -1,0 +1,97 @@
+﻿@using SCREAM.Data.Enums
+@inject IJSRuntime JSRuntime
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Assignment" Class="mr-2" />
+            @DialogTitle
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudGrid>
+            <!-- Timestamp -->
+            <MudItem xs="12" md="6">
+                <MudField Label="Timestamp" Variant="Variant.Outlined">
+                    @Log.Timestamp.ToLocalTime().ToString("g")
+                </MudField>
+            </MudItem>
+            <!-- Log Type -->
+            <MudItem xs="12" md="6">
+                  <MudTextField Label="Log Type" T="string" ReadOnly Variant="Variant.Outlined" Text="@Log.LogType.ToString()"/>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudTextField Label="Severity" T="string" ReadOnly Variant="Variant.Outlined" Text="@Log.Severity.ToString()" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudField Label="Title" Variant="Variant.Outlined">
+                    @Log.Title
+                </MudField>
+            </MudItem>
+            <!-- Message -->
+            <MudItem xs="12">
+                    <MudTextField Label="Message" T="string" ReadOnly Variant="Variant.Outlined" Text="@Log.Message" AutoGrow/>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyLogToClipboard" Color="Color.Primary" Variant="Variant.Text">
+            Copy
+        </MudButton>
+        <MudButton OnClick="Cancel" Color="Color.Default" Variant="Variant.Text">
+            Close
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public LogsPage.LogEntry Log { get; set; } = default!;
+
+    [Parameter]
+    public string DialogTitle { get; set; } = "Log Details";
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task CopyLogToClipboard()
+    {
+        try
+        {
+            var logText = $"Timestamp: {Log.Timestamp.ToLocalTime():g}\n" +
+                          $"Log Type: {Log.LogType}\n" +
+                          $"Severity: {Log.Severity}\n" +
+                          $"Title: {Log.Title}\n" +
+                          $"Message: {Log.Message}";
+
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", logText);
+            Snackbar.Add("Log details copied to clipboard", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to copy to clipboard: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private Color GetLogTypeColor(LogsPage.LogTypeEnum logType) =>
+        logType switch
+        {
+            LogsPage.LogTypeEnum.Backup  => Color.Primary,
+            LogsPage.LogTypeEnum.Restore => Color.Secondary,
+            _ => Color.Default
+        };
+
+    private Color GetSeverityColor(LogLevel severity) =>
+        severity switch
+        {
+            LogLevel.Critical or LogLevel.Error => Color.Error,
+            LogLevel.Warning                     => Color.Warning,
+            LogLevel.Information                 => Color.Info,
+            _                                    => Color.Default
+        };
+}
