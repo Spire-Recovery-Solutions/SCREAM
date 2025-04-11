@@ -16,8 +16,8 @@ namespace SCREAM.Service.Restore
         private readonly HttpClient _httpClient = httpClientFactory.CreateClient("SCREAM");
         private string? _encryptionKey;
         private readonly int _maxRetries = 3;
-        private readonly string _backupDirectory = "/backups";
 
+        private string _backupFolder = "/backups";
         private string _mysqlHost = "";
         private string _mysqlUser = "";
         private string _mysqlPassword = "";
@@ -32,8 +32,8 @@ namespace SCREAM.Service.Restore
         protected override async Task ExecuteAsync(CancellationToken cancellationToken)
         {
             LoadConfiguration();
-            Directory.CreateDirectory(_backupDirectory);
-            logger.LogInformation("Verified backup directory exists at: {Directory}", _backupDirectory);
+            Directory.CreateDirectory(_backupFolder);
+            logger.LogInformation("Verified backup directory exists at: {Directory}", _backupFolder);
 
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -58,6 +58,7 @@ namespace SCREAM.Service.Restore
         {
             _encryptionKey = GetConfigValue("MYSQL_BACKUP_ENCRYPTION_KEY", "MySqlBackup:EncryptionKey");
 
+            //_backupFolder = GetConfigValue("MYSQL_BACKUP_FOLDER", "MySqlBackup:BackupFolder", "/backups");
             // Load connection parameters.
             _mysqlHost = GetConfigValue("MYSQL_BACKUP_HOSTNAME", "MySqlBackup:HostName");
             _mysqlUser = GetConfigValue("MYSQL_BACKUP_USERNAME", "MySqlBackup:UserName");
@@ -91,8 +92,7 @@ namespace SCREAM.Service.Restore
                 .Add("--max_allowed_packet=1073741824")
                 .Add($"--host={connectionString.Item1}")
                 .Add($"--user={connectionString.Item2}")
-                .Add($"--password={connectionString.Item3}")
-                .Add("--init-command=\"SET SESSION innodb_strict_mode=OFF;\"", false);
+                .Add($"--password={connectionString.Item3}");
 
             // Schema is always needed except for global objects
             if (ShouldUseSchema(restoreItem.DatabaseItem.Type))
@@ -216,7 +216,7 @@ namespace SCREAM.Service.Restore
             {
                 // 1) Scan directory
                 var directoryStopwatch = Stopwatch.StartNew();
-                var backupDirectoryInfo = new DirectoryInfo(_backupDirectory);
+                var backupDirectoryInfo = new DirectoryInfo(_backupFolder);
                 int totalFiles = backupDirectoryInfo.GetFiles("*").Length;
                 logger.LogInformation("Found {FileCount} files in directory: {Directory}", totalFiles, backupDirectoryInfo.FullName);
                 directoryStopwatch.Stop();
@@ -292,14 +292,13 @@ namespace SCREAM.Service.Restore
         }
 
 
-        private async Task PrepareDatabase(string schema, Tuple<string, string, string> connectionString,
-            CancellationToken ct)
+        private async Task PrepareDatabase(string schema, Tuple<string, string, string> connectionString, CancellationToken ct)
         {
             try
             {
                 logger.LogInformation("Preparing database {Schema}", schema);
 
-        var result = await Cli.Wrap("/usr/bin/mysql")
+                var result = await Cli.Wrap("/usr/bin/mysql")
                     .WithArguments(args => args
                         .Add($"--host={connectionString.Item1}")
                         .Add($"--user={connectionString.Item2}")
@@ -308,11 +307,11 @@ namespace SCREAM.Service.Restore
                     )
                     .ExecuteBufferedAsync(ct);
 
-        if (result.ExitCode != 0)
-        {
-            logger.LogError("Failed to create {Schema}: {Error}", schema, result.StandardError);
-            throw new Exception($"MySQL error: {result.StandardError}");
-        }
+                if (result.ExitCode != 0)
+                {
+                    logger.LogError("Failed to create {Schema}: {Error}", schema, result.StandardError);
+                    throw new Exception($"MySQL error: {result.StandardError}");
+                }
             }
             catch (Exception ex)
             {
@@ -326,7 +325,7 @@ namespace SCREAM.Service.Restore
         private async Task<(bool allSuccessful, int failedCount)> ProcessItemsWithDependenciesAsync(List<RestoreItem> restoreItems, Tuple<string, string, string> connectionString, CancellationToken cancellationToken)
         {
             var processingOrder = new[]
-            {
+      {
         DatabaseItemType.TableStructure,
         DatabaseItemType.FunctionProcedure,
         DatabaseItemType.Trigger,
@@ -339,9 +338,10 @@ namespace SCREAM.Service.Restore
             int failedCount = 0;
 
             var schemas = restoreItems.Select(i => i.DatabaseItem.Schema).Distinct();
-              logger.LogInformation("Schemas to process: {Schemas}", string.Join(", ", schemas));
+            logger.LogInformation("Schemas to process: {Schemas}", string.Join(", ", schemas));
             foreach (var schema in schemas)
             {
+                logger.LogInformation("Preparing database for schema: {Schema}", schema);
                 await PrepareDatabase(schema, connectionString, cancellationToken);
             }
 
@@ -521,7 +521,7 @@ namespace SCREAM.Service.Restore
                 _ => throw new ArgumentOutOfRangeException(nameof(restoreItem.DatabaseItem.Type))
             };
 
-            return Path.Combine(_backupDirectory,
+            return Path.Combine(_backupFolder,
                 $"{restoreItem.DatabaseItem.Schema}.{restoreItem.DatabaseItem.Name}{fileSuffix}");
         }
 
