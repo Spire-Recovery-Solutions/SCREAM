@@ -165,6 +165,12 @@ namespace SCREAM.Service.Restore
         {
             try
             {
+                // Set the StartedAt timestamp when status is changing to Running
+                if (status == TaskStatus.Running && restoreItem.StartedAt == default)
+                {
+                    restoreItem.StartedAt = DateTime.UtcNow;
+                }
+
                 var updateRequest = new
                 {
                     restoreItem.Id,
@@ -173,7 +179,7 @@ namespace SCREAM.Service.Restore
                     Status = status,
                     restoreItem.RetryCount,
                     ErrorMessage = errorMessage,
-                    restoreItem.StartedAt,
+                    StartedAt = restoreItem.StartedAt, // Now this will have the proper value
                     CompletedAt = status == TaskStatus.RanToCompletion ? DateTime.UtcNow : restoreItem.CompletedAt
                 };
 
