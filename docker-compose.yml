@@ -6,10 +6,10 @@ services:
     command: --default-authentication-plugin=mysql_native_password --ssl=0 --default-time-zone='+00:00'
     environment:
       TZ: UTC
-      MYSQL_ROOT_PASSWORD: Here!Lives@A#Happy4Little%Password^
-      MYSQL_DATABASE: mydb
+      MYSQL_ROOT_PASSWORD: Here!Lives@A#Happy4Little%Password^ # Change this to a secure password
+      MYSQL_DATABASE: mydb # You can name this whatever you like
       MYSQL_USER: user
-      MYSQL_PASSWORD: userpassword
+      MYSQL_PASSWORD: userpassword # Change this to a secure password
     networks:
       - scream1
     ports:
@@ -21,18 +21,32 @@ services:
       retries: 10
       start_period: 30s
 
-  # Restore Service
+  scream-api:
+    build:
+      context: .
+      dockerfile: SCREAM.Service.Api/Dockerfile
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=mysql;Database=SCREAM;User=user;Password=userpassword;"
+      CONTAINER_APP_PORT: "8000"
+    ports:
+      - "8000:8000"
+    networks:
+      - scream1
+    depends_on:
+      mysql:
+        condition: service_healthy
+
   scream-restore:
     build:
       context: .
       dockerfile: SCREAM.Service.Restore/Dockerfile
     environment:
-      - API_URL=http://host.docker.internal:5102
+      - API_URL=http://scream-api:8000
       - MYSQL_BACKUP_ENCRYPTION_KEY=your-encryption-key-here
       - MYSQL_BACKUP_HOSTNAME=mysql
       - MYSQL_BACKUP_USERNAME=user
       - MYSQL_BACKUP_PASSWORD=userpassword
-      - MYSQL_BACKUP_THREADS=4 
+      - MYSQL_BACKUP_THREADS=4
     ports:
       - "8002:8002"
     networks:
@@ -41,21 +55,19 @@ services:
     volumes:
       - ./backups:/backups
     depends_on:
+      - scream-api
       - mysql
 
-  # Backup Service
   scream-backup:
     build:
       context: .
       dockerfile: SCREAM.Service.Backup/Dockerfile
     environment:
-      - API_URL=http://host.docker.internal:5102
-      - MYSQL_BACKUP_ENCRYPTION_KEY=your-encryption-key-here
+      - API_URL=http://scream-api:8000
       - MYSQL_BACKUP_HOSTNAME=mysql
       - MYSQL_BACKUP_USERNAME=user
       - MYSQL_BACKUP_PASSWORD=userpassword
       - MYSQL_BACKUP_DATABASE=SCREAM
-      - MYSQL_BACKUP_THREADS=4
     ports:
       - "8001:8001"
     networks:
@@ -64,6 +76,7 @@ services:
     volumes:
       - ./backups:/backups
     depends_on:
+      - scream-api
       - mysql
 
 networks:
