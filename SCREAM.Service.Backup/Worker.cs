@@ -1,6 +1,5 @@
 ﻿using CliWrap;
 using Cronos;
-using Microsoft.IO;
 using SCREAM.Data.Entities;
 using SCREAM.Data.Entities.Backup;
 using SCREAM.Data.Entities.Backup.BackupItems;
@@ -20,7 +19,6 @@ public class Worker : BackgroundService
     private readonly string _encryptionKey;
     private readonly string _backupFolder;
     private readonly string _maxPacketSize;
-    private readonly RecyclableMemoryStreamManager _memoryStreamManager;
     private readonly IConfiguration _configuration;
     private readonly int _threads;
     private readonly HttpClient _httpClient;
@@ -44,27 +42,27 @@ public class Worker : BackgroundService
             ? DateTimeOffset.Now.ToString("yyyy-MM-dd-hh-mm")
             : backupFolder + "_" + DateTimeOffset.Now.ToString("yyyy-MM-dd-hh-mm");
 
-        var options = new RecyclableMemoryStreamManager.Options()
-        {
-            // Use 1MB blocks for better handling of large backup files
-            BlockSize = 1024 * 1024,
+        //var options = new RecyclableMemoryStreamManager.Options()
+        //{
+        //    // Use 1MB blocks for better handling of large backup files
+        //    BlockSize = 1024 * 1024,
 
-            // Set large buffer multiple to 1MB for efficient chunking
-            LargeBufferMultiple = 1024 * 1024,
+        //    // Set large buffer multiple to 1MB for efficient chunking
+        //    LargeBufferMultiple = 1024 * 1024,
 
-            // Max single buffer size to 500MB (B2's recommended maximum part size)
-            MaximumBufferSize = 500 * 1024 * 1024,
+        //    // Max single buffer size to 500MB (B2's recommended maximum part size)
+        //    MaximumBufferSize = 500 * 1024 * 1024,
 
-            // Cap total memory usage for pools
-            MaximumLargePoolFreeBytes = 1024 * 1024 * 1024, // 1GB large pool
-            MaximumSmallPoolFreeBytes = 100 * 1024 * 1024, // 100MB small pool
+        //    // Cap total memory usage for pools
+        //    MaximumLargePoolFreeBytes = 1024 * 1024 * 1024, // 1GB large pool
+        //    MaximumSmallPoolFreeBytes = 100 * 1024 * 1024, // 100MB small pool
 
-            // Return buffers aggressively to help manage memory
-            AggressiveBufferReturn = true,
+        //    // Return buffers aggressively to help manage memory
+        //    AggressiveBufferReturn = true,
 
-        };
+        //};
 
-        _memoryStreamManager = new RecyclableMemoryStreamManager(options);
+        //_memoryStreamManager = new RecyclableMemoryStreamManager(options);
 
     }
 
