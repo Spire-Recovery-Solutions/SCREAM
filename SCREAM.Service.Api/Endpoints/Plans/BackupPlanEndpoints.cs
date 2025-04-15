@@ -25,8 +25,6 @@ public static class BackupPlanEndpoints
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
 
             IQueryable<BackupPlan> query = dbContext.BackupPlans
-                .Include(bp => bp.Items)
-                .Include(bp => bp.DatabaseTarget)
                 .Include(bp => bp.StorageTarget);
 
             if (isActive.HasValue)

@@ -63,7 +63,8 @@ namespace SCREAM.Service.Restore
             _mysqlHost = GetConfigValue("MYSQL_BACKUP_HOSTNAME", "MySqlBackup:HostName");
             _mysqlUser = GetConfigValue("MYSQL_BACKUP_USERNAME", "MySqlBackup:UserName");
             _mysqlPassword = GetConfigValue("MYSQL_BACKUP_PASSWORD", "MySqlBackup:Password");
-            _restoreThreads = int.Parse(GetConfigValue("MYSQL_BACKUP_THREADS", "MySqlBackup:Threads", Environment.ProcessorCount.ToString()));
+            _restoreThreads = int.Parse(GetConfigValue("MYSQL_BACKUP_THREADS", "MySqlBackup:Threads",
+                Environment.ProcessorCount.ToString()));
             _restoreSemaphore = new SemaphoreSlim(_restoreThreads);
 
             logger.LogInformation("Configuration loaded: Host={Host}, User={User}", _mysqlHost, _mysqlUser);
