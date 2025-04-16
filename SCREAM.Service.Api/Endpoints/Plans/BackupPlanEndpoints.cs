@@ -24,8 +24,7 @@ public static class BackupPlanEndpoints
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
 
-            IQueryable<BackupPlan> query = dbContext.BackupPlans
-                .Include(bp => bp.StorageTarget);
+            IQueryable<BackupPlan> query = dbContext.BackupPlans;
 
             if (isActive.HasValue)
                 query = query.Where(bp => bp.IsActive == isActive.Value);
@@ -126,49 +125,44 @@ public static class BackupPlanEndpoints
 
         // Create or update a backup plan
         group.MapPost("/", async (
-            IDbContextFactory<ScreamDbContext> dbContextFactory,
-            BackupPlan backupPlan) =>
-        {
-            await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    IDbContextFactory<ScreamDbContext> dbContextFactory,
+    BackupPlan backupPlan) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
 
-            if (backupPlan.Id == 0)
-            {
-                // Create new backup plan
-                dbContext.BackupPlans.Add(backupPlan);
-                await dbContext.SaveChangesAsync();
-                return Results.Created($"/plans/backup/{backupPlan.Id}", backupPlan);
-            }
-            else
-            {
-                var existingPlan = await dbContext.BackupPlans
-                    .Include(bp => bp.Items)
-                    .FirstOrDefaultAsync(bp => bp.Id == backupPlan.Id);
+    if (backupPlan.Id == 0)
+    {
+        // Create new backup plan by adding it to the database.
+        dbContext.BackupPlans.Add(backupPlan);
+        await dbContext.SaveChangesAsync();
+        return Results.Created($"/plans/backup/{backupPlan.Id}", backupPlan);
+    }
+    else
+    {
+        // Retrieve the existing backup plan without including related entities.
+        var existingPlan = await dbContext.BackupPlans
+            .FirstOrDefaultAsync(bp => bp.Id == backupPlan.Id);
 
-                if (existingPlan == null)
-                    return Results.NotFound();
+        if (existingPlan == null)
+            return Results.NotFound();
 
-                dbContext.Entry(existingPlan).CurrentValues.SetValues(backupPlan);
+        // Update only the scalar (non-navigation) properties.
+        existingPlan.Name = backupPlan.Name;
+        existingPlan.Description = backupPlan.Description;
+        existingPlan.DatabaseTargetId = backupPlan.DatabaseTargetId;
+        existingPlan.StorageTargetId = backupPlan.StorageTargetId;
+        existingPlan.IsActive = backupPlan.IsActive;
+        existingPlan.ScheduleCron = backupPlan.ScheduleCron;
+        existingPlan.ScheduleType = backupPlan.ScheduleType;
+        existingPlan.LastRun = backupPlan.LastRun;
+        existingPlan.NextRun = backupPlan.NextRun;
 
-                var existingItemsDict = existingPlan.Items.Where(i => i.Id != 0)
-                    .ToDictionary(i => i.Id);
-                var newItemsDict = backupPlan.Items.Where(i => i.Id != 0)
-                    .ToDictionary(i => i.Id);
+        // Do not update related navigation properties like Items or Jobs.
+        await dbContext.SaveChangesAsync();
+        return Results.Ok(existingPlan);
+    }
+});
 
-                foreach (var itemId in existingItemsDict.Keys.Except(newItemsDict.Keys))
-                    dbContext.Remove(existingItemsDict[itemId]);
-
-                foreach (var newItem in backupPlan.Items)
-                {
-                    if (newItem.Id != 0 && existingItemsDict.TryGetValue(newItem.Id, out var existingItem))
-                        dbContext.Entry(existingItem).CurrentValues.SetValues(newItem);
-                    else
-                        existingPlan.Items.Add(newItem);
-                }
-
-                await dbContext.SaveChangesAsync();
-                return Results.Ok(existingPlan);
-            }
-        });
 
         // Delete a backup plan
         group.MapDelete("/{backupPlanId:long}", async (

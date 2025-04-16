@@ -6,10 +6,8 @@ WORKDIR /app
 FROM mcr.microsoft.com/dotnet/sdk:8.0-jammy AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-
 COPY ["SCREAM.Service.Backup/SCREAM.Service.Backup.csproj", "SCREAM.Service.Backup/"]
 RUN dotnet restore "SCREAM.Service.Backup/SCREAM.Service.Backup.csproj"
-
 COPY . .
 WORKDIR "/src/SCREAM.Service.Backup"
 RUN dotnet build "SCREAM.Service.Backup.csproj" -c $BUILD_CONFIGURATION -o /app/build
@@ -21,6 +19,12 @@ RUN dotnet publish "SCREAM.Service.Backup.csproj" -c $BUILD_CONFIGURATION -o /ap
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+
+# Install both xz-utils and mysql-client packages
+RUN apt-get update && \
+    apt-get install -y xz-utils mysql-client && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Configure environment variables 
 ENV DOTNET_RUNNING_IN_CONTAINER=true 
