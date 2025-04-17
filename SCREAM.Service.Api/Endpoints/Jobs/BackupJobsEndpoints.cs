@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SCREAM.Data;
 using SCREAM.Data.Entities.Backup;
@@ -11,15 +12,37 @@ public static class BackupJobEndpoints
         var group = app.MapGroup("/jobs/backup")
             .WithTags("Jobs/Backup");
 
-        // Get all backup jobs
-        group.MapGet("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
-        {
-            await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-            var backupJobs = await dbContext.BackupJobs
-                .OrderByDescending(job => job.StartedAt)
-                .ToListAsync();
-            return Results.Ok(backupJobs);
-        });
+     group.MapGet("/",
+    async (
+        IDbContextFactory<ScreamDbContext> dbContextFactory,
+        [FromQuery] long? planId = null,
+        [FromQuery] TaskStatus[]? statuses = null,
+        [FromQuery] bool? hasTriggeredRestore = null
+    ) =>
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync();
+        IQueryable<BackupJob> query = db.BackupJobs;
+
+        // Filter by planId if provided
+        if (planId.HasValue)
+            query = query.Where(job => job.BackupPlanId == planId.Value);
+
+        // Filter by any statuses if provided
+        if (statuses != null && statuses.Any())
+            query = query.Where(job => statuses.Contains(job.Status));
+
+        // Filter by HasTriggeredRestore if provided
+        if (hasTriggeredRestore.HasValue)
+            query = query.Where(job => job.HasTriggeredRestore == hasTriggeredRestore.Value);
+
+        var backupJobs = await query
+            .OrderByDescending(job => job.StartedAt)
+            .ToListAsync();
+
+        return Results.Ok(backupJobs);
+    }
+);
+
 
         // Get a backup job by id
         group.MapGet("/{jobId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory, long jobId) =>
@@ -168,7 +191,7 @@ public static class BackupJobEndpoints
 
             return Results.Ok(existingJob);
         });
-        
+
         group.MapGet("/logs", async (
             IDbContextFactory<ScreamDbContext> dbContextFactory,
             long? backupJobId = null,

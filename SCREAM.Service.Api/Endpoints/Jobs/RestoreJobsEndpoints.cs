@@ -14,41 +14,54 @@ public static class RestoreJobEndpoints
 
         // Get all restore jobs
         group.MapGet("/", async (
-            IDbContextFactory<ScreamDbContext> dbContextFactory,
-            [FromQuery] TaskStatus[]? statuses,
-            bool? isCompressed,
-            bool? isEncrypted
-        ) =>
+     IDbContextFactory<ScreamDbContext> dbContextFactory,        // required
+     [FromQuery] long? planId = null,                  // optional
+     [FromQuery] TaskStatus[]? statuses = null,                  // optional
+     [FromQuery] bool? isCompressed = null,                  // optional
+     [FromQuery] bool? isEncrypted = null                   // optional
+ ) =>
+ {
+     await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+     IQueryable<RestoreJob> query = dbContext.RestoreJobs;
+
+     if (planId.HasValue)
+         query = query.Where(job => job.RestorePlanId == planId.Value);
+
+     if (statuses != null && statuses.Any())
+         query = query.Where(job => statuses.Contains(job.Status));
+
+     if (isCompressed.HasValue)
+         query = query.Where(job => job.IsCompressed == isCompressed.Value);
+
+     if (isEncrypted.HasValue)
+         query = query.Where(job => job.IsEncrypted == isEncrypted.Value);
+
+     var restoreJobs = await query
+         .OrderByDescending(job => job.StartedAt)
+         .ToListAsync();
+
+     return Results.Ok(restoreJobs);
+ });
+
+        // Get a restore job by id with optional status filter
+        group.MapGet("/{jobId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory, long jobId, TaskStatus? status = null) =>
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-            IQueryable<RestoreJob> query = dbContext.RestoreJobs;
-            if (statuses != null && statuses.Any())
+
+            var query = dbContext.RestoreJobs
+                .Include(job => job.RestoreItems)
+                .ThenInclude(item => item.DatabaseItem)
+                .Where(job => job.Id == jobId);
+
+            // Apply status filter if provided
+            if (status.HasValue)
             {
-                query = query.Where(job => statuses.Contains(job.Status));
+                query = query.Where(job => job.Status == status.Value);
             }
-            if (isCompressed.HasValue)
-            {
-                query = query.Where(job => job.IsCompressed == isCompressed.Value);
-            }
-            if (isEncrypted.HasValue)
-            {
-                query = query.Where(job => job.IsEncrypted == isEncrypted.Value);
-            }
-            var restoreJobs = await query.OrderByDescending(job => job.StartedAt).ToListAsync();
-            return Results.Ok(restoreJobs);
+
+            var restoreJob = await query.FirstOrDefaultAsync();
+            return restoreJob == null ? Results.NotFound() : Results.Ok(restoreJob);
         });
-
-        // Get a restore job by id
-        group.MapGet("/{jobId:long}", async (IDbContextFactory<ScreamDbContext> dbContextFactory, long jobId) =>
-       {
-           await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-           var restoreJob = await dbContext.RestoreJobs
-               .Include(job => job.RestoreItems)
-               .ThenInclude(item => item.DatabaseItem)
-               .FirstOrDefaultAsync(job => job.Id == jobId);
-
-           return restoreJob == null ? Results.NotFound() : Results.Ok(restoreJob);
-       });
 
         // Get logs for a restore job
         group.MapGet("/{jobId:long}/logs", async (IDbContextFactory<ScreamDbContext> dbContextFactory, long jobId) =>

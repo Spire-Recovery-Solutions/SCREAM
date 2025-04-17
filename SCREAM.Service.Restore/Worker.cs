@@ -23,6 +23,7 @@ namespace SCREAM.Service.Restore
         private string _mysqlPassword = "";
         private int _restoreThreads;
         private SemaphoreSlim _restoreSemaphore;
+
         private string GetConfigValue(string envKey, string configKey, string defaultValue = "")
         {
             var value = Environment.GetEnvironmentVariable(envKey);
@@ -69,10 +70,7 @@ namespace SCREAM.Service.Restore
 
         #region Restore Execution
 
-        private async Task<bool> ExecuteRestoreForItemAsync(
-         RestoreItem restoreItem,
-         Tuple<string, string, string> connectionString,
-         string backupFolderPath,
+        private async Task<bool> ExecuteRestoreForItemAsync(RestoreItem restoreItem, Tuple<string, string, string> connectionString, string backupFolderPath,
          CancellationToken ct)
         {
             string filePath = GetRestoreFilePath(backupFolderPath, restoreItem);
@@ -234,8 +232,15 @@ namespace SCREAM.Service.Restore
                 var (restorePlan, backupPlan, storageTarget) = await GetRestoreDependenciesAsync(restoreJob, cancellationToken);
                 var backupFolderPath = GetBackupFolderPath(storageTarget);
 
+                if (!Directory.Exists(backupFolderPath))
+                {
+                    throw new DirectoryNotFoundException(
+                        $"Backup directory not found: {backupFolderPath}. " +
+                        "Verify storage target path is configured correctly.");
+                }
+
+                logger.LogInformation("backup Folder path exist at: " + backupFolderPath);
                 // 3) Process files with all required data
-                Directory.CreateDirectory(backupFolderPath);
                 var backupDirectoryInfo = new DirectoryInfo(backupFolderPath);
 
                 // 4) Decrypt & decompress
@@ -561,12 +566,12 @@ namespace SCREAM.Service.Restore
         {
             string fileSuffix = restoreItem.DatabaseItem.Type switch
             {
-                DatabaseItemType.TableStructure => ".structure.sql",
-                DatabaseItemType.TableData => ".data.sql",
-                DatabaseItemType.View => ".view.sql",
-                DatabaseItemType.Trigger => ".triggers.sql",
-                DatabaseItemType.Event => ".events.sql",
-                DatabaseItemType.FunctionProcedure => ".funcs.sql",
+                DatabaseItemType.TableStructure => "-structure.sql",
+                DatabaseItemType.TableData => "-data.sql",
+                DatabaseItemType.View => "-view.sql",
+                DatabaseItemType.Trigger => "-triggers.sql",
+                DatabaseItemType.Event => "-events.sql",
+                DatabaseItemType.FunctionProcedure => "-funcs.sql",
                 _ => throw new ArgumentOutOfRangeException(nameof(restoreItem.DatabaseItem.Type))
             };
 
@@ -729,35 +734,55 @@ namespace SCREAM.Service.Restore
         {
             try
             {
-                var eligiblePlans = await _httpClient.GetFromJsonAsync<List<RestorePlan>>("plans/restore?isActive=true", ct) ?? new List<RestorePlan>();
+                // Get all active restore plans
+                var activePlans = await _httpClient
+                    .GetFromJsonAsync<List<RestorePlan>>("plans/restore?isActive=true", ct)
+                    ?? new List<RestorePlan>();
 
-                foreach (var plan in eligiblePlans)
+                foreach (var plan in activePlans)
                 {
-                    if (plan.ScheduleType == ScheduleType.Triggered) continue;
+                    // Skip triggered plans as they're handled elsewhere
+                    if (plan.ScheduleType == ScheduleType.Triggered)
+                        continue;
 
-                    var existingJobs = await _httpClient.GetFromJsonAsync<List<RestoreJob>>(
-                        $"jobs/restore?planId={plan.Id}", ct) ?? new List<RestoreJob>();
+                    // Get existing jobs for this plan
+                    var existingJobs = await _httpClient
+                        .GetFromJsonAsync<List<RestoreJob>>($"jobs/restore?planId={plan.Id}", ct)
+                        ?? new List<RestoreJob>();
 
-                    var lastJob = existingJobs
-                        .OrderByDescending(j => j.CreatedAt)
-                        .FirstOrDefault();
 
-                    if ((lastJob != null && (lastJob.Status == TaskStatus.Faulted || lastJob.Status == TaskStatus.Canceled)) || existingJobs.Any(j => j.Status < TaskStatus.RanToCompletion))
+                    var lastJob = existingJobs.OrderByDescending(j => j.CreatedAt).FirstOrDefault();
+                    bool jobsExist = existingJobs.Any();
+
+                    bool jobsStillRunning = existingJobs.Any(j => j.Status < TaskStatus.RanToCompletion);
+                    bool lastJobFailed = lastJob != null && lastJob.Status == TaskStatus.Faulted;
+
+                    // Skip if there are running jobs or the last job failed
+                    if (jobsStillRunning || lastJobFailed)
                     {
-                        string reason = lastJob != null && (lastJob.Status == TaskStatus.Faulted || lastJob.Status == TaskStatus.Canceled)
-                            ? $"last job {lastJob.Id} is in {lastJob.Status} state"
-                            : "active job exists";
+                        string reason = lastJobFailed
+                            ? $"last job {lastJob!.Id} failed"
+                            : "jobs are still running";
 
-                        logger.LogInformation("Skipping plan {PlanId} - {Reason}", plan.Id, reason);
+                        logger.LogInformation("Skipping plan {PlanId} because {Reason}", plan.Id, reason);
                         continue;
                     }
 
-                    bool shouldCreate = false;
+                    // Handle based on schedule type
+                    bool shouldCreateJob = false;
 
                     switch (plan.ScheduleType)
                     {
                         case ScheduleType.OneTime:
-                            shouldCreate = true;
+                            // For OneTime plans, create job only once
+                            shouldCreateJob = !jobsExist;
+
+                            if (jobsExist)
+                            {
+                                logger.LogInformation(
+                                    "Skipping OneTime plan {PlanId} because it already ran at {LastRun}",
+                                    plan.Id, lastJob!.CreatedAt);
+                            }
                             break;
 
                         case ScheduleType.Repeating:
@@ -772,13 +797,15 @@ namespace SCREAM.Service.Restore
                                 var cron = CronExpression.Parse(plan.ScheduleCron);
                                 var nextRun = plan.NextRun ?? cron.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
 
+                                // Create job if it's time to run based on the cron schedule
                                 if (DateTime.UtcNow >= nextRun)
                                 {
-                                    shouldCreate = true;
+                                    shouldCreateJob = true;
                                     plan.NextRun = cron.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
                                 }
                                 else if (plan.NextRun == null)
                                 {
+                                    // Just update the next run time if it's not set
                                     plan.NextRun = nextRun;
                                     await UpdateRestorePlan(plan, ct);
                                 }
@@ -791,13 +818,15 @@ namespace SCREAM.Service.Restore
                             break;
                     }
 
-                    if (!shouldCreate) continue;
-
-                    if (await CreateRestoreJob(plan, ct))
+                    // Create job if conditions are met
+                    if (shouldCreateJob)
                     {
-                        plan.LastRun = DateTime.UtcNow;
-                        await UpdateRestorePlan(plan, ct);
-                        logger.LogInformation("Successfully created restore job for plan {PlanId}", plan.Id);
+                        if (await CreateRestoreJob(plan, ct))
+                        {
+                            plan.LastRun = DateTime.UtcNow;
+                            await UpdateRestorePlan(plan, ct);
+                            logger.LogInformation("Successfully created restore job for plan {PlanId}", plan.Id);
+                        }
                     }
                 }
             }
@@ -806,6 +835,7 @@ namespace SCREAM.Service.Restore
                 logger.LogError(ex, "Error generating restore jobs");
             }
         }
+
 
         private async Task<bool> CreateRestoreJob(RestorePlan plan, CancellationToken ct)
         {

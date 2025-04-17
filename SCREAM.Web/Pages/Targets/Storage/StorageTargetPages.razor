@@ -1,5 +1,6 @@
 ﻿@page "/targets/storage"
 @using SCREAM.Data.Entities.StorageTargets
+@using SCREAM.Data.Entities.Backup
 @using System.Text.Json
 @using System.Text.Json.Serialization
 @using SCREAM.Web.Pages.Backup
@@ -35,6 +36,7 @@
         <MudTh>Name</MudTh>
         <MudTh>Type</MudTh>
         <MudTh>Description</MudTh>
+        <MudTh>In Use</MudTh>
         <MudTh>Actions</MudTh>
     </HeaderContent>
     <RowTemplate>
@@ -42,18 +44,28 @@
         <MudTd>@context.Type</MudTd>
         <MudTd>@context.Description</MudTd>
         <MudTd>
+            @{
+                bool isInUse = IsStorageTargetInUse(context.Id);
+                <MudChip T="string" Color="@(isInUse ? Color.Info : Color.Default)" Size="Size.Small">
+                    @(isInUse ? "Yes" : "No")
+                </MudChip>
+            }
+        </MudTd>
+        <MudTd>
             <MudIconButton Icon="@Icons.Material.Filled.Edit"
                            Color="Color.Primary"
                            OnClick="@(() => EditTarget(context))" />
             <MudIconButton Icon="@Icons.Material.Filled.Delete"
                            Color="Color.Error"
-                           OnClick="@(() => DeleteTarget(context))" />
+                           OnClick="@(() => DeleteTarget(context))"
+                           Disabled="@IsStorageTargetInUse(context.Id)" />
         </MudTd>
     </RowTemplate>
 </MudTable>
 
 @code {
     private List<StorageTarget> _storageTargets = [];
+    private List<BackupPlan> _backupPlans = [];
     private HttpClient _httpClient;
     private JsonSerializerOptions _jsonOptions;
     private bool _isLoading = false;
@@ -67,25 +79,35 @@
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                 DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
             };
-        await LoadStorageTargets();
+        await LoadData();
     }
 
-    private async Task LoadStorageTargets()
+    private async Task LoadData()
     {
         try
         {
             _isLoading = true;
-            _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("targets/storage", _jsonOptions)
-                               ?? [];
+            var storageTargetsTask = _httpClient.GetFromJsonAsync<List<StorageTarget>>("targets/storage", _jsonOptions);
+            var backupPlansTask = _httpClient.GetFromJsonAsync<List<BackupPlan>>("plans/backup", _jsonOptions);
+            
+            await Task.WhenAll(storageTargetsTask, backupPlansTask);
+            
+            _storageTargets = storageTargetsTask.Result ?? [];
+            _backupPlans = backupPlansTask.Result ?? [];
         }
         catch (Exception ex)
         {
-            Snackbar.Add("Error loading storage targets: " + ex.Message, Severity.Error);
+            Snackbar.Add("Error loading data: " + ex.Message, Severity.Error);
         }
         finally
         {
             _isLoading = false;
         }
+    }
+
+    private bool IsStorageTargetInUse(long storageTargetId)
+    {
+        return _backupPlans.Any(bp => bp.StorageTargetId == storageTargetId);
     }
 
     private void AddNewTarget()
@@ -100,6 +122,13 @@
 
     private async Task DeleteTarget(StorageTarget target)
     {
+        // Check if the target is in use
+        if (IsStorageTargetInUse(target.Id))
+        {
+            Snackbar.Add("Cannot delete storage target because it's in use by a backup plan.", Severity.Warning);
+            return;
+        }
+
         var parameters = new DialogParameters
         {
             { "ContentText", $"Are you sure you want to delete the storage target '{target.Name}'?" },
@@ -122,7 +151,8 @@
                 }
                 else
                 {
-                    Snackbar.Add("Failed to delete storage target.", Severity.Error);
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Failed to delete storage target: {errorContent}", Severity.Error);
                 }
             }
             catch (Exception ex)
@@ -134,7 +164,7 @@
 
     private async Task RefreshTargets()
     {
-        await LoadStorageTargets();
+        await LoadData();
         Snackbar.Add("Storage targets refreshed.", Severity.Info);
     }
 }

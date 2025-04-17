@@ -17,7 +17,6 @@ public class Worker : BackgroundService
     private readonly string _userName;
     private readonly string _password;
     private readonly string _encryptionKey;
-    private readonly string _backupFolder;
     private readonly string _maxPacketSize;
     private readonly IConfiguration _configuration;
     private readonly int _threads;
@@ -38,10 +37,6 @@ public class Worker : BackgroundService
         _threads = int.Parse(GetConfigValue("MYSQL_BACKUP_THREADS", "MySqlBackup:Threads",
             Environment.ProcessorCount.ToString()));
 
-        var backupFolder = GetConfigValue("MYSQL_BACKUP_FOLDER", "MySqlBackup:BackupFolder");
-        _backupFolder = string.IsNullOrEmpty(backupFolder)
-            ? DateTimeOffset.Now.ToString("yyyy-MM-dd-hh-mm")
-            : backupFolder + "_" + DateTimeOffset.Now.ToString("yyyy-MM-dd-hh-mm");
     }
 
     private string GetConfigValue(string envKey, string configKey, string defaultValue = "")
@@ -77,35 +72,58 @@ public class Worker : BackgroundService
     {
         try
         {
-            var eligiblePlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("plans/backup?isActive=true", stoppingToken) ?? new List<BackupPlan>();
+            // 1) Get all active backup plans
+            var activePlans = await _httpClient
+                .GetFromJsonAsync<List<BackupPlan>>("plans/backup?isActive=true", stoppingToken)
+                ?? new List<BackupPlan>();
 
-            foreach (var plan in eligiblePlans)
+            foreach (var plan in activePlans)
             {
-                if (plan.ScheduleType == ScheduleType.Triggered) continue;
+                // Skip triggered plans
+                if (plan.ScheduleType == ScheduleType.Triggered)
+                    continue;
 
-                var existingJobs = await _httpClient.GetFromJsonAsync<List<BackupJob>>($"jobs/backup?planId={plan.Id}", stoppingToken) ?? new List<BackupJob>();
+                // 2) Load existing jobs for this plan
+                var existingJobs = await _httpClient
+                    .GetFromJsonAsync<List<BackupJob>>($"jobs/backup?planId={plan.Id}", stoppingToken)
+                    ?? new List<BackupJob>();
 
-                var lastJob = existingJobs.OrderByDescending(j => j.CreatedAt).FirstOrDefault();
+                var lastJob = existingJobs
+                    .OrderByDescending(j => j.CreatedAt)
+                    .FirstOrDefault();
 
-                if ((lastJob != null && (lastJob.Status == TaskStatus.Faulted || lastJob.Status == TaskStatus.Canceled)) || existingJobs.Any(j => j.Status < TaskStatus.RanToCompletion))
+                bool jobsExist = existingJobs.Any();
+                bool jobsStillRunning = existingJobs.Any(j => j.Status < TaskStatus.RanToCompletion);
+                bool lastJobFailed = lastJob != null && lastJob.Status == TaskStatus.Faulted;
+
+                // 3) Skip if something’s in progress or last run failed
+                if (jobsStillRunning || lastJobFailed)
                 {
-                    string reason = lastJob != null && (lastJob.Status == TaskStatus.Faulted || lastJob.Status == TaskStatus.Canceled)
-                        ? $"last job {lastJob.Id} is in {lastJob.Status} state"
-                        : "active job exists";
-
-                    _logger.LogInformation("Skipping plan {PlanId} - {Reason}", plan.Id, reason);
+                    var reason = lastJobFailed
+                        ? $"last job {lastJob!.Id} failed"
+                        : "a job is still running";
+                    _logger.LogInformation("Skipping plan {PlanId} because {Reason}", plan.Id, reason);
                     continue;
                 }
 
-                bool shouldCreate = false;
+                // 4) Decide whether to create
+                bool shouldCreateJob = false;
 
                 switch (plan.ScheduleType)
                 {
                     case ScheduleType.OneTime:
-                        shouldCreate = true;
+                        // Only once ever
+                        shouldCreateJob = !jobsExist;
+                        if (jobsExist)
+                        {
+                            _logger.LogInformation(
+                                "Skipping OneTime plan {PlanId} because it already ran at {LastRun}",
+                                plan.Id, lastJob!.CreatedAt);
+                        }
                         break;
 
                     case ScheduleType.Repeating:
+                        // Must have a cron
                         if (string.IsNullOrEmpty(plan.ScheduleCron))
                         {
                             _logger.LogWarning("Repeating plan {PlanId} has no cron expression", plan.Id);
@@ -119,11 +137,12 @@ public class Worker : BackgroundService
 
                             if (DateTime.UtcNow >= nextRun)
                             {
-                                shouldCreate = true;
+                                shouldCreateJob = true;
                                 plan.NextRun = cron.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
                             }
                             else if (plan.NextRun == null)
                             {
+                                // Initialize NextRun so we don’t keep hitting this branch
                                 plan.NextRun = nextRun;
                                 await UpdateBackupPlan(plan, stoppingToken);
                             }
@@ -136,13 +155,15 @@ public class Worker : BackgroundService
                         break;
                 }
 
-                if (!shouldCreate) continue;
-
-                if (await CreateBackupJob(plan, stoppingToken))
+                // 5) Create the job if flagged
+                if (shouldCreateJob)
                 {
-                    plan.LastRun = DateTime.UtcNow;
-                    await UpdateBackupPlan(plan, stoppingToken);
-                    _logger.LogInformation("Successfully created backup job for plan {PlanId}", plan.Id);
+                    if (await CreateBackupJob(plan, stoppingToken))
+                    {
+                        plan.LastRun = DateTime.UtcNow;
+                        await UpdateBackupPlan(plan, stoppingToken);
+                        _logger.LogInformation("Successfully created backup job for plan {PlanId}", plan.Id);
+                    }
                 }
             }
         }
@@ -206,39 +227,13 @@ public class Worker : BackgroundService
     {
         try
         {
-            // Fetch all jobs
-            var allJobs = await _httpClient
-                .GetFromJsonAsync<List<BackupJob>>("jobs/backup", stoppingToken);
-            if (allJobs == null) return;
 
-            // Only consider jobs in the Created state
-            var pendingJobs = allJobs
-                .Where(job => job.Status == TaskStatus.Created)
-                .ToList();
+            var pendingJobs = await _httpClient.GetFromJsonAsync<List<BackupJob>>("jobs/backup?statuses=Created&statuses=WaitingToRun", stoppingToken);
 
-            if (!pendingJobs.Any()) return;
+            if (pendingJobs == null || !pendingJobs.Any()) return;
 
             foreach (var job in pendingJobs)
             {
-                // Retrieve the backup plan for the job.
-                var backupPlan = await GetBackupPlan(job.BackupPlanId, stoppingToken);
-                if (backupPlan == null)
-                {
-                    _logger.LogError("Backup plan not found for job {JobId}", job.Id);
-                    continue;
-                }
-
-                // Retrieve the storage target.
-                var storageTarget = await GetStorageTargetWithRetry(backupPlan.StorageTargetId, stoppingToken);
-                if (storageTarget == null)
-                {
-                    _logger.LogError(
-                        "Storage target not found for backup plan {BackupPlanId} in job {JobId}",
-                        backupPlan.Id, job.Id);
-                    continue;
-                }
-
-                // Mark the job as Running
                 job.Status = TaskStatus.Running;
                 job.StartedAt = DateTime.UtcNow;
                 await UpdateBackupJob(job, stoppingToken);
@@ -246,31 +241,39 @@ public class Worker : BackgroundService
                 var sw = Stopwatch.StartNew();
                 try
                 {
-                    // Gather selected items
+                    var backupPlan = await GetBackupPlan(job.BackupPlanId, stoppingToken);
+                    if (backupPlan == null)
+                    {
+                        _logger.LogError("Backup plan not found for job {JobId}", job.Id);
+                        await FailJob(job, new Exception("Backup plan not found"), stoppingToken);
+                        continue;
+                    }
+
+                    var storageTarget = await GetStorageTargetWithRetry(backupPlan.StorageTargetId, stoppingToken);
+                    if (storageTarget == null)
+                    {
+                        _logger.LogError("Storage target not found for job {JobId}", job.Id);
+                        await FailJob(job, new Exception("Storage target not found"), stoppingToken);
+                        continue;
+                    }
+
                     var backupItems = await GetBackupItems(job.BackupPlanId, stoppingToken);
                     var selectedItems = backupItems?.Where(i => i.IsSelected).ToList();
-
                     if (selectedItems == null || !selectedItems.Any())
                     {
-                        _logger.LogWarning("No selected items to backup for job {JobId}", job.Id);
+                        _logger.LogWarning("No selected items for job {JobId}", job.Id);
                         await CompleteJob(job, stoppingToken);
                         continue;
                     }
 
-                    // Process all items
-                    await ProcessBackupItems(job, selectedItems, storageTarget, stoppingToken);
-
-                    // After processing, check if any item failed
-                    var statuses = await GetBackupJobStatuses(job.Id, stoppingToken);
-                    var hasFailures = statuses?.Any(s => s.Status == TaskStatus.Faulted) ?? false;
-
-                    if (hasFailures)
+                    bool allItemsSucceeded = await ProcessBackupItems(job, selectedItems, storageTarget, stoppingToken);
+                    if (allItemsSucceeded)
                     {
-                        await FailJob(job, new Exception("Some items failed"), stoppingToken);
+                        await CompleteJob(job, stoppingToken);
                     }
                     else
                     {
-                        await CompleteJob(job, stoppingToken);
+                        await FailJob(job, new Exception("One or more items failed"), stoppingToken);
                     }
                 }
                 catch (Exception ex)
@@ -287,7 +290,7 @@ public class Worker : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving or processing backup jobs");
+            _logger.LogError(ex, "Error processing backup jobs");
         }
     }
 
@@ -325,43 +328,26 @@ public class Worker : BackgroundService
         return null;
     }
 
-    private async Task ProcessBackupItems(
+    private async Task<bool> ProcessBackupItems(
         BackupJob job,
         List<BackupItem> backupItems,
         StorageTarget storageTarget,
         CancellationToken stoppingToken)
     {
-        bool hasFailures = false;
+        int hasFailures = 0;
 
-        // Process schema items first (triggers, events, functions)
-        var schemas = backupItems
-            .Where(i => i.DatabaseItem.Type is DatabaseItemType.Event
-                or DatabaseItemType.FunctionProcedure
-                or DatabaseItemType.Trigger)
-            .Select(i => i.DatabaseItem.Schema)
-            .Distinct();
+        // Get current statuses for items in the job with specific statuses
+        var statuses = await _httpClient.GetFromJsonAsync<List<BackupItemStatus>>(
+            $"jobs/backup/items/status/{job.Id}?statuses=Created&statuses=WaitingToRun",
+            stoppingToken);
 
-        await Parallel.ForEachAsync(schemas, new ParallelOptions
-        {
-            MaxDegreeOfParallelism = _threads,
-            CancellationToken = stoppingToken
-        }, async (schema, ct) =>
-        {
-            var schemaItems = backupItems.Where(i =>
-                i.DatabaseItem.Schema == schema &&
-                i.DatabaseItem.Type is DatabaseItemType.Event
-                    or DatabaseItemType.FunctionProcedure
-                    or DatabaseItemType.Trigger).ToList();
+        // Filter eligible items based on returned statuses
+        var eligibleItems = backupItems.Where(item =>
+            statuses?.Any(s => s.BackupItemId == item.Id) ?? false).ToList();
 
-            if (await ProcessSchemaItemsWithRetry(job, schema, schemaItems, storageTarget, ct) == false)
-            {
-                hasFailures = true;
-            }
-        });
-
-        // Process tables/views
+        // FIRST: Process tables/views
         await Parallel.ForEachAsync(
-            backupItems.Where(i => i.DatabaseItem.Type is DatabaseItemType.TableStructure
+            eligibleItems.Where(i => i.DatabaseItem.Type is DatabaseItemType.TableStructure
                 or DatabaseItemType.View),
             new ParallelOptions
             {
@@ -370,16 +356,40 @@ public class Worker : BackgroundService
             },
             async (item, ct) =>
             {
-                if (await ProcessTableOrViewWithRetry(job, item, storageTarget, ct) == false)
+                if (!await ProcessTableOrViewWithRetry(job, item, storageTarget, ct))
                 {
-                    hasFailures = true;
+                    Interlocked.Exchange(ref hasFailures, 1);
                 }
             }
         );
 
-        // Process table data
+        // SECOND: Process schema items (triggers, events, functions)
+        var schemas = eligibleItems
+            .Where(i => i.DatabaseItem.Type is DatabaseItemType.Event
+                or DatabaseItemType.FunctionProcedure
+                or DatabaseItemType.Trigger)
+            .Select(i => i.DatabaseItem.Schema)
+            .Distinct();
+        await Parallel.ForEachAsync(schemas, new ParallelOptions
+        {
+            MaxDegreeOfParallelism = _threads,
+            CancellationToken = stoppingToken
+        }, async (schema, ct) =>
+        {
+            var schemaItems = eligibleItems.Where(i =>
+                i.DatabaseItem.Schema == schema &&
+                i.DatabaseItem.Type is DatabaseItemType.Event
+                    or DatabaseItemType.FunctionProcedure
+                    or DatabaseItemType.Trigger).ToList();
+            if (!await ProcessSchemaItemsWithRetry(job, schema, schemaItems, storageTarget, ct))
+            {
+                Interlocked.Exchange(ref hasFailures, 1);
+            }
+        });
+
+        // THIRD: Process table data
         await Parallel.ForEachAsync(
-            backupItems.Where(i => i.DatabaseItem.Type == DatabaseItemType.TableData),
+            eligibleItems.Where(i => i.DatabaseItem.Type == DatabaseItemType.TableData),
             new ParallelOptions
             {
                 MaxDegreeOfParallelism = _threads,
@@ -387,178 +397,310 @@ public class Worker : BackgroundService
             },
             async (item, ct) =>
             {
-                if (await ProcessTableDataWithRetry(job, item, storageTarget, ct) == false)
+                if (!await ProcessTableDataWithRetry(job, item, storageTarget, ct))
                 {
-                    hasFailures = true;
+                    Interlocked.Exchange(ref hasFailures, 1);
                 }
             }
         );
 
-        // If any failures occurred, mark the job as failed
-        if (hasFailures)
-        {
-            await FailJob(job, new Exception("Some items failed after retries"), stoppingToken);
-        }
+        return hasFailures == 0;
     }
 
     private async Task<bool> ProcessSchemaItemsWithRetry(
-    BackupJob job,
-    string schema,
-    List<BackupItem> schemaItems,
-    StorageTarget storageTarget,
-    CancellationToken token)
+     BackupJob job,
+     string schema,
+     List<BackupItem> schemaItems,
+     StorageTarget storageTarget,
+     CancellationToken token)
     {
         bool allSucceeded = true;
 
-        // Helper to run one dump command with retries, updating status only for the provided items.
-        async Task<bool> RunWithRetriesAndMarkAsync(
-            List<BackupItem> items,
-            Func<Command> buildDumpCommand,
-            string outputFileName)
-        {
-            var representative = items.First();
-            // Mark the representative item as Running
-            await UpdateItemStatus(job.Id, representative.Id, TaskStatus.Running, null, token);
+        // Get current statuses for all items in this job
+        var statuses = await _httpClient.GetFromJsonAsync<List<BackupItemStatus>>(
+            $"jobs/backup/items/status/{job.Id}", token) ?? [];
 
-            int retryCount = 0;
-            while (retryCount < _maxRetries)
-            {
-                try
-                {
-                    // Execute the dump + compress/encrypt
-                    var cmd = buildDumpCommand();
-                    await CompressEncryptUpload(cmd, outputFileName, storageTarget, token, job, representative);
-
-                    // On first success, mark all items in this group as completed
-                    foreach (var itm in items)
-                    {
-                        await UpdateItemStatus(job.Id, itm.Id, TaskStatus.RanToCompletion, null, token);
-                    }
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    retryCount++;
-                    if (retryCount >= _maxRetries)
-                    {
-                        _logger.LogError(ex, "Max retries reached for {Schema} - {File}", schema, outputFileName);
-                        // Only mark this group as failed
-                        foreach (var itm in items)
-                        {
-                            await UpdateItemStatus(
-                                job.Id,
-                                itm.Id,
-                                TaskStatus.Faulted,
-                                $"Failed after {_maxRetries} retries: {ex.Message}",
-                                token);
-                        }
-                        return false;
-                    }
-                    else
-                    {
-                        _logger.LogWarning(
-                            ex,
-                            "Retry {Retry}/{Max} for {Schema} - {File} after error: {Err}",
-                            retryCount, _maxRetries, schema, outputFileName, ex.Message);
-                        await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, retryCount)), token);
-                    }
-                }
-            }
-
-            // Should never get here
-            return false;
-        }
-
-        // 1) Triggers
+        // 1) Process Triggers
         var triggerItems = schemaItems
             .Where(i => i.DatabaseItem.Type == DatabaseItemType.Trigger)
             .ToList();
+
         if (triggerItems.Any())
         {
-            allSucceeded &= await RunWithRetriesAndMarkAsync(
-                triggerItems,
-                () => Cli.Wrap("/usr/bin/mysqldump")
-                          .WithArguments(a => a
-                              .Add($"--host={_hostName}")
-                              .Add($"--user={_userName}")
-                              .Add($"--password={_password}")
-                              .Add("--add-drop-trigger")
-                              .Add("--dump-date")
-                              .Add("--single-transaction")
-                              .Add("--skip-add-locks")
-                              .Add("--quote-names")
-                              .Add("--no-data")
-                              .Add("--no-create-db")
-                              .Add("--no-create-info")
-                              .Add("--skip-routines")
-                              .Add("--skip-events")
-                              .Add("--triggers")
-                              .Add($"--max-allowed-packet={_maxPacketSize}")
-                              .Add("--column-statistics=0")
-                              .Add(schema)),
-                $"{schema}-triggers.sql.xz.enc");
+            // Check if any trigger items need processing
+            var needsProcessing = false;
+            foreach (var item in triggerItems)
+            {
+                var status = statuses.FirstOrDefault(s => s.BackupItemId == item.Id);
+                if (status == null || (status.Status != TaskStatus.RanToCompletion && status.Status != TaskStatus.Faulted))
+                {
+                    needsProcessing = true;
+                    break;
+                }
+            }
+
+            if (needsProcessing)
+            {
+                // Pick one representative item to track the operation
+                var representative = triggerItems.First();
+                await UpdateItemStatus(job.Id, representative.Id, TaskStatus.Running, null, token);
+
+                bool success = false;
+                string errorMessage = null;
+
+                // Try the operation with retries
+                int retryCount = 0;
+                while (retryCount < _maxRetries && !success)
+                {
+                    try
+                    {
+                        var cmd = Cli.Wrap("/usr/bin/mysqldump")
+                            .WithArguments(a => a
+                                .Add($"--host={_hostName}")
+                                .Add($"--user={_userName}")
+                                .Add($"--password={_password}")
+                                .Add("--add-drop-trigger")
+                                .Add("--dump-date")
+                                .Add("--single-transaction")
+                                .Add("--skip-add-locks")
+                                .Add("--quote-names")
+                                .Add("--no-data")
+                                .Add("--no-create-db")
+                                .Add("--no-create-info")
+                                .Add("--skip-routines")
+                                .Add("--skip-events")
+                                .Add("--triggers")
+                                .Add($"--max-allowed-packet={_maxPacketSize}")
+                                .Add("--column-statistics=0")
+                                .Add(schema));
+
+                        await CompressEncryptUpload(cmd, $"{schema}-triggers.sql.xz.enc", storageTarget, token, job, representative);
+                        success = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        retryCount++;
+                        if (retryCount >= _maxRetries)
+                        {
+                            errorMessage = $"Failed after {_maxRetries} retries: {ex.Message}";
+                            _logger.LogError(ex, "Max retries reached for {Schema} - triggers", schema);
+                        }
+                        else
+                        {
+                            _logger.LogWarning(ex, "Retry {Retry}/{Max} for {Schema} - triggers after error: {Err}",
+                                retryCount, _maxRetries, schema, ex.Message);
+                            await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, retryCount)), token);
+                        }
+                    }
+                }
+
+                // Update each item's status individually based on success/failure
+                foreach (var item in triggerItems)
+                {
+                    var status = statuses.FirstOrDefault(s => s.BackupItemId == item.Id);
+                    // Only update items that aren't already in a final state
+                    if (status == null || (status.Status != TaskStatus.RanToCompletion && status.Status != TaskStatus.Faulted))
+                    {
+                        await UpdateItemStatus(
+                            job.Id,
+                            item.Id,
+                            success ? TaskStatus.RanToCompletion : TaskStatus.Faulted,
+                            success ? null : errorMessage,
+                            token);
+                    }
+                }
+
+                allSucceeded &= success;
+            }
         }
 
-        // 2) Events
+        // 2) Process Events
         var eventItems = schemaItems
             .Where(i => i.DatabaseItem.Type == DatabaseItemType.Event)
             .ToList();
+
         if (eventItems.Any())
         {
-            allSucceeded &= await RunWithRetriesAndMarkAsync(
-                eventItems,
-                () => Cli.Wrap("/usr/bin/mysqldump")
-                          .WithArguments(a => a
-                              .Add($"--host={_hostName}")
-                              .Add($"--user={_userName}")
-                              .Add($"--password={_password}")
-                              .Add("--no-data")
-                              .Add("--no-create-db")
-                              .Add("--no-create-info")
-                              .Add("--skip-routines")
-                              .Add("--events")
-                              .Add("--skip-triggers")
-                              .Add("--dump-date")
-                              .Add("--single-transaction")
-                              .Add("--skip-add-locks")
-                              .Add("--quote-names")
-                              .Add($"--max-allowed-packet={_maxPacketSize}")
-                              .Add("--column-statistics=0")
-                              .Add(schema)),
-                $"{schema}-events.sql.xz.enc");
+            // Check if any event items need processing
+            var needsProcessing = false;
+            foreach (var item in eventItems)
+            {
+                var status = statuses.FirstOrDefault(s => s.BackupItemId == item.Id);
+                if (status == null || (status.Status != TaskStatus.RanToCompletion && status.Status != TaskStatus.Faulted))
+                {
+                    needsProcessing = true;
+                    break;
+                }
+            }
+
+            if (needsProcessing)
+            {
+                // Pick one representative item to track the operation
+                var representative = eventItems.First();
+                await UpdateItemStatus(job.Id, representative.Id, TaskStatus.Running, null, token);
+
+                bool success = false;
+                string errorMessage = null;
+
+                // Try the operation with retries
+                int retryCount = 0;
+                while (retryCount < _maxRetries && !success)
+                {
+                    try
+                    {
+                        var cmd = Cli.Wrap("/usr/bin/mysqldump")
+                            .WithArguments(a => a
+                                .Add($"--host={_hostName}")
+                                .Add($"--user={_userName}")
+                                .Add($"--password={_password}")
+                                .Add("--no-data")
+                                .Add("--no-create-db")
+                                .Add("--no-create-info")
+                                .Add("--skip-routines")
+                                .Add("--events")
+                                .Add("--skip-triggers")
+                                .Add("--dump-date")
+                                .Add("--single-transaction")
+                                .Add("--skip-add-locks")
+                                .Add("--quote-names")
+                                .Add($"--max-allowed-packet={_maxPacketSize}")
+                                .Add("--column-statistics=0")
+                                .Add(schema));
+
+                        await CompressEncryptUpload(cmd, $"{schema}-events.sql.xz.enc", storageTarget, token, job, representative);
+                        success = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        retryCount++;
+                        if (retryCount >= _maxRetries)
+                        {
+                            errorMessage = $"Failed after {_maxRetries} retries: {ex.Message}";
+                            _logger.LogError(ex, "Max retries reached for {Schema} - events", schema);
+                        }
+                        else
+                        {
+                            _logger.LogWarning(ex, "Retry {Retry}/{Max} for {Schema} - events after error: {Err}",
+                                retryCount, _maxRetries, schema, ex.Message);
+                            await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, retryCount)), token);
+                        }
+                    }
+                }
+
+                // Update each item's status individually based on success/failure
+                foreach (var item in eventItems)
+                {
+                    var status = statuses.FirstOrDefault(s => s.BackupItemId == item.Id);
+                    // Only update items that aren't already in a final state
+                    if (status == null || (status.Status != TaskStatus.RanToCompletion && status.Status != TaskStatus.Faulted))
+                    {
+                        await UpdateItemStatus(
+                            job.Id,
+                            item.Id,
+                            success ? TaskStatus.RanToCompletion : TaskStatus.Faulted,
+                            success ? null : errorMessage,
+                            token);
+                    }
+                }
+
+                allSucceeded &= success;
+            }
         }
 
-        // 3) Functions / Stored Procedures
+        // 3) Process Functions / Stored Procedures
         var funcItems = schemaItems
             .Where(i => i.DatabaseItem.Type == DatabaseItemType.FunctionProcedure)
             .ToList();
+
         if (funcItems.Any())
         {
-            allSucceeded &= await RunWithRetriesAndMarkAsync(
-                funcItems,
-                () => Cli.Wrap("/usr/bin/mysqldump")
-                          .WithArguments(a => a
-                              .Add($"--host={_hostName}")
-                              .Add($"--user={_userName}")
-                              .Add($"--password={_password}")
-                              .Add("--no-data")
-                              .Add("--no-create-db")
-                              .Add("--no-create-info")
-                              .Add("--routines")
-                              .Add("--skip-events")
-                              .Add("--skip-triggers")
-                              .Add("--single-transaction")
-                              .Add("--skip-add-locks")
-                              .Add("--quote-names")
-                              .Add($"--max-allowed-packet={_maxPacketSize}")
-                              .Add("--column-statistics=0")
-                              .Add(schema)),
-                $"{schema}-funcs.sql.xz.enc");
+            // Check if any function/procedure items need processing
+            var needsProcessing = false;
+            foreach (var item in funcItems)
+            {
+                var status = statuses.FirstOrDefault(s => s.BackupItemId == item.Id);
+                if (status == null || (status.Status != TaskStatus.RanToCompletion && status.Status != TaskStatus.Faulted))
+                {
+                    needsProcessing = true;
+                    break;
+                }
+            }
+
+            if (needsProcessing)
+            {
+                // Pick one representative item to track the operation
+                var representative = funcItems.First();
+                await UpdateItemStatus(job.Id, representative.Id, TaskStatus.Running, null, token);
+
+                bool success = false;
+                string errorMessage = null;
+
+                // Try the operation with retries
+                int retryCount = 0;
+                while (retryCount < _maxRetries && !success)
+                {
+                    try
+                    {
+                        var cmd = Cli.Wrap("/usr/bin/mysqldump")
+                            .WithArguments(a => a
+                                .Add($"--host={_hostName}")
+                                .Add($"--user={_userName}")
+                                .Add($"--password={_password}")
+                                .Add("--no-data")
+                                .Add("--no-create-db")
+                                .Add("--no-create-info")
+                                .Add("--routines")
+                                .Add("--skip-events")
+                                .Add("--skip-triggers")
+                                .Add("--single-transaction")
+                                .Add("--skip-add-locks")
+                                .Add("--quote-names")
+                                .Add($"--max-allowed-packet={_maxPacketSize}")
+                                .Add("--column-statistics=0")
+                                .Add(schema));
+
+                        await CompressEncryptUpload(cmd, $"{schema}-funcs.sql.xz.enc", storageTarget, token, job, representative);
+                        success = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        retryCount++;
+                        if (retryCount >= _maxRetries)
+                        {
+                            errorMessage = $"Failed after {_maxRetries} retries: {ex.Message}";
+                            _logger.LogError(ex, "Max retries reached for {Schema} - functions/procedures", schema);
+                        }
+                        else
+                        {
+                            _logger.LogWarning(ex, "Retry {Retry}/{Max} for {Schema} - functions/procedures after error: {Err}",
+                                retryCount, _maxRetries, schema, ex.Message);
+                            await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, retryCount)), token);
+                        }
+                    }
+                }
+
+                // Update each item's status individually based on success/failure
+                foreach (var item in funcItems)
+                {
+                    var status = statuses.FirstOrDefault(s => s.BackupItemId == item.Id);
+                    // Only update items that aren't already in a final state
+                    if (status == null || (status.Status != TaskStatus.RanToCompletion && status.Status != TaskStatus.Faulted))
+                    {
+                        await UpdateItemStatus(
+                            job.Id,
+                            item.Id,
+                            success ? TaskStatus.RanToCompletion : TaskStatus.Faulted,
+                            success ? null : errorMessage,
+                            token);
+                    }
+                }
+
+                allSucceeded &= success;
+            }
         }
 
         return allSucceeded;
     }
-
     private async Task<bool> ProcessTableOrViewWithRetry(
      BackupJob job,
      BackupItem item,
@@ -575,7 +717,7 @@ public class Worker : BackgroundService
                 switch (item.DatabaseItem.Type)
                 {
                     case DatabaseItemType.TableStructure:
-                        await DumpSchema(item.DatabaseItem.Schema, item.DatabaseItem.Name, storageTarget, token, job, item);
+                        await DumpStructure(item.DatabaseItem.Schema, item.DatabaseItem.Name, storageTarget, token, job, item);
                         break;
                     case DatabaseItemType.View:
                         await DumpView(item.DatabaseItem.Schema, item.DatabaseItem.Name, storageTarget, token, job, item);
@@ -654,92 +796,67 @@ public class Worker : BackgroundService
 
 
     private async Task UpdateItemStatus(long jobId, long itemId, TaskStatus status,
-     string? errorMessage, CancellationToken token)
+      string? errorMessage, CancellationToken token)
     {
 
-        try
+        int maxRetries = 3;
+        int attempt = 0;
+
+        while (attempt < maxRetries)
         {
-            // Get all statuses for this job
-            var allStatuses = await _httpClient
-                .GetFromJsonAsync<List<BackupItemStatus>>(
+            try
+            {
+                var existingStatus = await _httpClient.GetFromJsonAsync<BackupItemStatus>(
+                    $"jobs/backup/items/status/{jobId}/{itemId}", token);
+
+                var statusUpdate = new BackupItemStatus
+                {
+                    Id = existingStatus?.Id ?? 0,
+                    BackupJobId = jobId,
+                    BackupItemId = itemId,
+                    Status = status,
+                    ErrorMessage = errorMessage,
+                    StartedAt = status == TaskStatus.Running ? DateTime.UtcNow : null,
+                    CompletedAt = status >= TaskStatus.RanToCompletion ? DateTime.UtcNow : null
+                };
+
+                var response = await _httpClient.PostAsJsonAsync(
                     $"jobs/backup/items/status/{jobId}",
+                    statusUpdate,
                     token);
 
-            if (allStatuses == null)
-            {
-                throw new Exception($"Failed to retrieve statuses for job {jobId}");
+                if (!response.IsSuccessStatusCode)
+                {
+                    var error = await response.Content.ReadAsStringAsync(token);
+                    throw new Exception($"Failed to update status: {error}");
+                }
+
+                return; // Success
             }
-
-            var existingStatus = allStatuses.FirstOrDefault(s => s.BackupItemId == itemId);
-
-            // Create or update status
-            var statusUpdate = new BackupItemStatus
+            catch (Exception ex)
             {
-                Id = existingStatus?.Id ?? 0,
-                BackupJobId = jobId,
-                BackupItemId = itemId,
-                Status = status,
-                ErrorMessage = errorMessage,
-                StartedAt = status == TaskStatus.Running ? DateTime.UtcNow : existingStatus?.StartedAt,
-                CompletedAt = status >= TaskStatus.RanToCompletion ? DateTime.UtcNow : null
-            };
-
-            // Use POST for both create and update as defined in the API
-            var response = await _httpClient.PostAsJsonAsync(
-                $"jobs/backup/items/status/{jobId}",
-                statusUpdate,
-                token);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var error = await response.Content.ReadAsStringAsync(token);
-                throw new Exception($"Failed to update status: {error}");
+                attempt++;
+                if (attempt >= maxRetries)
+                {
+                    _logger.LogError(ex, "Failed to update status for item {ItemId} after {MaxRetries} attempts.", itemId, maxRetries);
+                    throw;
+                }
+                await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)), token);
             }
-
-            return; // Success, exit the retry loop
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to update status for item {ItemId}.",
-                itemId);
-
         }
     }
-
-    private async Task<List<BackupItemStatus>?> GetBackupJobStatuses(long jobId, CancellationToken token)
-    {
-        try
-        {
-            return await _httpClient.GetFromJsonAsync<List<BackupItemStatus>>(
-                $"jobs/backup/items/status/{jobId}",
-                token
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to get backup job statuses for job {JobId}",
-                jobId);
-        }
-
-        return null;
-    }
-
 
     private async Task<List<BackupItem>?> GetBackupItems(long planId, CancellationToken token)
     {
         try
         {
             return await _httpClient.GetFromJsonAsync<List<BackupItem>>(
-                $"plans/backup/items/{planId}",
-                token
-            );
+                $"plans/backup/items/{planId}", token);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to get backup items for plan {PlanId}.",
                 planId);
-
-
         }
 
         return null;
@@ -762,26 +879,10 @@ public class Worker : BackgroundService
 
     private async Task CompleteJob(BackupJob job, CancellationToken token)
     {
-        try
-        {
-            var statuses = await GetBackupJobStatuses(job.Id, token);
-            if (statuses?.All(s => s.Status == TaskStatus.RanToCompletion) ?? false)
-            {
-                job.Status = TaskStatus.RanToCompletion;
-                job.CompletedAt = DateTime.UtcNow;
-                await UpdateBackupJob(job, token);
-                _logger.LogInformation("Completed backup job {JobId}", job.Id);
-            }
-            else
-            {
-                await FailJob(job, new Exception("Some items failed"), token);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error completing job {JobId}", job.Id);
-            await FailJob(job, ex, token);
-        }
+        job.Status = TaskStatus.RanToCompletion;
+        job.CompletedAt = DateTime.UtcNow;
+        await UpdateBackupJob(job, token);
+        _logger.LogInformation("Completed backup job {JobId}", job.Id);
     }
 
     private async Task FailJob(BackupJob job, Exception ex, CancellationToken token)
@@ -841,7 +942,7 @@ public class Worker : BackgroundService
         }
     }
 
-    private async Task DumpSchema(string schema, string table, StorageTarget storageTarget,
+    private async Task DumpStructure(string structure, string table, StorageTarget storageTarget,
     CancellationToken stoppingToken, BackupJob job, BackupItem item)
     {
         var time = Stopwatch.StartNew();
@@ -863,25 +964,25 @@ public class Worker : BackgroundService
                     .Add("--skip-triggers")
                     .Add($"--max-allowed-packet={_maxPacketSize}")
                     .Add("--column-statistics=0")
-                    .Add(schema)
+                    .Add(structure)
                     .Add(table))
                 .WithStandardErrorPipe(new LoggerPipeTarget(_logger));
 
-            _logger.LogInformation($"-- Dumping {schema}.{table} - SCHEMA");
-            await CompressEncryptUpload(schemaDump, $"{schema}.{table}-schema.sql.xz.enc", storageTarget, stoppingToken, job, item);
+            _logger.LogInformation($"-- Dumping {structure}.{table} - STRUCTURE");
+            await CompressEncryptUpload(schemaDump, $"{structure}.{table}-structure.sql.xz.enc", storageTarget, stoppingToken, job, item);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"ERROR Dumping {schema}.{table} - SCHEMA");
+            _logger.LogError(ex, $"ERROR Dumping {structure}.{table} - STRUCTURE");
             // Update item status to failed
             await UpdateItemStatus(job.Id, item.Id, TaskStatus.Faulted,
-                $"Failed to dump schema for {schema}.{table}: {ex.Message}", stoppingToken);
+                $"Failed to dump structure for {structure}.{table}: {ex.Message}", stoppingToken);
             throw;
         }
         finally
         {
             time.Stop();
-            _logger.LogInformation($"-- Dumped {schema}.{table} - SCHEMA -- Took {time.ElapsedMilliseconds}ms");
+            _logger.LogInformation($"-- Dumped {structure}.{table} - SCHEMA -- Took {time.ElapsedMilliseconds}ms");
         }
     }
 
@@ -948,58 +1049,37 @@ public class Worker : BackgroundService
         }
     }
 
-    private async Task HandleLocalStorage(Command dumpCommand, string fileName, LocalStorageTarget storageTarget,
-    CancellationToken stoppingToken, BackupJob job, BackupItem item)
+    private async Task HandleLocalStorage(
+     Command dumpCommand,
+     string fileName,
+     LocalStorageTarget storageTarget,
+     CancellationToken stoppingToken,
+     BackupJob job,
+     BackupItem item)
     {
         var time = Stopwatch.StartNew();
         try
         {
-            var fullPath = Path.Combine(
-                storageTarget.Path,
-                _hostName,
-                _backupFolder,
-                fileName);
-
-            Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
-
-            int attempt = 0;
-            while (attempt < _maxRetries)
+            var fullPath = Path.Combine(storageTarget.Path, fileName);
+            var targetDirectory = Path.GetDirectoryName(fullPath)!;
+            // Validate directory exists before proceeding
+            if (!Directory.Exists(storageTarget.Path))
             {
-                try
-                {
-                    await (dumpCommand
-                           | Cli.Wrap("xz").WithArguments($"-T {_threads} -3 -c")
-                           | Cli.Wrap("openssl").WithArguments($"enc -aes-256-cbc -pbkdf2 -iter 20000 -k {_encryptionKey}")
-                           | PipeTarget.ToFile(fullPath))
-                        .ExecuteAsync(stoppingToken);
-
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    attempt++;
-                    if (attempt >= _maxRetries)
-                    {
-                        _logger.LogError(ex, "All {MaxRetries} attempts failed for {FileName}", _maxRetries, fileName);
-
-                        // Update item status to failed
-                        if (item != null)
-                        {
-                            await UpdateItemStatus(job.Id, item.Id, TaskStatus.Faulted,
-                                $"Failed to process {fileName}: {ex.Message}", stoppingToken);
-                        }
-
-                        throw;
-                    }
-
-                    _logger.LogWarning(ex, "Backup attempt {Attempt} of {MaxRetries} failed for {FileName}. Retrying in 2 seconds...",
-                        attempt, _maxRetries, fileName);
-                    await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
-                }
+                throw new DirectoryNotFoundException(
+                    $"Target directory does not exist: {storageTarget.Path}. " +
+                    "Verify the storage path is configured correctly.");
             }
 
+
+            await (dumpCommand
+                   | Cli.Wrap("xz").WithArguments($"-T {_threads} -3 -c")
+                   | Cli.Wrap("openssl").WithArguments($"enc -aes-256-cbc -pbkdf2 -iter 20000 -k {_encryptionKey}")
+                   | PipeTarget.ToFile(fullPath))
+                .ExecuteAsync(stoppingToken);
+
             time.Stop();
-            _logger.LogInformation("Local backup saved to {FilePath} in {ElapsedTime}ms", fullPath, time.ElapsedMilliseconds);
+            _logger.LogInformation("Local backup saved to {FilePath} in {ElapsedTime}ms",
+                fullPath, time.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
@@ -1007,13 +1087,11 @@ public class Worker : BackgroundService
             _logger.LogError(ex, "Local storage backup failed for {FileName} after {ElapsedTime}ms",
                 fileName, time.ElapsedMilliseconds);
 
-            // Update item status to failed if not already updated
             if (item != null)
             {
                 await UpdateItemStatus(job.Id, item.Id, TaskStatus.Faulted,
                     $"Local storage backup failed: {ex.Message}", stoppingToken);
             }
-
             throw;
         }
     }
