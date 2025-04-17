@@ -1060,9 +1060,6 @@ public class Worker : BackgroundService
         var time = Stopwatch.StartNew();
         try
         {
-            var fullPath = Path.Combine(storageTarget.Path, fileName);
-            var targetDirectory = Path.GetDirectoryName(fullPath)!;
-            // Validate directory exists before proceeding
             if (!Directory.Exists(storageTarget.Path))
             {
                 throw new DirectoryNotFoundException(
@@ -1070,6 +1067,14 @@ public class Worker : BackgroundService
                     "Verify the storage path is configured correctly.");
             }
 
+            var fullPath = Path.Combine(storageTarget.Path, fileName);
+            var targetDirectory = Path.GetDirectoryName(fullPath)!;
+
+            if (!Directory.Exists(targetDirectory))
+            {
+                Directory.CreateDirectory(targetDirectory);
+                _logger.LogInformation("Created directory: {Directory}", targetDirectory);
+            }
 
             await (dumpCommand
                    | Cli.Wrap("xz").WithArguments($"-T {_threads} -3 -c")
@@ -1086,7 +1091,6 @@ public class Worker : BackgroundService
             time.Stop();
             _logger.LogError(ex, "Local storage backup failed for {FileName} after {ElapsedTime}ms",
                 fileName, time.ElapsedMilliseconds);
-
             if (item != null)
             {
                 await UpdateItemStatus(job.Id, item.Id, TaskStatus.Faulted,
