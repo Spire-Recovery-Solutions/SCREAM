@@ -1,5 +1,8 @@
-﻿using CliWrap;
+﻿using Amazon.S3;
+using Amazon.S3.Model;
+using CliWrap;
 using Cronos;
+using Microsoft.IO;
 using SCREAM.Data.Entities;
 using SCREAM.Data.Entities.Backup;
 using SCREAM.Data.Entities.Backup.BackupItems;
@@ -18,9 +21,12 @@ public class Worker : BackgroundService
     private readonly string _password;
     private readonly string _encryptionKey;
     private readonly string _maxPacketSize;
+    private readonly string _s3ServiceUrl;
     private readonly IConfiguration _configuration;
     private readonly int _threads;
     private readonly HttpClient _httpClient;
+    private readonly RecyclableMemoryStreamManager _memoryStreamManager;
+    private readonly AmazonS3Client _b2Client;
     private readonly int _maxRetries = 3;
 
     public Worker(ILogger<Worker> logger, IConfiguration configuration, IHttpClientFactory httpClientFactory)
@@ -36,6 +42,37 @@ public class Worker : BackgroundService
         _maxPacketSize = GetConfigValue("MYSQL_BACKUP_MAX_PACKET_SIZE", "MySqlBackup:MaxPacketSize", "1073741824");
         _threads = int.Parse(GetConfigValue("MYSQL_BACKUP_THREADS", "MySqlBackup:Threads",
             Environment.ProcessorCount.ToString()));
+        var b2Config = new AmazonS3Config
+        {
+            ServiceURL = GetConfigValue("MYSQL_BACKUP_B2_SERVICE_URL", "MySqlBackup:BackblazeB2:ServiceURL"),
+            ForcePathStyle = true
+        };
+        var options = new RecyclableMemoryStreamManager.Options()
+        {
+            // Use 1MB blocks for better handling of large backup files
+            BlockSize = 1024 * 1024,
+
+            // Set large buffer multiple to 1MB for efficient chunking
+            LargeBufferMultiple = 1024 * 1024,
+
+            // Max single buffer size to 500MB (B2's recommended maximum part size)
+            MaximumBufferSize = 500 * 1024 * 1024,
+
+            // Cap total memory usage for pools
+            MaximumLargePoolFreeBytes = 1024 * 1024 * 1024, // 1GB large pool
+            MaximumSmallPoolFreeBytes = 100 * 1024 * 1024, // 100MB small pool
+
+            // Return buffers aggressively to help manage memory
+            AggressiveBufferReturn = true,
+
+        };
+        _memoryStreamManager = new RecyclableMemoryStreamManager(options);
+
+        _s3ServiceUrl = GetConfigValue("MYSQL_BACKUP_B2_SERVICE_URL", "MySqlBackup:BackblazeB2:ServiceURL");
+        var b2AccessKey = GetConfigValue("MYSQL_BACKUP_B2_ACCESS_KEY", "MySqlBackup:BackblazeB2:AccessKey");
+        var b2SecretKey = GetConfigValue("MYSQL_BACKUP_B2_SECRET_KEY", "MySqlBackup:BackblazeB2:SecretKey");
+        var
+        _b2Client = new AmazonS3Client(b2AccessKey, b2SecretKey, b2Config);
 
     }
 
@@ -54,7 +91,6 @@ public class Worker : BackgroundService
     {
         while (await _timer.WaitForNextTickAsync(stoppingToken) && !stoppingToken.IsCancellationRequested)
         {
-            var currentBackupFolder = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd-HH-mm");
             var sw = Stopwatch.StartNew();
 
             // Generate backup jobs based on backup plans
@@ -249,7 +285,7 @@ public class Worker : BackgroundService
                         continue;
                     }
 
-                    var storageTarget = await GetStorageTargetWithRetry(backupPlan.StorageTargetId, stoppingToken);
+                    var storageTarget = await GetStorageTarget(backupPlan.StorageTargetId, stoppingToken);
                     if (storageTarget == null)
                     {
                         _logger.LogError("Storage target not found for job {JobId}", job.Id);
@@ -311,7 +347,7 @@ public class Worker : BackgroundService
         return null;
     }
 
-    private async Task<StorageTarget> GetStorageTargetWithRetry(long targetId, CancellationToken token)
+    private async Task<StorageTarget> GetStorageTarget(long targetId, CancellationToken token)
     {
         try
         {
@@ -471,7 +507,7 @@ public class Worker : BackgroundService
                                 .Add("--skip-events")
                                 .Add("--triggers")
                                 .Add($"--max-allowed-packet={_maxPacketSize}")
-                                .Add("--column-statistics=0")
+                                .Add("--skip-column-statistics")
                                 .Add(schema));
 
                         await CompressEncryptUpload(cmd, $"{schema}-triggers.sql.xz.enc", storageTarget, token, job, representative);
@@ -564,7 +600,7 @@ public class Worker : BackgroundService
                                 .Add("--skip-add-locks")
                                 .Add("--quote-names")
                                 .Add($"--max-allowed-packet={_maxPacketSize}")
-                                .Add("--column-statistics=0")
+                                .Add("--skip-column-statistics")
                                 .Add(schema));
 
                         await CompressEncryptUpload(cmd, $"{schema}-events.sql.xz.enc", storageTarget, token, job, representative);
@@ -656,7 +692,7 @@ public class Worker : BackgroundService
                                 .Add("--skip-add-locks")
                                 .Add("--quote-names")
                                 .Add($"--max-allowed-packet={_maxPacketSize}")
-                                .Add("--column-statistics=0")
+                                .Add("--skip-column-statistics")
                                 .Add(schema));
 
                         await CompressEncryptUpload(cmd, $"{schema}-funcs.sql.xz.enc", storageTarget, token, job, representative);
@@ -919,7 +955,7 @@ public class Worker : BackgroundService
                     .Add("--skip-add-locks")
                     .Add("--quote-names")
                     .Add($"--max-allowed-packet={_maxPacketSize}")
-                    .Add("--column-statistics=0")
+                    .Add("--skip-column-statistics")
                     .Add(schema)
                     .Add(table))
                 .WithStandardErrorPipe(new LoggerPipeTarget(_logger));
@@ -963,7 +999,7 @@ public class Worker : BackgroundService
                     .Add("--skip-events")
                     .Add("--skip-triggers")
                     .Add($"--max-allowed-packet={_maxPacketSize}")
-                    .Add("--column-statistics=0")
+                    .Add("--skip-column-statistics")
                     .Add(structure)
                     .Add(table))
                 .WithStandardErrorPipe(new LoggerPipeTarget(_logger));
@@ -1008,7 +1044,7 @@ public class Worker : BackgroundService
                     .Add("--skip-events")
                     .Add("--skip-triggers")
                     .Add($"--max-allowed-packet={_maxPacketSize}")
-                    .Add("--column-statistics=0")
+                    .Add("--skip-column-statistics")
                     .Add(schema)
                     .Add(table))
                 .WithStandardErrorPipe(new LoggerPipeTarget(_logger));
@@ -1032,21 +1068,204 @@ public class Worker : BackgroundService
     }
 
     private async Task CompressEncryptUpload(Command dumpCommand, string fileName, StorageTarget storageTarget,
-      CancellationToken stoppingToken, BackupJob job, BackupItem item)
+    CancellationToken stoppingToken, BackupJob job, BackupItem item)
     {
         if (storageTarget is LocalStorageTarget localTarget)
         {
             await HandleLocalStorage(dumpCommand, fileName, localTarget, stoppingToken, job, item);
         }
-        else if (storageTarget is S3StorageTarget)
+        else if (storageTarget is S3StorageTarget s3Target)
         {
-            // If needed, implement S3 storage handling here.
-            throw new NotSupportedException("S3 storage is not implemented in this example.");
+            await HandleS3Storage(dumpCommand, fileName, s3Target, stoppingToken, job, item);
         }
         else
         {
             throw new NotSupportedException($"Storage type {storageTarget.GetType().Name} not supported");
         }
+    }
+
+    private async Task HandleS3Storage(
+    Command dumpCommand,
+    string fileName,
+    S3StorageTarget storageTarget,
+    CancellationToken stoppingToken,
+    BackupJob job,
+    BackupItem item)
+    {
+        var time = Stopwatch.StartNew();
+        try
+        {
+            var config = new AmazonS3Config
+            {
+                ServiceURL = _s3ServiceUrl,
+                ForcePathStyle = true,
+                Timeout = TimeSpan.FromMinutes(15),
+                MaxErrorRetry = 3
+            };
+
+            using var s3Client = new AmazonS3Client(
+                storageTarget.AccessKey,
+                storageTarget.SecretKey,
+                config
+            );
+
+            var fileKey = Path.Combine(_hostName, Environment.GetEnvironmentVariable("LOCAL_STORAGE_ROOT") ?? "/backups", fileName);
+            var partETags = new List<PartETag>();
+            var partNumber = 1;
+            var uploadId = string.Empty;
+            const long minPartSize = 5L * 1024L * 1024L;
+            const long maxPartSize = 500L * 1024L * 1024L;
+            const int readChunkSize = 81920;
+            long totalBytesRead = 0;
+            var isMultiPartUpload = false;
+
+            var xzCommand = Cli.Wrap("xz")
+                .WithArguments($"-T {_threads} -3 -c");
+
+            var encryptCommand = Cli.Wrap("openssl")
+                .WithArguments($"enc -aes-256-cbc -pbkdf2 -iter 20000 -salt -pass pass:{_encryptionKey}");
+
+            await (dumpCommand | xzCommand | encryptCommand)
+                .WithStandardOutputPipe(PipeTarget.Create(async (stream, token) =>
+                {
+                    try
+                    {
+                        while (!token.IsCancellationRequested)
+                        {
+                            await using var remoteStream = _memoryStreamManager.GetStream(
+                                $"BackupUpload.{fileName}.Part{partNumber}");
+
+                            var buffer = new byte[readChunkSize];
+                            var reachedEnd = false;
+
+                            while (remoteStream.Length < maxPartSize && !reachedEnd)
+                            {
+                                var bytesRead = await stream.ReadAsync(buffer, token);
+                                if (bytesRead == 0)
+                                {
+                                    reachedEnd = true;
+                                    break;
+                                }
+
+                                totalBytesRead += bytesRead;
+                                await remoteStream.WriteAsync(buffer.AsMemory(0, bytesRead), token);
+
+                                if (totalBytesRead >= minPartSize && !isMultiPartUpload)
+                                {
+                                    isMultiPartUpload = true;
+                                    uploadId = await StartMultipartUpload(s3Client, storageTarget.BucketName, fileKey, stoppingToken);
+                                    _logger.LogInformation("Multi-Part Upload Started for {FileName} - UploadId: {UploadId}",
+                                        fileName, uploadId);
+                                }
+                            }
+
+                            if (remoteStream.Length > 0)
+                            {
+                                remoteStream.Position = 0;
+
+                                if (isMultiPartUpload)
+                                {
+                                    await UploadPart(s3Client, storageTarget.BucketName, fileKey, uploadId, partNumber,
+                                        remoteStream, partETags, stoppingToken);
+                                    partNumber++;
+                                }
+                                else
+                                {
+                                    await PerformSinglePartUpload(s3Client, storageTarget.BucketName, fileKey,
+                                        remoteStream, fileName, totalBytesRead, stoppingToken);
+                                }
+                            }
+
+                            if (reachedEnd)
+                            {
+                                if (isMultiPartUpload)
+                                {
+                                    await CompleteMultipartUpload(s3Client, storageTarget.BucketName, fileKey,
+                                        uploadId, partETags, fileName, stoppingToken);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "S3 upload failed for {FileName}", fileName);
+                        if (!string.IsNullOrEmpty(uploadId))
+                        {
+                            await AbortMultipartUpload(s3Client, storageTarget.BucketName, fileKey, uploadId, stoppingToken);
+                        }
+                        throw;
+                    }
+                }))
+                .ExecuteAsync(stoppingToken);
+
+            time.Stop();
+            _logger.LogInformation("S3 upload completed for {FileName} in {Elapsed}ms",
+                fileName, time.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            time.Stop();
+            _logger.LogError(ex, "S3 upload failed for {FileName} after {Elapsed}ms",
+                fileName, time.ElapsedMilliseconds);
+            await UpdateItemStatus(job.Id, item.Id, TaskStatus.Faulted,
+                $"S3 upload failed: {ex.Message}", stoppingToken);
+            throw;
+        }
+    }
+
+    private async Task<string> StartMultipartUpload(IAmazonS3 client, string bucketName, string fileKey, CancellationToken ct)
+    {
+        var response = await client.InitiateMultipartUploadAsync(bucketName, fileKey, ct);
+        return response.UploadId;
+    }
+
+    private async Task UploadPart(IAmazonS3 client, string bucketName, string fileKey, string uploadId, int partNumber,
+        Stream stream, List<PartETag> partETags, CancellationToken ct)
+    {
+        var request = new UploadPartRequest
+        {
+            BucketName = bucketName,
+            Key = fileKey,
+            UploadId = uploadId,
+            PartNumber = partNumber,
+            InputStream = stream
+        };
+
+        var response = await client.UploadPartAsync(request, ct);
+        partETags.Add(new PartETag(partNumber, response.ETag));
+    }
+
+    private async Task CompleteMultipartUpload(IAmazonS3 client, string bucketName, string fileKey, string uploadId,
+        List<PartETag> partETags, string fileName, CancellationToken ct)
+    {
+        var request = new CompleteMultipartUploadRequest
+        {
+            BucketName = bucketName,
+            Key = fileKey,
+            UploadId = uploadId,
+            PartETags = partETags
+        };
+
+        await client.CompleteMultipartUploadAsync(request, ct);
+    }
+
+    private async Task AbortMultipartUpload(IAmazonS3 client, string bucketName, string fileKey, string uploadId, CancellationToken ct)
+    {
+        await client.AbortMultipartUploadAsync(bucketName, fileKey, uploadId, ct);
+    }
+
+    private async Task PerformSinglePartUpload(IAmazonS3 client, string bucketName, string fileKey,
+        Stream stream, string fileName, long size, CancellationToken ct)
+    {
+        var request = new PutObjectRequest
+        {
+            BucketName = bucketName,
+            Key = fileKey,
+            InputStream = stream
+        };
+
+        await client.PutObjectAsync(request, ct);
     }
 
     private async Task HandleLocalStorage(
@@ -1060,25 +1279,22 @@ public class Worker : BackgroundService
         var time = Stopwatch.StartNew();
         try
         {
-            if (!Directory.Exists(storageTarget.Path))
-            {
-                throw new DirectoryNotFoundException(
-                    $"Target directory does not exist: {storageTarget.Path}. " +
-                    "Verify the storage path is configured correctly.");
-            }
-
-            var fullPath = Path.Combine(storageTarget.Path, fileName);
-            var targetDirectory = Path.GetDirectoryName(fullPath)!;
+            var root = Environment.GetEnvironmentVariable("LOCAL_STORAGE_ROOT") ?? "/backups";
+            root = root.TrimEnd('/', '\\');
+            var path = storageTarget.Path.Trim('/', '\\');
+            var targetDirectory = $"{root}/{path}";
 
             if (!Directory.Exists(targetDirectory))
             {
                 Directory.CreateDirectory(targetDirectory);
-                _logger.LogInformation("Created directory: {Directory}", targetDirectory);
+                _logger.LogInformation("Created target directory: {Directory}", targetDirectory);
             }
+
+            var fullPath = Path.Combine(targetDirectory, fileName);
 
             await (dumpCommand
                    | Cli.Wrap("xz").WithArguments($"-T {_threads} -3 -c")
-                   | Cli.Wrap("openssl").WithArguments($"enc -aes-256-cbc -pbkdf2 -iter 20000 -k {_encryptionKey}")
+                   | Cli.Wrap("openssl").WithArguments($"enc -aes-256-cbc -pbkdf2 -iter 20000 -salt -pass pass:{_encryptionKey}")
                    | PipeTarget.ToFile(fullPath))
                 .ExecuteAsync(stoppingToken);
 
@@ -1091,11 +1307,9 @@ public class Worker : BackgroundService
             time.Stop();
             _logger.LogError(ex, "Local storage backup failed for {FileName} after {ElapsedTime}ms",
                 fileName, time.ElapsedMilliseconds);
-            if (item != null)
-            {
-                await UpdateItemStatus(job.Id, item.Id, TaskStatus.Faulted,
-                    $"Local storage backup failed: {ex.Message}", stoppingToken);
-            }
+
+            await UpdateItemStatus(job.Id, item.Id, TaskStatus.Faulted,
+                $"Local storage backup failed: {ex.Message}", stoppingToken);
             throw;
         }
     }

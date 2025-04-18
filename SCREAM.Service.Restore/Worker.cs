@@ -309,7 +309,12 @@ namespace SCREAM.Service.Restore
             if (storageTarget is not LocalStorageTarget localTarget)
                 throw new NotSupportedException("Only local storage supported");
 
-            return localTarget.Path;
+            var root = Environment.GetEnvironmentVariable("LOCAL_STORAGE_ROOT") ?? "/backups";
+            root = root.TrimEnd('/', '\\');
+            var path = localTarget.Path.Trim('/', '\\');
+            var targetDirectory = $"{root}/{path}";
+
+            return targetDirectory;
         }
 
         private async Task<(RestorePlan Plan, BackupPlan BackupPlan, StorageTarget StorageTarget)> GetRestoreDependenciesAsync(RestoreJob restoreJob, CancellationToken ct)
@@ -621,27 +626,76 @@ namespace SCREAM.Service.Restore
             try
             {
                 logger.LogInformation("Decompressing file: {FileName}", compressedFile.Name);
+                var outputPath = Path.Combine(
+                    backupDirectoryInfo.FullName,
+                    Path.GetFileNameWithoutExtension(compressedFile.Name)
+                );
+                var result = await Cli.Wrap("xz")
+                    .WithArguments($"--decompress --keep --stdout \"{compressedFile.FullName}\"")
+                    .WithStandardOutputPipe(PipeTarget.ToFile(outputPath))
+                    .ExecuteAsync(ct);
 
-                var command = $"7z e {compressedFile.FullName} -o{backupDirectoryInfo.FullName} -aoa";
+                if (result.ExitCode != 0)
+                {
+                    logger.LogError("XZ decompression failed for {FileName}", compressedFile.Name);
+                }
+                else
+                {
+                    // Verify the output file exists and has content before deleting the source
+                    var outputFile = new FileInfo(outputPath);
+                    if (outputFile.Exists && outputFile.Length > 0)
+                    {
+                        File.Delete(compressedFile.FullName);
+                        logger.LogInformation("Decompressed {FileName} in {Ms}ms and removed source file",
+                            compressedFile.Name, localStopwatch.ElapsedMilliseconds);
+                    }
+                    else
+                    {
+                        logger.LogWarning("Decompressed output file is missing or empty: {FileName}", outputPath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Exception decompressing file {FileName}", compressedFile.Name);
+            }
+        }
+
+        private async Task ProcessEncryptedFileAsync(FileInfo encryptedFile, DirectoryInfo backupDirectoryInfo, CancellationToken ct)
+        {
+            var localStopwatch = Stopwatch.StartNew();
+            try
+            {
+                logger.LogInformation("Decrypting file: {FileName}", encryptedFile.Name);
+                var outputFile = encryptedFile.FullName.Replace(".enc", "");
+                var command = $"/usr/bin/openssl enc -d -aes-256-cbc -pbkdf2 -iter 20000 -in {encryptedFile.FullName} -out {outputFile} -k {_encryptionKey}";
                 var result = await Cli.Wrap("/bin/bash")
                     .WithArguments(new[] { "-c", command })
                     .ExecuteBufferedAsync(ct);
 
                 if (result.ExitCode != 0)
                 {
-                    logger.LogError("Decompression failed for {FileName}: {Error}", compressedFile.Name, result.StandardError);
+                    logger.LogError("Decryption failed for {FileName}: {Error}", encryptedFile.Name, result.StandardError);
                 }
                 else
                 {
-                    // Delete the compressed file after successful decompression.
-                    File.Delete(compressedFile.FullName);
-                    logger.LogInformation("Successfully decompressed {FileName} in {Milliseconds}ms",
-                        compressedFile.Name, localStopwatch.ElapsedMilliseconds);
+                    // Verify the output file exists and has content before deleting the source
+                    var decryptedFile = new FileInfo(outputFile);
+                    if (decryptedFile.Exists && decryptedFile.Length > 0)
+                    {
+                        File.Delete(encryptedFile.FullName);
+                        logger.LogInformation("Successfully decrypted {FileName} in {Milliseconds}ms and removed source file",
+                            encryptedFile.Name, localStopwatch.ElapsedMilliseconds);
+                    }
+                    else
+                    {
+                        logger.LogWarning("Decrypted output file is missing or empty: {FileName}", outputFile);
+                    }
                 }
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Exception decompressing file {FileName}", compressedFile.Name);
+                logger.LogError(ex, "Exception decrypting file {FileName}", encryptedFile.Name);
             }
         }
 
@@ -680,35 +734,6 @@ namespace SCREAM.Service.Restore
             await Task.Delay(10000, cancellationToken);
         }
 
-        private async Task ProcessEncryptedFileAsync(FileInfo encryptedFile, DirectoryInfo backupDirectoryInfo, CancellationToken ct)
-        {
-            var localStopwatch = Stopwatch.StartNew();
-            try
-            {
-                logger.LogInformation("Decrypting file: {FileName}", encryptedFile.Name);
-                var outputFile = encryptedFile.FullName.Replace(".enc", "");
-                var command = $"/usr/bin/openssl enc -d -aes-256-cbc -pbkdf2 -iter 20000 -in {encryptedFile.FullName} -out {outputFile} -k {_encryptionKey}";
-                var result = await Cli.Wrap("/bin/bash")
-                    .WithArguments(new[] { "-c", command })
-                    .ExecuteBufferedAsync(ct);
-
-                if (result.ExitCode != 0)
-                {
-                    logger.LogError("Decryption failed for {FileName}: {Error}", encryptedFile.Name, result.StandardError);
-                }
-                else
-                {
-                    File.Delete(encryptedFile.FullName);
-                    logger.LogInformation("Successfully decrypted {FileName} in {Milliseconds}ms", encryptedFile.Name, localStopwatch.ElapsedMilliseconds);
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Exception decrypting file {FileName}", encryptedFile.Name);
-            }
-        }
-
-
         #region API Integration
 
         private async Task UpdateJobStatusAsync(RestoreJob job, TaskStatus status, string? message, CancellationToken ct)
@@ -741,11 +766,9 @@ namespace SCREAM.Service.Restore
 
                 foreach (var plan in activePlans)
                 {
-                    // Skip triggered plans as they're handled elsewhere
                     if (plan.ScheduleType == ScheduleType.Triggered)
                         continue;
 
-                    // Get existing jobs for this plan
                     var existingJobs = await _httpClient
                         .GetFromJsonAsync<List<RestoreJob>>($"jobs/restore?planId={plan.Id}", ct)
                         ?? new List<RestoreJob>();
@@ -757,7 +780,6 @@ namespace SCREAM.Service.Restore
                     bool jobsStillRunning = existingJobs.Any(j => j.Status < TaskStatus.RanToCompletion);
                     bool lastJobFailed = lastJob != null && lastJob.Status == TaskStatus.Faulted;
 
-                    // Skip if there are running jobs or the last job failed
                     if (jobsStillRunning || lastJobFailed)
                     {
                         string reason = lastJobFailed
@@ -797,7 +819,6 @@ namespace SCREAM.Service.Restore
                                 var cron = CronExpression.Parse(plan.ScheduleCron);
                                 var nextRun = plan.NextRun ?? cron.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
 
-                                // Create job if it's time to run based on the cron schedule
                                 if (DateTime.UtcNow >= nextRun)
                                 {
                                     shouldCreateJob = true;
@@ -805,7 +826,6 @@ namespace SCREAM.Service.Restore
                                 }
                                 else if (plan.NextRun == null)
                                 {
-                                    // Just update the next run time if it's not set
                                     plan.NextRun = nextRun;
                                     await UpdateRestorePlan(plan, ct);
                                 }
@@ -818,7 +838,6 @@ namespace SCREAM.Service.Restore
                             break;
                     }
 
-                    // Create job if conditions are met
                     if (shouldCreateJob)
                     {
                         if (await CreateRestoreJob(plan, ct))
@@ -941,19 +960,23 @@ namespace SCREAM.Service.Restore
                             continue;
                         }
 
-                        // Cron schedule validation
                         if (!string.IsNullOrEmpty(plan.ScheduleCron))
                         {
                             try
                             {
                                 var cron = CronExpression.Parse(plan.ScheduleCron);
-                                var nextRun = plan.NextRun ?? cron.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
 
-                                if (DateTime.UtcNow < nextRun)
+                                if (plan.LastRun.HasValue)
                                 {
-                                    logger.LogInformation("Skipping plan {PlanId} - before scheduled time", plan.Id);
-                                    continue;
+                                    var nextRun = plan.NextRun ?? cron.GetNextOccurrence(plan.LastRun.Value, TimeZoneInfo.Utc);
+
+                                    if (DateTime.UtcNow < nextRun)
+                                    {
+                                        logger.LogInformation("Skipping plan {PlanId} - before scheduled time", plan.Id);
+                                        continue;
+                                    }
                                 }
+                                // If LastRun is null, proceed to trigger immediately without schedule check
                             }
                             catch (CronFormatException ex)
                             {
@@ -972,7 +995,7 @@ namespace SCREAM.Service.Restore
                             if (!string.IsNullOrEmpty(plan.ScheduleCron))
                             {
                                 var cron = CronExpression.Parse(plan.ScheduleCron);
-                                plan.NextRun = cron.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
+                                plan.NextRun = cron.GetNextOccurrence(plan.LastRun.Value, TimeZoneInfo.Utc);
                             }
                             await UpdateRestorePlan(plan, ct);
 
