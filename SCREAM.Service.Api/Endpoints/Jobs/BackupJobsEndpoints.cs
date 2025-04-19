@@ -146,5 +146,63 @@ public static class BackupJobEndpoints
 
             return Results.Ok(backupItemStatus);
         });
+
+        group.MapPut("/{jobId:long}", async (
+            IDbContextFactory<ScreamDbContext> dbContextFactory,
+            long jobId,
+            BackupJob updatedJob) =>
+        {
+            await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+
+            var existingJob = await dbContext.BackupJobs
+                .FirstOrDefaultAsync(j => j.Id == jobId);
+
+            if (existingJob == null)
+                return Results.NotFound();
+
+            existingJob.Status = updatedJob.Status;
+            existingJob.CompletedAt = updatedJob.CompletedAt;
+            existingJob.HasTriggeredRestore = updatedJob.HasTriggeredRestore;
+
+            await dbContext.SaveChangesAsync();
+
+            return Results.Ok(existingJob);
+        });
+        
+        group.MapGet("/logs", async (
+            IDbContextFactory<ScreamDbContext> dbContextFactory,
+            long? backupJobId = null,
+            DateTime? dateFrom = null,
+            DateTime? dateTo = null,
+            LogLevel? severity = null,
+            string? title = null) =>
+        {
+            await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+            IQueryable<BackupJobLog> query = dbContext.BackupJobLogs;
+
+            if (backupJobId.HasValue)
+            {
+                query = query.Where(log => log.BackupJobId == backupJobId.Value);
+            }
+            if (dateFrom.HasValue)
+            {
+                query = query.Where(log => log.Timestamp >= dateFrom.Value);
+            }
+            if (dateTo.HasValue)
+            {
+                query = query.Where(log => log.Timestamp <= dateTo.Value);
+            }
+            if (severity.HasValue)
+            {
+                query = query.Where(log => log.Severity == severity.Value);
+            }
+            if (!string.IsNullOrEmpty(title))
+            {
+                query = query.Where(log => log.Title.Contains(title));
+            }
+
+            var backupLogs = await query.ToListAsync();
+            return Results.Ok(backupLogs);
+        });
     }
 }

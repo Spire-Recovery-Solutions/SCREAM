@@ -186,9 +186,13 @@ else
                             <MudVirtualize Items="_jobLogs" Context="log">
                                 <div class="d-flex py-1">
                                     <span class="mr-2"
-                                          style="color: #8a8a8a; min-width: 130px; font-family: Consolas, monospace; font-size: 0.85rem;">@log.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")</span>
+                                          style="color: #8a8a8a; min-width: 130px; font-family: Consolas, monospace; font-size: 0.85rem;">
+                                        @log.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff")
+                                    </span>
                                     <span class="mr-2"
-                                          style="color: @GetLogLevelColorCode(log.Severity); min-width: 80px; font-weight: 600; font-family: Consolas, monospace;">@log.Severity</span>
+                                          style="color: @GetLogLevelColorCode(log.Severity); min-width: 80px; font-weight: 600; font-family: Consolas, monospace;">
+                                        @log.Severity
+                                    </span>
                                     <span style="font-family: Consolas, monospace; color: #d4d4d4; overflow-wrap: anywhere;">
                                         @if (!string.IsNullOrEmpty(log.Title))
                                         {
@@ -281,8 +285,8 @@ else
         try
         {
             var logs = await _httpClient.GetFromJsonAsync<List<RestoreJobLog>>($"jobs/restore/{JobId}/logs");
-            _jobLogs = logs
-                ?.Select(l => new RestoreJobLogViewModel
+            _jobLogs = logs?
+                .Select(l => new RestoreJobLogViewModel
                     {
                         Id = l.Id,
                         Timestamp = l.Timestamp,
@@ -414,7 +418,7 @@ else
             try
             {
                 // Call the API endpoint to retry a specific restore item.
-                var retryResponse = await _httpClient.PostAsync($"jobs/restore/{JobId}/items/{itemId}/retry", null);
+                var retryResponse = await _httpClient.PostAsync($"jobs/restore/items/{JobId}/{itemId}/retry", null);
                 if (retryResponse.IsSuccessStatusCode)
                 {
                     Snackbar.Add("Restore item retry initiated", Severity.Success);

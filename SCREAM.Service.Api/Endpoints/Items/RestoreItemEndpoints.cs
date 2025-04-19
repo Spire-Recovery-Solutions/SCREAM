@@ -1,5 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SCREAM.Data;
+using SCREAM.Data.Entities;
 using SCREAM.Data.Entities.Restore;
 
 namespace SCREAM.Service.Api.Endpoints.Items
@@ -11,10 +13,15 @@ namespace SCREAM.Service.Api.Endpoints.Items
             var group = app.MapGroup("/jobs/restore/items")
                 .WithTags("Jobs/RestoreItems");
 
-            // GET: List all restore items for a specific restore job
+            // GET: List all restore items for a specific restore job based on filters.
             group.MapGet("/{jobId:long}", async (
                 IDbContextFactory<ScreamDbContext> dbContextFactory,
-                long jobId) =>
+                long jobId,
+                [FromQuery] TaskStatus[]? statuses = null,
+                [FromQuery] string? schema = null,
+                [FromQuery] string? name = null,
+                [FromQuery] DatabaseItemType? type = null,
+                [FromQuery] int? maxRetryCount = null) =>
             {
                 await using var dbContext = await dbContextFactory.CreateDbContextAsync();
                 var restoreJob = await dbContext.RestoreJobs
@@ -25,8 +32,26 @@ namespace SCREAM.Service.Api.Endpoints.Items
                 if (restoreJob == null)
                     return Results.NotFound("Restore job not found");
 
-                return Results.Ok(restoreJob.RestoreItems);
+                var filteredItems = restoreJob.RestoreItems.AsQueryable();
+
+                if (statuses != null && statuses.Any())
+                    filteredItems = filteredItems.Where(ri => statuses.Contains(ri.Status));
+
+                if (!string.IsNullOrEmpty(schema))
+                    filteredItems = filteredItems.Where(ri => ri.DatabaseItem.Schema.Contains(schema));
+
+                if (!string.IsNullOrEmpty(name))
+                    filteredItems = filteredItems.Where(ri => ri.DatabaseItem.Name.Contains(name));
+
+                if (type.HasValue)
+                    filteredItems = filteredItems.Where(ri => ri.DatabaseItem.Type == type.Value);
+
+                if (maxRetryCount.HasValue)
+                    filteredItems = filteredItems.Where(ri => ri.RetryCount <= maxRetryCount.Value);
+
+                return Results.Ok(filteredItems.ToList());
             });
+
 
             // GET: Get a specific restore item for a specific restore job
             group.MapGet("/{jobId:long}/{itemId:long}", async (
@@ -122,6 +147,61 @@ namespace SCREAM.Service.Api.Endpoints.Items
                 await dbContext.SaveChangesAsync();
                 return Results.NoContent();
             });
+
+         group.MapPost("/{jobId:long}/{itemId:long}/retry", async (
+           IDbContextFactory<ScreamDbContext> dbContextFactory,
+           long jobId,
+           long itemId) =>
+       {
+           await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+           var restoreJob = await dbContext.RestoreJobs
+               .Include(j => j.RestoreItems)
+               .ThenInclude(restoreItem => restoreItem.DatabaseItem)
+               .FirstOrDefaultAsync(j => j.Id == jobId);
+
+           if (restoreJob == null)
+               return Results.NotFound("Restore job not found");
+
+           var restoreItem = restoreJob.RestoreItems.FirstOrDefault(i => i.Id == itemId);
+
+           if (restoreItem == null)
+               return Results.NotFound("Restore item not found");
+
+           if (restoreItem.Status != TaskStatus.Faulted)
+               return Results.BadRequest("Only failed items can be retried");
+
+           // Reset item status.
+           restoreItem.Status = TaskStatus.WaitingToRun;
+           restoreItem.CompletedAt = null;
+           restoreItem.RetryCount += 1;
+           restoreItem.ErrorMessage = null;
+
+           // If the parent job is faulted, set its status to Running.
+           var job = await dbContext.RestoreJobs
+               .FirstOrDefaultAsync(j => j.Id == restoreItem.RestoreJobId);
+           if (job != null && job.Status == TaskStatus.Faulted)
+           {
+               job.Status = TaskStatus.Running;
+               job.CompletedAt = null;
+           }
+           await dbContext.SaveChangesAsync();
+
+           // Log the retry.
+           var logEntry = new RestoreJobLog
+           {
+               RestoreJobId = restoreItem.RestoreJobId,
+               RestoreItemId = restoreItem.Id,
+               Timestamp = DateTime.UtcNow,
+               Title = "Item Retry",
+               Message = $"Restore item retry initiated for {restoreItem.DatabaseItem.Name}",
+               Severity = LogLevel.Information
+           };
+
+           dbContext.RestoreJobLogs.Add(logEntry);
+           await dbContext.SaveChangesAsync();
+
+           return Results.Ok(restoreItem);
+       });
         }
     }
 }

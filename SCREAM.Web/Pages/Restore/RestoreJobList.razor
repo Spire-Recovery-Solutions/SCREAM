@@ -15,18 +15,18 @@
 <MudText Align="Align.Center" Typo="Typo.h4" Class="mb-4">Restore Jobs</MudText>
 
 <MudTable Items="@_restoreJobs" Dense="true" Hover="true" Loading="@_loading" LoadingProgressColor="Color.Info"
-Filter="new Func<RestoreJobViewModel, bool>(FilterFunc)" @bind-SelectedItem="_selectedJob"
-OnRowClick="RowClickEvent" T="RestoreJobViewModel" Elevation="0">
+          Filter="new Func<RestoreJobViewModel, bool>(FilterFunc)" @bind-SelectedItem="_selectedJob"
+          OnRowClick="RowClickEvent" T="RestoreJobViewModel" Elevation="0">
     <ToolBarContent>
         <MudGrid>
             <MudItem xs="12" md="9">
                 <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start"
-                AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
-                Class="mt-0"></MudTextField>
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                              Class="mt-0"></MudTextField>
             </MudItem>
             <MudItem xs="12" md="3" Class="d-flex justify-end">
                 <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.Refresh"
-                OnClick="RefreshData">
+                           OnClick="RefreshData">
                     Refresh
                 </MudButton>
             </MudItem>
@@ -50,10 +50,10 @@ OnRowClick="RowClickEvent" T="RestoreJobViewModel" Elevation="0">
         </MudTd>
         <MudTd DataLabel="Progress">
             <MudProgressLinear Color="@GetProgressColor(context.Status)"
-            Value="@context.ProgressPercentage"
-            Class="my-2"
-            Striped="@(context.Status == TaskStatus.Running)"
-            Indeterminate="@(context.Status == TaskStatus.Running && context.ProgressPercentage < 5)" />
+                               Value="@context.ProgressPercentage"
+                               Class="my-2"
+                               Striped="@(context.Status == TaskStatus.Running)"
+                               Indeterminate="@(context.Status == TaskStatus.Running && context.ProgressPercentage < 5)" />
             @context.ProgressPercentage.ToString("0.#")%
         </MudTd>
         <MudTd DataLabel="Started">@context.StartedAt.ToLocalTime().ToString("g")</MudTd>
@@ -65,11 +65,11 @@ OnRowClick="RowClickEvent" T="RestoreJobViewModel" Elevation="0">
         </MudTd>
         <MudTd DataLabel="Actions">
             <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info"
-            OnClick="@(() => ViewJob(context.Id))" />
+                           OnClick="@(() => ViewJob(context.Id))" />
             @if (context.Status == TaskStatus.Faulted)
             {
                 <MudIconButton Icon="@Icons.Material.Filled.Replay" Color="Color.Warning"
-                OnClick="@(() => RetryJob(context.Id))" />
+                               OnClick="@(() => RetryJob(context.Id))" />
             }
         </MudTd>
     </RowTemplate>
@@ -178,8 +178,17 @@ OnRowClick="RowClickEvent" T="RestoreJobViewModel" Elevation="0">
         {
             try
             {
-                Snackbar.Add("Restore job retry initiated", Severity.Success);
-                await RefreshData();
+                var response = await _httpClient.PostAsync($"jobs/restore/{jobId}/retry", null);
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Restore job retry initiated", Severity.Success);
+                    await RefreshData();
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Error retrying restore job: {error}", Severity.Error);
+                }
             }
             catch (Exception ex)
             {
@@ -279,4 +288,4 @@ OnRowClick="RowClickEvent" T="RestoreJobViewModel" Elevation="0">
         public DateTime? CompletedAt { get; set; }
         public float ProgressPercentage { get; set; }
     }
- }
+}

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SCREAM.Data;
 using SCREAM.Data.Entities.Restore;
@@ -12,12 +13,28 @@ public static class RestoreJobEndpoints
             .WithTags("Jobs/Restore");
 
         // Get all restore jobs
-        group.MapGet("/", async (IDbContextFactory<ScreamDbContext> dbContextFactory) =>
+        group.MapGet("/", async (
+            IDbContextFactory<ScreamDbContext> dbContextFactory,
+            [FromQuery] TaskStatus[]? statuses,
+            bool? isCompressed,
+            bool? isEncrypted
+        ) =>
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-            var restoreJobs = await dbContext.RestoreJobs
-                .OrderByDescending(job => job.StartedAt)
-                .ToListAsync();
+            IQueryable<RestoreJob> query = dbContext.RestoreJobs;
+            if (statuses != null && statuses.Any())
+            {
+                query = query.Where(job => statuses.Contains(job.Status));
+            }
+            if (isCompressed.HasValue)
+            {
+                query = query.Where(job => job.IsCompressed == isCompressed.Value);
+            }
+            if (isEncrypted.HasValue)
+            {
+                query = query.Where(job => job.IsEncrypted == isEncrypted.Value);
+            }
+            var restoreJobs = await query.OrderByDescending(job => job.StartedAt).ToListAsync();
             return Results.Ok(restoreJobs);
         });
 
@@ -144,5 +161,96 @@ public static class RestoreJobEndpoints
 
             return Results.Ok(restoreItem);
         });
+
+        group.MapPut("/{jobId:long}", async (
+            IDbContextFactory<ScreamDbContext> dbContextFactory,
+            long jobId,
+            RestoreJob updateJob) =>
+        {
+            await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+            var existingJob = await dbContext.RestoreJobs
+                .FirstOrDefaultAsync(job => job.Id == jobId);
+
+            if (existingJob == null)
+                return Results.NotFound();
+
+            var previousStatus = existingJob.Status;
+
+            existingJob.Status = updateJob.Status;
+            existingJob.IsCompressed = updateJob.IsCompressed;
+            existingJob.IsEncrypted = updateJob.IsEncrypted;
+            existingJob.RestorePlanId = updateJob.RestorePlanId;
+
+            if (updateJob.Status == TaskStatus.RanToCompletion ||
+                updateJob.Status == TaskStatus.Faulted ||
+                updateJob.Status == TaskStatus.Canceled)
+            {
+                existingJob.CompletedAt = DateTime.UtcNow;
+            }
+            else if (previousStatus is TaskStatus.RanToCompletion or TaskStatus.Faulted or TaskStatus.Canceled &&
+                     updateJob.Status is not TaskStatus.RanToCompletion and not TaskStatus.Faulted and not TaskStatus.Canceled)
+            {
+                existingJob.CompletedAt = null;
+            }
+
+            await dbContext.SaveChangesAsync();
+
+            if (previousStatus != updateJob.Status)
+            {
+                var logEntry = new RestoreJobLog
+                {
+                    RestoreJobId = existingJob.Id,
+                    Timestamp = DateTime.UtcNow,
+                    Title = "Status Change",
+                    Message = $"Job status changed from {previousStatus} to {updateJob.Status}",
+                    Severity = LogLevel.Information
+                };
+
+                dbContext.RestoreJobLogs.Add(logEntry);
+                await dbContext.SaveChangesAsync();
+            }
+
+            return Results.Ok(existingJob);
+        });
+
+        group.MapGet("/logs", async (
+           IDbContextFactory<ScreamDbContext> dbContextFactory,
+           long? restoreJobId = null,
+           DateTime? dateFrom = null,
+           DateTime? dateTo = null,
+           LogLevel? severity = null,
+           string? title = null) =>
+       {
+           await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+
+           IQueryable<RestoreJobLog> query = dbContext.RestoreJobLogs;
+
+           if (restoreJobId.HasValue)
+           {
+               query = query.Where(log => log.RestoreJobId == restoreJobId.Value);
+           }
+           if (dateFrom.HasValue)
+           {
+               query = query.Where(log => log.Timestamp >= dateFrom.Value);
+           }
+           if (dateTo.HasValue)
+           {
+               query = query.Where(log => log.Timestamp <= dateTo.Value);
+           }
+           if (severity.HasValue)
+           {
+               query = query.Where(log => log.Severity == severity.Value);
+           }
+           if (!string.IsNullOrEmpty(title))
+           {
+               query = query.Where(log => log.Title.Contains(title));
+           }
+
+           var restoreLogs = await query
+               .OrderByDescending(log => log.Timestamp)
+               .ToListAsync();
+
+           return Results.Ok(restoreLogs);
+       });
     }
 }

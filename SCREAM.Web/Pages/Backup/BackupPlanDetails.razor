@@ -39,22 +39,17 @@
                                Label="Database Connection"
                                Variant="Variant.Outlined"
                                Required="true"
+                               ToStringFunc="@(id => GetDatabaseTargetDisplayName(id))"
                                HelperText="Select the database you want to back up">
-                        @if (_databaseTargets == null || _databaseTargets.Count == 0)
+                        <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
+                        @foreach (var conn in _databaseTargets)
                         {
-                            <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
-                        }
-                        else
-                        {
-                            <MudSelectItem T="long" Value="0">Select Database Connection</MudSelectItem>
-                            @foreach (var conn in _databaseTargets)
-                            {
-                                <MudSelectItem Value="@conn.Id">
-                                    @conn.HostName (@conn.Type)
-                                </MudSelectItem>
-                            }
+                            <MudSelectItem Value="@conn.Id">
+                                @conn.HostName (@conn.Type)
+                            </MudSelectItem>
                         }
                     </MudSelect>
+
                 </MudItem>
 
 
@@ -63,20 +58,14 @@
                                Label="Storage Target"
                                Variant="Variant.Outlined"
                                Required="true"
+                               ToStringFunc="@(id => GetStorageTargetDisplayName(id))"
                                HelperText="Select where to store your backups">
-                        @if (_storageTargets == null || _storageTargets.Count == 0)
+                        <MudSelectItem T="long" Value="0">Select Storage Target</MudSelectItem>
+                        @foreach (var target in _storageTargets)
                         {
-                            <MudSelectItem T="long" Value="0">Select Storage Target</MudSelectItem>
-                        }
-                        else
-                        {
-                            <MudSelectItem T="long" Value="0">Select Storage Target</MudSelectItem>
-                            @foreach (var target in _storageTargets)
-                            {
-                                <MudSelectItem Value="@target.Id">
-                                    @target.Name (@target.Type)
-                                </MudSelectItem>
-                            }
+                            <MudSelectItem Value="@target.Id">
+                                @target.Name (@target.Type)
+                            </MudSelectItem>
                         }
                     </MudSelect>
                 </MudItem>
@@ -317,5 +306,18 @@
         {
             dialog?.Close();
         }
+    }
+    private string GetDatabaseTargetDisplayName(long id)
+    {
+        if (id == 0) return "Select Database Connection";
+        var target = _databaseTargets?.FirstOrDefault(t => t.Id == id);
+        return target != null ? $"{target.HostName} ({target.Type})" : id.ToString();
+    }
+
+    private string GetStorageTargetDisplayName(long id)
+    {
+        if (id == 0) return "Select Storage Target";
+        var target = _storageTargets?.FirstOrDefault(t => t.Id == id);
+        return target != null ? $"{target.Name} ({target.Type})" : id.ToString();
     }
 }

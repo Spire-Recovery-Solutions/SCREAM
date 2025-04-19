@@ -1,0 +1,84 @@
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0.40
+    command: --default-authentication-plugin=mysql_native_password --ssl=0 --default-time-zone='+00:00'
+    environment:
+      TZ: UTC
+      MYSQL_ROOT_PASSWORD: Here!Lives@A#Happy4Little%Password^ # Change this to a secure password
+      MYSQL_DATABASE: mydb # You can name this whatever you like
+      MYSQL_USER: user
+      MYSQL_PASSWORD: userpassword # Change this to a secure password
+    networks:
+      - scream1
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -uuser -puserpassword"]
+      interval: 10s
+      timeout: 15s
+      retries: 10
+      start_period: 30s
+
+  scream-api:
+    build:
+      context: .
+      dockerfile: SCREAM.Service.Api/Dockerfile
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=mysql;Database=SCREAM;User=user;Password=userpassword;"
+      CONTAINER_APP_PORT: "8000"
+    ports:
+      - "8000:8000"
+    networks:
+      - scream1
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  scream-restore:
+    build:
+      context: .
+      dockerfile: SCREAM.Service.Restore/Dockerfile
+    environment:
+      - API_URL=http://scream-api:8000
+      - MYSQL_BACKUP_ENCRYPTION_KEY=your-encryption-key-here
+      - MYSQL_BACKUP_HOSTNAME=mysql
+      - MYSQL_BACKUP_USERNAME=user
+      - MYSQL_BACKUP_PASSWORD=userpassword
+      - MYSQL_BACKUP_THREADS=4
+    ports:
+      - "8002:8002"
+    networks:
+      - scream1
+    restart: on-failure
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      - scream-api
+      - mysql
+
+  scream-backup:
+    build:
+      context: .
+      dockerfile: SCREAM.Service.Backup/Dockerfile
+    environment:
+      - API_URL=http://scream-api:8000
+      - MYSQL_BACKUP_HOSTNAME=mysql
+      - MYSQL_BACKUP_USERNAME=user
+      - MYSQL_BACKUP_PASSWORD=userpassword
+      - MYSQL_BACKUP_DATABASE=SCREAM
+    ports:
+      - "8001:8001"
+    networks:
+      - scream1
+    restart: on-failure
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      - scream-api
+      - mysql
+
+networks:
+  scream1:
+    external: true
