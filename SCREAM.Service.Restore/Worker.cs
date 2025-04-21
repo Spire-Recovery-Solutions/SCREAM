@@ -513,7 +513,7 @@ namespace SCREAM.Service.Restore
             bool success = false;
             var itemSw = Stopwatch.StartNew();
             logger.LogInformation("Starting to process {Type} item {ItemId} ({Schema}.{Name})",
-                item.DatabaseItem.Type, item.Id, item.DatabaseItem.Schema, item.DatabaseItem.Name);
+            item.DatabaseItem.Type, item.Id, item.DatabaseItem.Schema, item.DatabaseItem.Name);
 
             while (attempt <= _maxRetries && !success && !cancellationToken.IsCancellationRequested)
             {
@@ -612,9 +612,7 @@ namespace SCREAM.Service.Restore
             return Path.Combine(backupFolder, $"{restoreItem.DatabaseItem.Schema}.{restoreItem.DatabaseItem.Name}{fileSuffix}");
         }
 
-        private async Task ProcessDecompressionAsync(
-     CancellationToken cancellationToken,
-     DirectoryInfo backupDirectoryInfo)
+        private async Task ProcessDecompressionAsync(CancellationToken cancellationToken, DirectoryInfo backupDirectoryInfo)
         {
             var decompSw = Stopwatch.StartNew();
             var compressedFiles = backupDirectoryInfo.GetFiles("*.xz").ToList();

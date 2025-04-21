@@ -8,7 +8,6 @@ using SCREAM.Data.Entities.Backup;
 using SCREAM.Data.Entities.Backup.BackupItems;
 using SCREAM.Data.Entities.StorageTargets;
 using SCREAM.Data.Enums;
-using SCREAM.Service.Backup;
 using System.Diagnostics;
 using System.Net.Http.Json;
 
@@ -43,10 +42,10 @@ public class Worker : BackgroundService
         _threads = int.Parse(GetConfigValue("MYSQL_BACKUP_THREADS", "MySqlBackup:Threads",
             Environment.ProcessorCount.ToString()));
 
-         var backupFolder = GetConfigValue("MYSQL_BACKUP_FOLDER", "MySqlBackup:BackupFolder");
-         _backupFolder = string.IsNullOrEmpty(backupFolder)
-            ? DateTimeOffset.Now.ToString("yyyy-MM-dd-hh-mm")
-            : backupFolder + "_" + DateTimeOffset.Now.ToString("yyyy-MM-dd-hh-mm");
+        var backupFolder = GetConfigValue("MYSQL_BACKUP_FOLDER", "MySqlBackup:BackupFolder");
+        _backupFolder = string.IsNullOrEmpty(backupFolder)
+           ? DateTimeOffset.Now.ToString("yyyy-MM-dd-hh-mm")
+           : backupFolder + "_" + DateTimeOffset.Now.ToString("yyyy-MM-dd-hh-mm");
 
         var b2Config = new AmazonS3Config
         {
@@ -1344,73 +1343,48 @@ public class Worker : BackgroundService
     }
 
     private async Task HandleLocalStorage(
-    Command dumpCommand,
-    string fileName,
-    LocalStorageTarget storageTarget,
-    CancellationToken stoppingToken,
-    BackupJob job,
-    BackupItem item)
+     Command dumpCommand,
+     string fileName,
+     LocalStorageTarget storageTarget,
+     CancellationToken stoppingToken,
+     BackupJob job,
+     BackupItem item)
     {
         var sw = Stopwatch.StartNew();
         try
         {
-            // ensure the target directory exists
-            var root = Environment.GetEnvironmentVariable("LOCAL_STORAGE_ROOT") ?? "/backups";
-            root = root.TrimEnd('/', '\\');
-            var path = storageTarget.Path.Trim('/', '\\');
-            var targetDirectory = Path.Combine(root, path);
-            if (!Directory.Exists(targetDirectory))
-            {
-                Directory.CreateDirectory(targetDirectory);
-                _logger.LogInformation("Created local storage directory: {Directory}", targetDirectory);
-            }
+            var backupPath = Path.Combine(
+                Environment.GetEnvironmentVariable("LOCAL_STORAGE_ROOT") ?? "/backups",
+                storageTarget.Path.Trim(Path.DirectorySeparatorChar),
+                fileName);
 
-            var fullPath = Path.Combine(targetDirectory, fileName);
+            Directory.CreateDirectory(Path.GetDirectoryName(backupPath)!);
 
             var xzCmd = Cli.Wrap("xz")
-                .WithArguments(args => args
-                    .Add($"-T {_threads}")
-                    .Add("-3")
-                    .Add("-c"));
+                .WithArguments($"-T {_threads} -3 -c");
 
             var encryptCmd = Cli.Wrap("openssl")
-                .WithArguments(args => args
-                    .Add("enc")
-                    .Add("-aes-256-cbc")
-                    .Add("-pbkdf2")
-                    .Add("-iter").Add("20000")
-                    .Add("-k").Add(_encryptionKey)
-                    .Add("-in").Add("-")
-                    .Add("-out").Add("-"));
+                .WithArguments($"enc -aes-256-cbc -pbkdf2 -iter 20000 -k {_encryptionKey}");
 
-            await (dumpCommand
-                    | xzCmd
-                    | encryptCmd)
-                .WithStandardErrorPipe(PipeTarget.ToDelegate(line => { if (!string.IsNullOrEmpty(line)) _logger.LogError(line); }))
-                .WithStandardOutputPipe(PipeTarget.ToFile(fullPath))
+            await (dumpCommand | xzCmd | encryptCmd)
+                .WithStandardOutputPipe(PipeTarget.ToFile(backupPath))
+                .WithStandardErrorPipe(PipeTarget.ToDelegate(line =>
+                    _logger.LogError("Backup error: {Error}", line)))
                 .ExecuteAsync(stoppingToken);
 
-            sw.Stop();
-            _logger.LogInformation(
-                "Local backup saved to {FilePath} in {Elapsed}ms",
-                fullPath, sw.ElapsedMilliseconds);
+            _logger.LogInformation("Backup saved to {Path}", backupPath);
         }
         catch (Exception ex)
         {
-            sw.Stop();
-            _logger.LogError(
-                ex,
-                "Local storage backup failed for {FileName} after {Elapsed}ms",
-                fileName, sw.ElapsedMilliseconds);
-
-            await UpdateItemStatus(
-                job.Id,
-                item.Id,
-                TaskStatus.Faulted,
-                $"Local storage backup failed: {ex.Message}",
-                stoppingToken);
-
+            _logger.LogError(ex, "Backup failed for {File}", fileName);
+            await UpdateItemStatus(job.Id, item.Id, TaskStatus.Faulted,
+                $"Backup failed: {ex.Message}", stoppingToken);
             throw;
+        }
+        finally
+        {
+            sw.Stop();
+            _logger.LogDebug("Backup operation took {Ms}ms", sw.ElapsedMilliseconds);
         }
     }
 }
