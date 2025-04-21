@@ -47,12 +47,11 @@ services:
       dockerfile: SCREAM.Service.Restore/Dockerfile
     environment:
       - API_URL=http://scream-api:8000
-      - MYSQL_BACKUP_ENCRYPTION_KEY=your-encryption-key-here
+      - MYSQL_BACKUP_ENCRYPTION_KEY=your-strong-encryption-key-here
       - MYSQL_BACKUP_HOSTNAME=mysql
       - MYSQL_BACKUP_USERNAME=user
       - MYSQL_BACKUP_PASSWORD=userpassword
       - MYSQL_BACKUP_THREADS=4
-      # Also aware of LOCAL_STORAGE_ROOT in code if needed
       - LOCAL_STORAGE_ROOT=/backups
     ports:
       - "8002:8002"

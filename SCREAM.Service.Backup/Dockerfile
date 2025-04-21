@@ -21,7 +21,7 @@ WORKDIR /app
 COPY --from=publish /app/publish .
 
 # Install both xz-utils and mysql-client packages
-RUN apt-get update && apt-get install -y wget lsb-release xz-utils curl p7zip-full && \
+RUN apt-get update && apt-get install -y wget lsb-release xz-utils curl && \
     wget -q https://downloads.mysql.com/archives/get/p/23/file/mysql-common_8.0.40-1ubuntu22.04_amd64.deb && \
     wget -q https://downloads.mysql.com/archives/get/p/23/file/mysql-community-client-core_8.0.40-1ubuntu22.04_amd64.deb && \
     wget -q https://downloads.mysql.com/archives/get/p/23/file/mysql-community-client-plugins_8.0.40-1ubuntu22.04_amd64.deb && \
@@ -36,7 +36,6 @@ RUN apt-get update && apt-get install -y wget lsb-release xz-utils curl p7zip-fu
 
 # Configure environment variables 
 ENV DOTNET_RUNNING_IN_CONTAINER=true 
-ENV DOTNET_EnableDiagnostics=0 
-ENV ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+ENV DOTNET_EnableDiagnostics=0
 
 ENTRYPOINT ["dotnet", "SCREAM.Service.Backup.dll"]

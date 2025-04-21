@@ -49,20 +49,11 @@ public class Worker : BackgroundService
         };
         var options = new RecyclableMemoryStreamManager.Options()
         {
-            // Use 1MB blocks for better handling of large backup files
             BlockSize = 1024 * 1024,
-
-            // Set large buffer multiple to 1MB for efficient chunking
             LargeBufferMultiple = 1024 * 1024,
-
-            // Max single buffer size to 500MB (B2's recommended maximum part size)
             MaximumBufferSize = 500 * 1024 * 1024,
-
-            // Cap total memory usage for pools
-            MaximumLargePoolFreeBytes = 1024 * 1024 * 1024, // 1GB large pool
-            MaximumSmallPoolFreeBytes = 100 * 1024 * 1024, // 100MB small pool
-
-            // Return buffers aggressively to help manage memory
+            MaximumLargePoolFreeBytes = 1024 * 1024 * 1024,
+            MaximumSmallPoolFreeBytes = 100 * 1024 * 1024,
             AggressiveBufferReturn = true,
 
         };
@@ -490,27 +481,33 @@ public class Worker : BackgroundService
                 {
                     try
                     {
-                        var cmd = Cli.Wrap("/usr/bin/mysqldump")
-                            .WithArguments(a => a
-                                .Add($"--host={_hostName}")
-                                .Add($"--user={_userName}")
-                                .Add($"--password={_password}")
-                                .Add("--add-drop-trigger")
-                                .Add("--dump-date")
-                                .Add("--single-transaction")
-                                .Add("--skip-add-locks")
-                                .Add("--quote-names")
-                                .Add("--no-data")
-                                .Add("--no-create-db")
-                                .Add("--no-create-info")
-                                .Add("--skip-routines")
-                                .Add("--skip-events")
-                                .Add("--triggers")
-                                .Add($"--max-allowed-packet={_maxPacketSize}")
-                                .Add("--skip-column-statistics")
-                                .Add(schema));
+                        var triggersDump =
+                 Cli.Wrap("/usr/bin/mysqldump")
+                     .WithArguments(args => args
+                         .Add($"--host={_hostName}")
+                         .Add($"--user={_userName}")
+                         .Add($"--password={_password}")
 
-                        await CompressEncryptUpload(cmd, $"{schema}-triggers.sql.xz.enc", storageTarget, token, job, representative);
+                         .Add("--add-drop-trigger")
+                         .Add("--dump-date")
+                         .Add("--single-transaction")
+                         .Add("--skip-add-locks")
+                         .Add("--quote-names")
+
+                         .Add("--no-data")
+                         .Add("--no-create-db")
+                         .Add("--no-create-info")
+                         .Add("--skip-routines")
+                         .Add("--skip-events")
+                         .Add("--triggers")
+
+                         .Add($"--max-allowed-packet={_maxPacketSize}")
+                         .Add("--skip-column-statistics")
+                         .Add(schema)
+                     )
+                     .WithStandardErrorPipe(new LoggerPipeTarget(_logger));
+
+                        await CompressEncryptUpload(triggersDump, $"{schema}-triggers.sql.xz.enc", storageTarget, token, job, representative);
                         success = true;
                     }
                     catch (Exception ex)
@@ -584,26 +581,32 @@ public class Worker : BackgroundService
                 {
                     try
                     {
-                        var cmd = Cli.Wrap("/usr/bin/mysqldump")
-                            .WithArguments(a => a
-                                .Add($"--host={_hostName}")
-                                .Add($"--user={_userName}")
-                                .Add($"--password={_password}")
-                                .Add("--no-data")
-                                .Add("--no-create-db")
-                                .Add("--no-create-info")
-                                .Add("--skip-routines")
-                                .Add("--events")
-                                .Add("--skip-triggers")
-                                .Add("--dump-date")
-                                .Add("--single-transaction")
-                                .Add("--skip-add-locks")
-                                .Add("--quote-names")
-                                .Add($"--max-allowed-packet={_maxPacketSize}")
-                                .Add("--skip-column-statistics")
-                                .Add(schema));
+                        var eventsDump = Cli.Wrap("/usr/bin/mysqldump")
+                .WithArguments(args => args
+                    .Add($"--host={_hostName}")
+                    .Add($"--user={_userName}")
+                    .Add($"--password={_password}")
 
-                        await CompressEncryptUpload(cmd, $"{schema}-events.sql.xz.enc", storageTarget, token, job, representative);
+                    .Add($"--no-data")
+                    .Add($"--no-create-db")
+                    .Add($"--no-create-info")
+                    .Add($"--skip-routines")
+                    .Add($"--events")
+                    .Add($"--skip-triggers")
+
+                    .Add($"--dump-date")
+                    .Add($"--single-transaction")
+                    .Add($"--skip-add-locks")
+                    .Add($"--quote-names")
+
+
+
+                    .Add($"--max-allowed-packet={_maxPacketSize}")
+                    .Add("--skip-column-statistics")
+                    .Add(schema))
+                    .WithStandardErrorPipe(new LoggerPipeTarget(_logger)); ;
+
+                        await CompressEncryptUpload(eventsDump, $"{schema}-events.sql.xz.enc", storageTarget, token, job, representative);
                         success = true;
                     }
                     catch (Exception ex)
@@ -677,25 +680,31 @@ public class Worker : BackgroundService
                 {
                     try
                     {
-                        var cmd = Cli.Wrap("/usr/bin/mysqldump")
-                            .WithArguments(a => a
-                                .Add($"--host={_hostName}")
-                                .Add($"--user={_userName}")
-                                .Add($"--password={_password}")
-                                .Add("--no-data")
-                                .Add("--no-create-db")
-                                .Add("--no-create-info")
-                                .Add("--routines")
-                                .Add("--skip-events")
-                                .Add("--skip-triggers")
-                                .Add("--single-transaction")
-                                .Add("--skip-add-locks")
-                                .Add("--quote-names")
-                                .Add($"--max-allowed-packet={_maxPacketSize}")
-                                .Add("--skip-column-statistics")
-                                .Add(schema));
+                        var funcDumps =
+                Cli.Wrap("/usr/bin/mysqldump")
+                    .WithArguments(args => args
+                        .Add($"--host={_hostName}")
+                        .Add($"--user={_userName}")
+                        .Add($"--password={_password}")
 
-                        await CompressEncryptUpload(cmd, $"{schema}-funcs.sql.xz.enc", storageTarget, token, job, representative);
+                        .Add($"--no-data")
+                        .Add($"--no-create-db")
+                        .Add($"--no-create-info")
+                        .Add($"--routines")
+                        .Add($"--skip-events")
+                        .Add($"--skip-triggers")
+
+                        .Add($"--single-transaction")
+                        .Add($"--skip-add-locks")
+                        .Add($"--quote-names")
+
+                        .Add($"--max-allowed-packet={_maxPacketSize}")
+                        .Add("--skip-column-statistics")
+                        .Add(schema)
+                    )
+                    .WithStandardErrorPipe(new LoggerPipeTarget(_logger));
+
+                        await CompressEncryptUpload(funcDumps, $"{schema}-funcs.sql.xz.enc", storageTarget, token, job, representative);
                         success = true;
                     }
                     catch (Exception ex)
@@ -937,28 +946,33 @@ public class Worker : BackgroundService
         {
             // Data dump for table data.
             var dataDump = Cli.Wrap("/usr/bin/mysqldump")
-                .WithArguments(args => args
-                    .Add($"--host={_hostName}")
-                    .Add($"--user={_userName}")
-                    .Add($"--password={_password}")
-                    .Add("--no-create-info")
-                    .Add("--skip-triggers")
-                    .Add("--skip-routines")
-                    .Add("--skip-events")
-                    .Add("--complete-insert")
-                    .Add("--disable-keys")
-                    .Add("--dump-date")
-                    .Add("--extended-insert")
-                    .Add("--no-autocommit")
-                    .Add("--quick")
-                    .Add("--single-transaction")
-                    .Add("--skip-add-locks")
-                    .Add("--quote-names")
-                    .Add($"--max-allowed-packet={_maxPacketSize}")
-                    .Add("--skip-column-statistics")
-                    .Add(schema)
-                    .Add(table))
-                .WithStandardErrorPipe(new LoggerPipeTarget(_logger));
+               .WithArguments(args => args
+                   .Add($"--host={_hostName}")
+                   .Add($"--user={_userName}")
+                   .Add($"--password={_password}")
+
+                   .Add("--no-create-info")
+                   .Add("--skip-triggers")
+                   .Add("--skip-routines")
+                   .Add("--skip-events")
+
+                   .Add("--complete-insert")
+                   .Add("--disable-keys")
+                   .Add("--dump-date")
+                   .Add("--extended-insert")
+                   .Add("--no-autocommit")
+                   .Add("--quick")
+                   .Add("--single-transaction")
+                   .Add("--skip-add-locks")
+                   .Add("--quote-names")
+
+                   .Add($"--max-allowed-packet={_maxPacketSize}")
+                   .Add("--skip-column-statistics")
+                   .Add(schema)
+                   .Add(table)
+               )
+               .WithStandardErrorPipe(new LoggerPipeTarget(_logger));
+
 
             _logger.LogInformation($"-- Dumping {schema}.{table} - DATA");
             await CompressEncryptUpload(dataDump, $"{schema}.{table}-data.sql.xz.enc", storageTarget, stoppingToken, job, item);
@@ -989,21 +1003,24 @@ public class Worker : BackgroundService
                     .Add($"--host={_hostName}")
                     .Add($"--user={_userName}")
                     .Add($"--password={_password}")
-                    .Add("--add-drop-table")
-                    .Add("--dump-date")
-                    .Add("--single-transaction")
-                    .Add("--skip-add-locks")
-                    .Add("--quote-names")
-                    .Add("--no-data")
-                    .Add("--skip-routines")
-                    .Add("--skip-events")
-                    .Add("--skip-triggers")
+
+                    .Add($"--add-drop-table")
+                    .Add($"--dump-date")
+                    .Add($"--single-transaction")
+                    .Add($"--skip-add-locks")
+                    .Add($"--quote-names")
+
+                    .Add($"--no-data")
+                    .Add($"--skip-routines")
+                    .Add($"--skip-events")
+                    .Add($"--skip-triggers")
+
                     .Add($"--max-allowed-packet={_maxPacketSize}")
                     .Add("--skip-column-statistics")
                     .Add(structure)
-                    .Add(table))
+                    .Add(table)
+                )
                 .WithStandardErrorPipe(new LoggerPipeTarget(_logger));
-
             _logger.LogInformation($"-- Dumping {structure}.{table} - STRUCTURE");
             await CompressEncryptUpload(schemaDump, $"{structure}.{table}-structure.sql.xz.enc", storageTarget, stoppingToken, job, item);
         }
@@ -1034,19 +1051,23 @@ public class Worker : BackgroundService
                     .Add($"--host={_hostName}")
                     .Add($"--user={_userName}")
                     .Add($"--password={_password}")
-                    .Add("--add-drop-table")
-                    .Add("--dump-date")
-                    .Add("--single-transaction")
-                    .Add("--skip-add-locks")
-                    .Add("--quote-names")
-                    .Add("--no-data")
-                    .Add("--skip-routines")
-                    .Add("--skip-events")
-                    .Add("--skip-triggers")
+
+                    .Add($"--add-drop-table")
+                    .Add($"--dump-date")
+                    .Add($"--single-transaction")
+                    .Add($"--skip-add-locks")
+                    .Add($"--quote-names")
+
+                    .Add($"--no-data")
+                    .Add($"--skip-routines")
+                    .Add($"--skip-events")
+                    .Add($"--skip-triggers")
+
                     .Add($"--max-allowed-packet={_maxPacketSize}")
                     .Add("--skip-column-statistics")
                     .Add(schema)
-                    .Add(table))
+                    .Add(table)
+                )
                 .WithStandardErrorPipe(new LoggerPipeTarget(_logger));
 
             _logger.LogInformation($"-- Dumping {schema}.{table} - VIEW");
@@ -1269,47 +1290,72 @@ public class Worker : BackgroundService
     }
 
     private async Task HandleLocalStorage(
-     Command dumpCommand,
-     string fileName,
-     LocalStorageTarget storageTarget,
-     CancellationToken stoppingToken,
-     BackupJob job,
-     BackupItem item)
+    Command dumpCommand,
+    string fileName,
+    LocalStorageTarget storageTarget,
+    CancellationToken stoppingToken,
+    BackupJob job,
+    BackupItem item)
     {
-        var time = Stopwatch.StartNew();
+        var sw = Stopwatch.StartNew();
         try
         {
+            // ensure the target directory exists
             var root = Environment.GetEnvironmentVariable("LOCAL_STORAGE_ROOT") ?? "/backups";
             root = root.TrimEnd('/', '\\');
             var path = storageTarget.Path.Trim('/', '\\');
-            var targetDirectory = $"{root}/{path}";
-
+            var targetDirectory = Path.Combine(root, path);
             if (!Directory.Exists(targetDirectory))
             {
                 Directory.CreateDirectory(targetDirectory);
-                _logger.LogInformation("Created target directory: {Directory}", targetDirectory);
+                _logger.LogInformation("Created local storage directory: {Directory}", targetDirectory);
             }
 
             var fullPath = Path.Combine(targetDirectory, fileName);
 
+            var xzCmd = Cli.Wrap("xz")
+                .WithArguments(args => args
+                    .Add($"-T {_threads}")
+                    .Add("-3")
+                    .Add("-c"));
+
+            var encryptCmd = Cli.Wrap("openssl")
+                .WithArguments(args => args
+                    .Add("enc")
+                    .Add("-aes-256-cbc")
+                    .Add("-pbkdf2")
+                    .Add("-iter").Add("20000")
+                    .Add("-k").Add(_encryptionKey)
+                    .Add("-in").Add("-")
+                    .Add("-out").Add("-"));
+
             await (dumpCommand
-                   | Cli.Wrap("xz").WithArguments($"-T {_threads} -3 -c")
-                   | Cli.Wrap("openssl").WithArguments($"enc -aes-256-cbc -pbkdf2 -iter 20000 -salt -pass pass:{_encryptionKey}")
-                   | PipeTarget.ToFile(fullPath))
+                    | xzCmd
+                    | encryptCmd)
+                .WithStandardErrorPipe(new LoggerPipeTarget(_logger))
+                .WithStandardOutputPipe(PipeTarget.ToFile(fullPath))
                 .ExecuteAsync(stoppingToken);
 
-            time.Stop();
-            _logger.LogInformation("Local backup saved to {FilePath} in {ElapsedTime}ms",
-                fullPath, time.ElapsedMilliseconds);
+            sw.Stop();
+            _logger.LogInformation(
+                "Local backup saved to {FilePath} in {Elapsed}ms",
+                fullPath, sw.ElapsedMilliseconds);
         }
         catch (Exception ex)
         {
-            time.Stop();
-            _logger.LogError(ex, "Local storage backup failed for {FileName} after {ElapsedTime}ms",
-                fileName, time.ElapsedMilliseconds);
+            sw.Stop();
+            _logger.LogError(
+                ex,
+                "Local storage backup failed for {FileName} after {Elapsed}ms",
+                fileName, sw.ElapsedMilliseconds);
 
-            await UpdateItemStatus(job.Id, item.Id, TaskStatus.Faulted,
-                $"Local storage backup failed: {ex.Message}", stoppingToken);
+            await UpdateItemStatus(
+                job.Id,
+                item.Id,
+                TaskStatus.Faulted,
+                $"Local storage backup failed: {ex.Message}",
+                stoppingToken);
+
             throw;
         }
     }

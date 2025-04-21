@@ -56,7 +56,17 @@ namespace SCREAM.Service.Restore
         private void LoadConfiguration()
         {
             _encryptionKey = GetConfigValue("MYSQL_BACKUP_ENCRYPTION_KEY", "MySqlBackup:EncryptionKey");
-
+            // Add validation for encryption key
+            if (string.IsNullOrEmpty(_encryptionKey))
+            {
+                logger.LogError("Encryption key is not configured!");
+                throw new InvalidOperationException("Encryption key is required");
+            }
+            else
+            {
+                logger.LogInformation("Encryption key configured successfully (present: {KeyPresent})",
+                    !string.IsNullOrEmpty(_encryptionKey));
+            }
             // Load connection parameters.
             _mysqlHost = GetConfigValue("MYSQL_BACKUP_HOSTNAME", "MySqlBackup:HostName");
             _mysqlUser = GetConfigValue("MYSQL_BACKUP_USERNAME", "MySqlBackup:UserName");
@@ -71,7 +81,7 @@ namespace SCREAM.Service.Restore
         #region Restore Execution
 
         private async Task<bool> ExecuteRestoreForItemAsync(RestoreItem restoreItem, Tuple<string, string, string> connectionString, string backupFolderPath,
-         CancellationToken ct)
+    CancellationToken ct)
         {
             string filePath = GetRestoreFilePath(backupFolderPath, restoreItem);
 
@@ -89,7 +99,7 @@ namespace SCREAM.Service.Restore
             await UpdateRestoreItemStatusAsync(restoreItem, TaskStatus.Running);
 
             var argsBuilder = new ArgumentsBuilder()
-                .Add("--max_allowed_packet=1073741824")
+                .Add("--max-allowed-packet=1073741824")
                 .Add($"--host={connectionString.Item1}")
                 .Add($"--user={connectionString.Item2}")
                 .Add($"--password={connectionString.Item3}");
@@ -147,7 +157,6 @@ namespace SCREAM.Service.Restore
                 return false;
             }
         }
-
         private bool ShouldUseSchema(DatabaseItemType type)
         {
             return type switch
@@ -355,12 +364,18 @@ namespace SCREAM.Service.Restore
                         .Add($"--password={connectionString.Item3}")
                         .Add($"--execute=CREATE DATABASE IF NOT EXISTS `{schema}`")
                     )
+                    .WithValidation(CommandResultValidation.None)
                     .ExecuteBufferedAsync(ct);
 
                 if (result.ExitCode != 0)
                 {
-                    logger.LogError("Failed to create {Schema}: {Error}", schema, result.StandardError);
-                    throw new Exception($"MySQL error: {result.StandardError}");
+                    logger.LogError("Failed to create {Schema}. Exit code: {ExitCode}. Error: {Error}",
+                        schema, result.ExitCode, result.StandardError.Trim());
+                    throw new Exception($"MySQL command failed: {result.StandardError.Trim()}");
+                }
+                else
+                {
+                    logger.LogInformation("Successfully created or verified database {Schema}.", schema);
                 }
             }
             catch (Exception ex)
@@ -369,6 +384,7 @@ namespace SCREAM.Service.Restore
                 throw;
             }
         }
+
 
         #endregion
 
@@ -583,17 +599,18 @@ namespace SCREAM.Service.Restore
             return Path.Combine(backupFolder, $"{restoreItem.DatabaseItem.Schema}.{restoreItem.DatabaseItem.Name}{fileSuffix}");
         }
 
-        private async Task ProcessDecompressionAsync(CancellationToken cancellationToken, DirectoryInfo backupDirectoryInfo)
+        private async Task ProcessDecompressionAsync(
+     CancellationToken cancellationToken,
+     DirectoryInfo backupDirectoryInfo)
         {
             var decompSw = Stopwatch.StartNew();
-
-            var compressedFiles = backupDirectoryInfo.GetFiles().Where(file => file.Extension == ".xz").ToList();
-            if (!compressedFiles.Any())
-                return;
+            var compressedFiles = backupDirectoryInfo.GetFiles("*.xz").ToList();
+            if (!compressedFiles.Any()) return;
 
             logger.LogInformation("Found {Count} compressed files to decompress.", compressedFiles.Count);
 
             var tasks = new List<Task>();
+            int failedCount = 0;
 
             foreach (var compressedFile in compressedFiles)
             {
@@ -606,7 +623,8 @@ namespace SCREAM.Service.Restore
                     }
                     catch (Exception ex)
                     {
-                        logger.LogError(ex, "Error decompressing file {FileName}", compressedFile.Name);
+                        Interlocked.Increment(ref failedCount);
+                        logger.LogError(ex, "Decompression failed for {FileName}", compressedFile.Name);
                     }
                     finally
                     {
@@ -616,50 +634,49 @@ namespace SCREAM.Service.Restore
             }
 
             await Task.WhenAll(tasks);
-            logger.LogInformation("Completed decompression of files in {TotalMilliseconds}ms.", decompSw.ElapsedMilliseconds);
-            await Task.Delay(10000, cancellationToken);
+            logger.LogInformation(
+                "Decompression completed in {Elapsed}ms with {FailedCount} failures",
+                decompSw.ElapsedMilliseconds,
+                failedCount);
+
+            if (failedCount > 0)
+                throw new Exception($"Decompression failed for {failedCount} files. Cannot proceed with restore.");
         }
 
-        private async Task ProcessCompressedFileAsync(FileInfo compressedFile, DirectoryInfo backupDirectoryInfo, CancellationToken ct)
+        private async Task ProcessCompressedFileAsync(
+        FileInfo compressedFile,
+        DirectoryInfo backupDirectoryInfo,
+        CancellationToken ct)
         {
             var localStopwatch = Stopwatch.StartNew();
             try
             {
                 logger.LogInformation("Decompressing file: {FileName}", compressedFile.Name);
-                var outputPath = Path.Combine(
-                    backupDirectoryInfo.FullName,
-                    Path.GetFileNameWithoutExtension(compressedFile.Name)
-                );
-                var result = await Cli.Wrap("xz")
-                    .WithArguments($"--decompress --keep --stdout \"{compressedFile.FullName}\"")
-                    .WithStandardOutputPipe(PipeTarget.ToFile(outputPath))
-                    .ExecuteAsync(ct);
+
+                var command = $"7z e {compressedFile.FullName} -o{backupDirectoryInfo.FullName} -aoa";
+
+                var result = await Cli.Wrap("/bin/bash")
+                    .WithArguments(new[] { "-c", command })
+                    .ExecuteBufferedAsync();
 
                 if (result.ExitCode != 0)
                 {
-                    logger.LogError("XZ decompression failed for {FileName}", compressedFile.Name);
+                    throw new Exception($"xz decompression failed for {compressedFile.Name}: {result.StandardError}");
                 }
-                else
-                {
-                    // Verify the output file exists and has content before deleting the source
-                    var outputFile = new FileInfo(outputPath);
-                    if (outputFile.Exists && outputFile.Length > 0)
-                    {
-                        File.Delete(compressedFile.FullName);
-                        logger.LogInformation("Decompressed {FileName} in {Ms}ms and removed source file",
-                            compressedFile.Name, localStopwatch.ElapsedMilliseconds);
-                    }
-                    else
-                    {
-                        logger.LogWarning("Decompressed output file is missing or empty: {FileName}", outputPath);
-                    }
-                }
+
+                // Delete the original .xz file after successful decompression
+                File.Delete(compressedFile.FullName);
+                logger.LogInformation(
+                    "Decompressed {FileName} in {Ms}ms and removed source file",
+                    compressedFile.Name,
+                    localStopwatch.ElapsedMilliseconds);
             }
-            catch (Exception ex)
+            finally
             {
-                logger.LogError(ex, "Exception decompressing file {FileName}", compressedFile.Name);
+                localStopwatch.Stop();
             }
         }
+
 
         private async Task ProcessEncryptedFileAsync(FileInfo encryptedFile, DirectoryInfo backupDirectoryInfo, CancellationToken ct)
         {
@@ -668,18 +685,20 @@ namespace SCREAM.Service.Restore
             {
                 logger.LogInformation("Decrypting file: {FileName}", encryptedFile.Name);
                 var outputFile = encryptedFile.FullName.Replace(".enc", "");
-                var command = $"/usr/bin/openssl enc -d -aes-256-cbc -pbkdf2 -iter 20000 -in {encryptedFile.FullName} -out {outputFile} -k {_encryptionKey}";
+
+                var command =
+                    $"/usr/bin/openssl enc -d -aes-256-cbc -pbkdf2 -iter 20000 -in {encryptedFile.FullName} -out {encryptedFile.FullName.Replace(".enc", "")} -k {_encryptionKey}";
+
                 var result = await Cli.Wrap("/bin/bash")
                     .WithArguments(new[] { "-c", command })
-                    .ExecuteBufferedAsync(ct);
+                    .ExecuteBufferedAsync();
 
                 if (result.ExitCode != 0)
                 {
-                    logger.LogError("Decryption failed for {FileName}: {Error}", encryptedFile.Name, result.StandardError);
+                    logger.LogError("Decryption failed for {FileName}", encryptedFile.Name);
                 }
                 else
                 {
-                    // Verify the output file exists and has content before deleting the source
                     var decryptedFile = new FileInfo(outputFile);
                     if (decryptedFile.Exists && decryptedFile.Length > 0)
                     {
@@ -696,6 +715,11 @@ namespace SCREAM.Service.Restore
             catch (Exception ex)
             {
                 logger.LogError(ex, "Exception decrypting file {FileName}", encryptedFile.Name);
+                throw;
+            }
+            finally
+            {
+                localStopwatch.Stop();
             }
         }
 
@@ -976,7 +1000,6 @@ namespace SCREAM.Service.Restore
                                         continue;
                                     }
                                 }
-                                // If LastRun is null, proceed to trigger immediately without schedule check
                             }
                             catch (CronFormatException ex)
                             {
@@ -985,12 +1008,10 @@ namespace SCREAM.Service.Restore
                             }
                         }
 
-                        // Attempt to create restore job
                         logger.LogInformation("Triggering restore for plan {PlanId} (Backup: {BackupId})", plan.Id, backup.Id);
 
                         if (await CreateRestoreJob(plan, ct))
                         {
-                            // Update plan timestamps
                             plan.LastRun = DateTime.UtcNow;
                             if (!string.IsNullOrEmpty(plan.ScheduleCron))
                             {
