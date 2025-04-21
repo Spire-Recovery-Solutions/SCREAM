@@ -609,7 +609,7 @@ public class Worker : BackgroundService
                     .Add($"--max-allowed-packet={_maxPacketSize}")
                     .Add("--skip-column-statistics")
                     .Add(schema))
-                    .WithStandardErrorPipe(PipeTarget.ToDelegate(line => { if (!string.IsNullOrEmpty(line)) _logger.LogError(line); })); ;
+                    .WithStandardErrorPipe(PipeTarget.ToDelegate(line => { if (!string.IsNullOrEmpty(line)) _logger.LogError(line); }));
 
                         await CompressEncryptUpload(eventsDump, $"{schema}-events.sql.xz.enc", storageTarget, token, job, representative);
                         success = true;
@@ -1222,7 +1222,7 @@ public class Worker : BackgroundService
                         throw;
                     }
                 }))
-                .WithStandardErrorPipe(new LoggerPipeTarget(_logger))
+                .WithStandardErrorPipe(PipeTarget.ToDelegate(line => { if (!string.IsNullOrEmpty(line)) _logger.LogError(line); }))
                 .ExecuteAsync(stoppingToken);
 
             time.Stop();
@@ -1386,7 +1386,7 @@ public class Worker : BackgroundService
             await (dumpCommand
                     | xzCmd
                     | encryptCmd)
-                .WithStandardErrorPipe(new LoggerPipeTarget(_logger))
+                .WithStandardErrorPipe(PipeTarget.ToDelegate(line => { if (!string.IsNullOrEmpty(line)) _logger.LogError(line); }))
                 .WithStandardOutputPipe(PipeTarget.ToFile(fullPath))
                 .ExecuteAsync(stoppingToken);
 
