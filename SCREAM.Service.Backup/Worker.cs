@@ -21,7 +21,7 @@ public class Worker : BackgroundService
     private readonly string _password;
     private readonly string _encryptionKey;
     private readonly string _maxPacketSize;
-    private readonly string _s3ServiceUrl;
+    private readonly string _backupFolder;
     private readonly IConfiguration _configuration;
     private readonly int _threads;
     private readonly HttpClient _httpClient;
@@ -42,6 +42,12 @@ public class Worker : BackgroundService
         _maxPacketSize = GetConfigValue("MYSQL_BACKUP_MAX_PACKET_SIZE", "MySqlBackup:MaxPacketSize", "1073741824");
         _threads = int.Parse(GetConfigValue("MYSQL_BACKUP_THREADS", "MySqlBackup:Threads",
             Environment.ProcessorCount.ToString()));
+
+         var backupFolder = GetConfigValue("MYSQL_BACKUP_FOLDER", "MySqlBackup:BackupFolder");
+         _backupFolder = string.IsNullOrEmpty(backupFolder)
+            ? DateTimeOffset.Now.ToString("yyyy-MM-dd-hh-mm")
+            : backupFolder + "_" + DateTimeOffset.Now.ToString("yyyy-MM-dd-hh-mm");
+
         var b2Config = new AmazonS3Config
         {
             ServiceURL = GetConfigValue("MYSQL_BACKUP_B2_SERVICE_URL", "MySqlBackup:BackblazeB2:ServiceURL"),
@@ -59,7 +65,6 @@ public class Worker : BackgroundService
         };
         _memoryStreamManager = new RecyclableMemoryStreamManager(options);
 
-        _s3ServiceUrl = GetConfigValue("MYSQL_BACKUP_B2_SERVICE_URL", "MySqlBackup:BackblazeB2:ServiceURL");
         var b2AccessKey = GetConfigValue("MYSQL_BACKUP_B2_ACCESS_KEY", "MySqlBackup:BackblazeB2:AccessKey");
         var b2SecretKey = GetConfigValue("MYSQL_BACKUP_B2_SECRET_KEY", "MySqlBackup:BackblazeB2:SecretKey");
         var
@@ -505,7 +510,7 @@ public class Worker : BackgroundService
                          .Add("--skip-column-statistics")
                          .Add(schema)
                      )
-                     .WithStandardErrorPipe(new LoggerPipeTarget(_logger));
+                     .WithStandardErrorPipe(PipeTarget.ToDelegate(line => { if (!string.IsNullOrEmpty(line)) _logger.LogError(line); }));
 
                         await CompressEncryptUpload(triggersDump, $"{schema}-triggers.sql.xz.enc", storageTarget, token, job, representative);
                         success = true;
@@ -604,7 +609,7 @@ public class Worker : BackgroundService
                     .Add($"--max-allowed-packet={_maxPacketSize}")
                     .Add("--skip-column-statistics")
                     .Add(schema))
-                    .WithStandardErrorPipe(new LoggerPipeTarget(_logger)); ;
+                    .WithStandardErrorPipe(PipeTarget.ToDelegate(line => { if (!string.IsNullOrEmpty(line)) _logger.LogError(line); })); ;
 
                         await CompressEncryptUpload(eventsDump, $"{schema}-events.sql.xz.enc", storageTarget, token, job, representative);
                         success = true;
@@ -702,7 +707,7 @@ public class Worker : BackgroundService
                         .Add("--skip-column-statistics")
                         .Add(schema)
                     )
-                    .WithStandardErrorPipe(new LoggerPipeTarget(_logger));
+                    .WithStandardErrorPipe(PipeTarget.ToDelegate(line => { if (!string.IsNullOrEmpty(line)) _logger.LogError(line); }));
 
                         await CompressEncryptUpload(funcDumps, $"{schema}-funcs.sql.xz.enc", storageTarget, token, job, representative);
                         success = true;
@@ -971,7 +976,7 @@ public class Worker : BackgroundService
                    .Add(schema)
                    .Add(table)
                )
-               .WithStandardErrorPipe(new LoggerPipeTarget(_logger));
+               .WithStandardErrorPipe(PipeTarget.ToDelegate(line => { if (!string.IsNullOrEmpty(line)) _logger.LogError(line); }));
 
 
             _logger.LogInformation($"-- Dumping {schema}.{table} - DATA");
@@ -1020,7 +1025,11 @@ public class Worker : BackgroundService
                     .Add(structure)
                     .Add(table)
                 )
-                .WithStandardErrorPipe(new LoggerPipeTarget(_logger));
+                .WithStandardErrorPipe(PipeTarget.ToDelegate(line =>
+{
+    if (!string.IsNullOrEmpty(line))
+        _logger.LogError(line);
+}));
             _logger.LogInformation($"-- Dumping {structure}.{table} - STRUCTURE");
             await CompressEncryptUpload(schemaDump, $"{structure}.{table}-structure.sql.xz.enc", storageTarget, stoppingToken, job, item);
         }
@@ -1068,7 +1077,11 @@ public class Worker : BackgroundService
                     .Add(schema)
                     .Add(table)
                 )
-                .WithStandardErrorPipe(new LoggerPipeTarget(_logger));
+                .WithStandardErrorPipe(PipeTarget.ToDelegate(line =>
+{
+    if (!string.IsNullOrEmpty(line))
+        _logger.LogError(line);
+}));
 
             _logger.LogInformation($"-- Dumping {schema}.{table} - VIEW");
             await CompressEncryptUpload(viewDump, $"{schema}.{table}-view.sql.xz.enc", storageTarget, stoppingToken, job, item);
@@ -1114,37 +1127,28 @@ public class Worker : BackgroundService
     BackupItem item)
     {
         var time = Stopwatch.StartNew();
+        string uploadId = null;
+        List<PartETag> partETags = null;
+
         try
         {
-            var config = new AmazonS3Config
-            {
-                ServiceURL = _s3ServiceUrl,
-                ForcePathStyle = true,
-                Timeout = TimeSpan.FromMinutes(15),
-                MaxErrorRetry = 3
-            };
-
-            using var s3Client = new AmazonS3Client(
-                storageTarget.AccessKey,
-                storageTarget.SecretKey,
-                config
-            );
-
-            var fileKey = Path.Combine(_hostName, Environment.GetEnvironmentVariable("LOCAL_STORAGE_ROOT") ?? "/backups", fileName);
-            var partETags = new List<PartETag>();
+            var fileKey = Path.Combine(_hostName, _backupFolder, fileName);
+            partETags = new List<PartETag>();
             var partNumber = 1;
-            var uploadId = string.Empty;
-            const long minPartSize = 5L * 1024L * 1024L;
-            const long maxPartSize = 500L * 1024L * 1024L;
-            const int readChunkSize = 81920;
+
+            const long minPartSize = 5L * 1024L * 1024L; // 5 MB
+            const long maxPartSize = 500L * 1024L * 1024L; // 500 MB
             long totalBytesRead = 0;
             var isMultiPartUpload = false;
 
             var xzCommand = Cli.Wrap("xz")
-                .WithArguments($"-T {_threads} -3 -c");
+                .WithArguments(builder => builder
+                    .Add($"-T {_threads}")
+                    .Add("-3")
+                    .Add("-c"));
 
             var encryptCommand = Cli.Wrap("openssl")
-                .WithArguments($"enc -aes-256-cbc -pbkdf2 -iter 20000 -salt -pass pass:{_encryptionKey}");
+                .WithArguments($"enc -aes-256-cbc -pbkdf2 -iter 20000 -k {_encryptionKey} -in - -out -");
 
             await (dumpCommand | xzCommand | encryptCommand)
                 .WithStandardOutputPipe(PipeTarget.Create(async (stream, token) =>
@@ -1156,7 +1160,7 @@ public class Worker : BackgroundService
                             await using var remoteStream = _memoryStreamManager.GetStream(
                                 $"BackupUpload.{fileName}.Part{partNumber}");
 
-                            var buffer = new byte[readChunkSize];
+                            var buffer = new byte[81920];
                             var reachedEnd = false;
 
                             while (remoteStream.Length < maxPartSize && !reachedEnd)
@@ -1174,9 +1178,9 @@ public class Worker : BackgroundService
                                 if (totalBytesRead >= minPartSize && !isMultiPartUpload)
                                 {
                                     isMultiPartUpload = true;
-                                    uploadId = await StartMultipartUpload(s3Client, storageTarget.BucketName, fileKey, stoppingToken);
-                                    _logger.LogInformation("Multi-Part Upload Started for {FileName} - UploadId: {UploadId}",
-                                        fileName, uploadId);
+                                    uploadId = await StartMultipartUpload(storageTarget.BucketName, fileKey, stoppingToken);
+                                    _logger.LogInformation(
+                                        $"{fileName} - Multi-Part Upload Started - UploadId: {uploadId}");
                                 }
                             }
 
@@ -1186,13 +1190,13 @@ public class Worker : BackgroundService
 
                                 if (isMultiPartUpload)
                                 {
-                                    await UploadPart(s3Client, storageTarget.BucketName, fileKey, uploadId, partNumber,
+                                    await UploadPart(storageTarget.BucketName, fileKey, uploadId, partNumber,
                                         remoteStream, partETags, stoppingToken);
                                     partNumber++;
                                 }
                                 else
                                 {
-                                    await PerformSinglePartUpload(s3Client, storageTarget.BucketName, fileKey,
+                                    await PerformSinglePartUpload(storageTarget.BucketName, fileKey,
                                         remoteStream, fileName, totalBytesRead, stoppingToken);
                                 }
                             }
@@ -1201,8 +1205,8 @@ public class Worker : BackgroundService
                             {
                                 if (isMultiPartUpload)
                                 {
-                                    await CompleteMultipartUpload(s3Client, storageTarget.BucketName, fileKey,
-                                        uploadId, partETags, fileName, stoppingToken);
+                                    await CompleteMultipartUpload(storageTarget.BucketName, fileKey, uploadId,
+                                        partETags, fileName, stoppingToken);
                                 }
                                 break;
                             }
@@ -1210,83 +1214,133 @@ public class Worker : BackgroundService
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "S3 upload failed for {FileName}", fileName);
+                        _logger.LogError(ex, $"{fileName} - Upload pipeline error: {ex.Message}");
                         if (!string.IsNullOrEmpty(uploadId))
                         {
-                            await AbortMultipartUpload(s3Client, storageTarget.BucketName, fileKey, uploadId, stoppingToken);
+                            await AbortMultipartUpload(storageTarget.BucketName, fileKey, uploadId, stoppingToken);
                         }
                         throw;
                     }
                 }))
+                .WithStandardErrorPipe(new LoggerPipeTarget(_logger))
                 .ExecuteAsync(stoppingToken);
 
             time.Stop();
-            _logger.LogInformation("S3 upload completed for {FileName} in {Elapsed}ms",
-                fileName, time.ElapsedMilliseconds);
+            _logger.LogInformation(
+                $"{fileName} - S3 upload completed in {time.ElapsedMilliseconds}ms - Total: {totalBytesRead:N0} bytes");
         }
         catch (Exception ex)
         {
             time.Stop();
-            _logger.LogError(ex, "S3 upload failed for {FileName} after {Elapsed}ms",
-                fileName, time.ElapsedMilliseconds);
+            _logger.LogError(ex, $"{fileName} - S3 upload failed after {time.ElapsedMilliseconds}ms");
             await UpdateItemStatus(job.Id, item.Id, TaskStatus.Faulted,
                 $"S3 upload failed: {ex.Message}", stoppingToken);
             throw;
         }
     }
 
-    private async Task<string> StartMultipartUpload(IAmazonS3 client, string bucketName, string fileKey, CancellationToken ct)
+    private async Task<string> StartMultipartUpload(string bucketName, string fileKey, CancellationToken ct)
     {
-        var response = await client.InitiateMultipartUploadAsync(bucketName, fileKey, ct);
+        var response = await _b2Client.InitiateMultipartUploadAsync(bucketName, fileKey, ct);
         return response.UploadId;
     }
 
-    private async Task UploadPart(IAmazonS3 client, string bucketName, string fileKey, string uploadId, int partNumber,
+    private async Task UploadPart(string bucketName, string fileKey, string uploadId, int partNumber,
         Stream stream, List<PartETag> partETags, CancellationToken ct)
     {
-        var request = new UploadPartRequest
+        var timer = Stopwatch.StartNew();
+        try
         {
-            BucketName = bucketName,
-            Key = fileKey,
-            UploadId = uploadId,
-            PartNumber = partNumber,
-            InputStream = stream
-        };
+            var request = new UploadPartRequest
+            {
+                BucketName = bucketName,
+                Key = fileKey,
+                UploadId = uploadId,
+                PartNumber = partNumber,
+                InputStream = stream,
+                CalculateContentMD5Header = true
+            };
 
-        var response = await client.UploadPartAsync(request, ct);
-        partETags.Add(new PartETag(partNumber, response.ETag));
+            var response = await _b2Client.UploadPartAsync(request, ct);
+            partETags.Add(new PartETag(partNumber, response.ETag));
+
+            var mbps = (stream.Length / 1024.0 / 1024.0) / (timer.ElapsedMilliseconds / 1000.0);
+            _logger.LogInformation(
+                $"{fileKey} - Part {partNumber} uploaded ({stream.Length:N0} bytes) in {timer.ElapsedMilliseconds}ms ({mbps:N2} MB/s)");
+        }
+        finally
+        {
+            timer.Stop();
+        }
     }
 
-    private async Task CompleteMultipartUpload(IAmazonS3 client, string bucketName, string fileKey, string uploadId,
+    private async Task CompleteMultipartUpload(string bucketName, string fileKey, string uploadId,
         List<PartETag> partETags, string fileName, CancellationToken ct)
     {
-        var request = new CompleteMultipartUploadRequest
+        var timer = Stopwatch.StartNew();
+        try
         {
-            BucketName = bucketName,
-            Key = fileKey,
-            UploadId = uploadId,
-            PartETags = partETags
-        };
+            var request = new CompleteMultipartUploadRequest
+            {
+                BucketName = bucketName,
+                Key = fileKey,
+                UploadId = uploadId,
+                PartETags = partETags
+            };
 
-        await client.CompleteMultipartUploadAsync(request, ct);
+            var response = await _b2Client.CompleteMultipartUploadAsync(request, ct);
+            _logger.LogInformation(
+                $"{fileName} - Multipart upload completed in {timer.ElapsedMilliseconds}ms ({partETags.Count} parts)");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"{fileName} - Failed to complete multipart upload after {timer.ElapsedMilliseconds}ms");
+            await AbortMultipartUpload(bucketName, fileKey, uploadId, ct);
+            throw;
+        }
+        finally
+        {
+            timer.Stop();
+        }
     }
 
-    private async Task AbortMultipartUpload(IAmazonS3 client, string bucketName, string fileKey, string uploadId, CancellationToken ct)
+    private async Task AbortMultipartUpload(string bucketName, string fileKey, string uploadId, CancellationToken ct)
     {
-        await client.AbortMultipartUploadAsync(bucketName, fileKey, uploadId, ct);
+        try
+        {
+            await _b2Client.AbortMultipartUploadAsync(bucketName, fileKey, uploadId, ct);
+            _logger.LogInformation($"{fileKey} - Successfully aborted multipart upload {uploadId}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"{fileKey} - Failed to abort multipart upload {uploadId}");
+        }
     }
 
-    private async Task PerformSinglePartUpload(IAmazonS3 client, string bucketName, string fileKey,
-        Stream stream, string fileName, long size, CancellationToken ct)
+    private async Task PerformSinglePartUpload(string bucketName, string fileKey,
+        Stream stream, string fileName, long totalBytes, CancellationToken ct)
     {
-        var request = new PutObjectRequest
+        var timer = Stopwatch.StartNew();
+        try
         {
-            BucketName = bucketName,
-            Key = fileKey,
-            InputStream = stream
-        };
+            var request = new PutObjectRequest
+            {
+                BucketName = bucketName,
+                Key = fileKey,
+                InputStream = stream,
+                CalculateContentMD5Header = true
+            };
 
-        await client.PutObjectAsync(request, ct);
+            var response = await _b2Client.PutObjectAsync(request, ct);
+
+            var mbps = (totalBytes / 1024.0 / 1024.0) / (timer.ElapsedMilliseconds / 1000.0);
+            _logger.LogInformation(
+                $"{fileName} - Single-part upload completed ({totalBytes:N0} bytes) in {timer.ElapsedMilliseconds}ms ({mbps:N2} MB/s)");
+        }
+        finally
+        {
+            timer.Stop();
+        }
     }
 
     private async Task HandleLocalStorage(

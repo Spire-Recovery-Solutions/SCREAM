@@ -79,6 +79,7 @@ services:
       - MYSQL_BACKUP_B2_SERVICE_URL=https://s3.us-west-001.backblazeb2.com
       - MYSQL_BACKUP_B2_ACCESS_KEY=TEMP_ACCESS_KEY_HERE
       - MYSQL_BACKUP_B2_SECRET_KEY=TEMP_SECRET_KEY_HERE
+      - MYSQL_BACKUP_FOLDER=backup
     ports:
       - "8001:8001"
     networks:
