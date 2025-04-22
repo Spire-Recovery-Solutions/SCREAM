@@ -49,25 +49,32 @@
                             </MudSelectItem>
                         }
                     </MudSelect>
-
                 </MudItem>
 
-
                 <MudItem xs="12" md="6">
-                    <MudSelect T="long" @bind-Value="_backupPlan.StorageTargetId"
-                               Label="Storage Target"
-                               Variant="Variant.Outlined"
-                               Required="true"
-                               ToStringFunc="@(id => GetStorageTargetDisplayName(id))"
-                               HelperText="Select where to store your backups">
-                        <MudSelectItem T="long" Value="0">Select Storage Target</MudSelectItem>
-                        @foreach (var target in _storageTargets)
-                        {
-                            <MudSelectItem Value="@target.Id">
-                                @target.Name (@target.Type)
-                            </MudSelectItem>
-                        }
-                    </MudSelect>
+                    @if (_availableStorageTargets.Count > 0)
+                    {
+                        <MudSelect T="long" @bind-Value="_backupPlan.StorageTargetId"
+                                   Label="Storage Target"
+                                   Variant="Variant.Outlined"
+                                   Required="true"
+                                   ToStringFunc="@(id => GetStorageTargetDisplayName(id))"
+                                   HelperText="Select where to store your backups">
+                            <MudSelectItem T="long" Value="0">Select Storage Target</MudSelectItem>
+                            @foreach (var target in _availableStorageTargets)
+                            {
+                                <MudSelectItem Value="@target.Id">
+                                    @target.Name (@target.Type)
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                    else
+                    {
+                        <MudText Color="Color.Error" Class="mt-2">
+                            No available storage targets. <MudLink Href="/targets/storage/0">Create a new storage target</MudLink>
+                        </MudText>
+                    }
                 </MudItem>
 
                 <MudItem xs="12">
@@ -167,6 +174,8 @@
     private HttpClient _httpClient;
     private List<DatabaseTarget> _databaseTargets = [];
     private List<StorageTarget> _storageTargets = [];
+    private List<StorageTarget> _availableStorageTargets = [];
+    private List<BackupPlan> _existingBackupPlans = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -176,6 +185,7 @@
         {
             _databaseTargets = await _httpClient.GetFromJsonAsync<List<DatabaseTarget>>("targets/database") ?? [];
             _storageTargets = await _httpClient.GetFromJsonAsync<List<StorageTarget>>("targets/storage") ?? [];
+            _existingBackupPlans = await _httpClient.GetFromJsonAsync<List<BackupPlan>>("plans/backup") ?? [];
 
             if (Id is > 0)
             {
@@ -185,10 +195,32 @@
                     _backupPlan = plan;
                 }
             }
+
+            FilterAvailableStorageTargets();
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Error loading data: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void FilterAvailableStorageTargets()
+    {
+        var usedStorageTargetIds = _existingBackupPlans
+            .Select(bp => bp.StorageTargetId)
+            .ToHashSet();
+
+        if (_backupPlan.StorageTargetId > 0)
+        {
+            _availableStorageTargets = _storageTargets
+                .Where(st => !usedStorageTargetIds.Contains(st.Id) || st.Id == _backupPlan.StorageTargetId)
+                .ToList();
+        }
+        else
+        {
+            _availableStorageTargets = _storageTargets
+                .Where(st => !usedStorageTargetIds.Contains(st.Id))
+                .ToList();
         }
     }
 
@@ -307,6 +339,7 @@
             dialog?.Close();
         }
     }
+
     private string GetDatabaseTargetDisplayName(long id)
     {
         if (id == 0) return "Select Database Connection";

@@ -1,6 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
-using SCREAM.Data.Entities.Backup;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SCREAM.Data;
+using SCREAM.Data.Entities.Backup;
 
 namespace SCREAM.Service.Api.Endpoints.BackupItemStatuses
 {
@@ -11,32 +12,40 @@ namespace SCREAM.Service.Api.Endpoints.BackupItemStatuses
             var group = app.MapGroup("/jobs/backup/items/status")
                 .WithTags("Jobs/BackupItemStatus");
 
-            group.MapGet("/{jobId:long}", async (
-                IDbContextFactory<ScreamDbContext> dbContextFactory,
-                long jobId) =>
-            {
-                await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-                var statuses = await dbContext.BackupItemStatuses
-                    .Include(s => s.BackupItem)
-                    .ThenInclude(i => i.DatabaseItem)
-                    .Where(s => s.BackupJobId == jobId)
-                    .ToListAsync();
-                return Results.Ok(statuses);
-            });
-
+         group.MapGet("/{jobId:long}", async (
+    IDbContextFactory<ScreamDbContext> dbContextFactory,
+    long jobId,
+    [FromQuery] TaskStatus[]? statuses = null,
+    [FromQuery] long? itemId = null) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var query = dbContext.BackupItemStatuses
+        .Include(s => s.BackupItem)
+        .ThenInclude(i => i.DatabaseItem)
+        .Where(s => s.BackupJobId == jobId);
+    
+    if (statuses != null && statuses.Any())
+        query = query.Where(s => statuses.Contains(s.Status));
+    
+    if (itemId.HasValue)
+        query = query.Where(s => s.BackupItemId == itemId.Value);
+    
+    var itemStatuses = await query.ToListAsync();
+    return Results.Ok(itemStatuses);
+});
             // GET: Get a specific backup item status
             group.MapGet("/{jobId:long}/{itemStatusId:long}", async (
-                IDbContextFactory<ScreamDbContext> dbContextFactory,
-                long jobId,
-                long itemStatusId) =>
-            {
-                await using var dbContext = await dbContextFactory.CreateDbContextAsync();
-                var status = await dbContext.BackupItemStatuses
-                    .Include(s => s.BackupItem)
-                    .ThenInclude(i => i.DatabaseItem)
-                    .FirstOrDefaultAsync(s => s.Id == itemStatusId && s.BackupJobId == jobId);
-                return status == null ? Results.NotFound() : Results.Ok(status);
-            });
+    IDbContextFactory<ScreamDbContext> dbContextFactory,
+    long jobId,
+    long itemStatusId) =>
+{
+    await using var dbContext = await dbContextFactory.CreateDbContextAsync();
+    var status = await dbContext.BackupItemStatuses
+        .Include(s => s.BackupItem)
+        .ThenInclude(i => i.DatabaseItem)
+        .FirstOrDefaultAsync(s => s.Id == itemStatusId && s.BackupJobId == jobId);
+    return status == null ? Results.NotFound() : Results.Ok(status);
+});
 
             // POST: Create or update a backup item status
             group.MapPost("/{jobId:long}", async (

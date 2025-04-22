@@ -60,7 +60,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 // Map all endpoint groups
 app.MapStorageTargetEndpoints();
@@ -87,7 +90,7 @@ using (var scope = app.Services.CreateScope())
     // Add a sample database target for development
     dbContext.DatabaseTargets.Add(new DatabaseTarget
     {
-        HostName = "localhost",
+        HostName = Environment.GetEnvironmentVariable("MYSQL_HOSTNAME") ?? "localhost",
         Port = 3306,
         UserName = "root",
         // TODO: Move this password to user secrets or environment variables

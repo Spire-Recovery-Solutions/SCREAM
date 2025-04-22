@@ -26,8 +26,13 @@ services:
       context: .
       dockerfile: SCREAM.Service.Api/Dockerfile
     environment:
+      ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__DefaultConnection: "Server=mysql;Database=SCREAM;User=user;Password=userpassword;"
       CONTAINER_APP_PORT: "8000"
+      LOCAL_STORAGE_ROOT: "/backups"
+      MYSQL_HOSTNAME: mysql
+    volumes:
+      - ./backups:/backups
     ports:
       - "8000:8000"
     networks:
@@ -42,11 +47,12 @@ services:
       dockerfile: SCREAM.Service.Restore/Dockerfile
     environment:
       - API_URL=http://scream-api:8000
-      - MYSQL_BACKUP_ENCRYPTION_KEY=your-encryption-key-here
+      - MYSQL_BACKUP_ENCRYPTION_KEY=your-strong-encryption-key-here
       - MYSQL_BACKUP_HOSTNAME=mysql
       - MYSQL_BACKUP_USERNAME=user
       - MYSQL_BACKUP_PASSWORD=userpassword
       - MYSQL_BACKUP_THREADS=4
+      - LOCAL_STORAGE_ROOT=/backups
     ports:
       - "8002:8002"
     networks:
@@ -68,6 +74,12 @@ services:
       - MYSQL_BACKUP_USERNAME=user
       - MYSQL_BACKUP_PASSWORD=userpassword
       - MYSQL_BACKUP_DATABASE=SCREAM
+      - MYSQL_BACKUP_ENCRYPTION_KEY=your-strong-encryption-key-here
+      - LOCAL_STORAGE_ROOT=/backups
+      - MYSQL_BACKUP_B2_SERVICE_URL=https://s3.us-west-001.backblazeb2.com
+      - MYSQL_BACKUP_B2_ACCESS_KEY=TEMP_ACCESS_KEY_HERE
+      - MYSQL_BACKUP_B2_SECRET_KEY=TEMP_SECRET_KEY_HERE
+      - MYSQL_BACKUP_FOLDER=backup
     ports:
       - "8001:8001"
     networks:

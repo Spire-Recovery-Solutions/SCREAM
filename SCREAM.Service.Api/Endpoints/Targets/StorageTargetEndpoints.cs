@@ -102,13 +102,18 @@ public static class StorageTargetEndpoints
 
     private static async Task<bool> TestStorageTarget(StorageTarget storageTarget)
     {
-        // Add testing logic for the storage target
         switch (storageTarget)
         {
             case LocalStorageTarget localStorageTarget:
-                return Directory.Exists(localStorageTarget.Path);
-            case S3StorageTarget s3StorageTarget:
-                // Simulate S3 storage target testing
+                var root = Environment.GetEnvironmentVariable("LOCAL_STORAGE_ROOT") ?? "/backups";
+
+                root = root.TrimEnd('/', '\\');
+                var path = localStorageTarget.Path.Trim('/', '\\');
+
+                var fullPath = $"{root}/{path}";
+
+                return Directory.Exists(fullPath);
+            case S3StorageTarget:
                 await Task.Delay(1000);
                 return true;
             default:

@@ -1,6 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using SCREAM.Data;
-
 namespace SCREAM.Service.Backup;
 
 public class Program

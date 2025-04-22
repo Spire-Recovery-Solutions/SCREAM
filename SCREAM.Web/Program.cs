@@ -9,7 +9,7 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddHttpClient("SCREAM", client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5102");
+    client.BaseAddress = new Uri("http://localhost:8000");//change this to 5102 when running locally
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 builder.Services.AddMudServices();
