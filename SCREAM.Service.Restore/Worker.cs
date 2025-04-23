@@ -337,16 +337,11 @@ namespace SCREAM.Service.Restore
             var restorePlan = await _httpClient.GetFromJsonAsync<RestorePlan>(
                 $"plans/restore/{restoreJob.RestorePlanId}", ct)
                 ?? throw new InvalidOperationException("Restore plan not found");
-
-            var backupPlan = await _httpClient.GetFromJsonAsync<BackupPlan>(
-                $"plans/backup/{restorePlan.SourceBackupPlanId}", ct)
-                ?? throw new InvalidOperationException("Backup plan not found");
-
             var storageTarget = await _httpClient.GetFromJsonAsync<StorageTarget>(
-                $"targets/storage/{backupPlan.StorageTargetId}", ct)
+                $"targets/storage/{restorePlan.SourceBackupPlan.StorageTargetId}", ct)
                 ?? throw new InvalidOperationException("Storage target not found");
 
-            return (restorePlan, backupPlan, storageTarget);
+            return (restorePlan, restorePlan.SourceBackupPlan, storageTarget);
         }
 
         private async Task<List<RestoreItem>> GetRestoreItemsForJobAsync(RestoreJob job, CancellationToken ct)

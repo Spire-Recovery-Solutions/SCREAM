@@ -24,7 +24,10 @@ public static class BackupPlanEndpoints
         {
             await using var dbContext = await dbContextFactory.CreateDbContextAsync();
 
-            IQueryable<BackupPlan> query = dbContext.BackupPlans;
+            IQueryable<BackupPlan> query = dbContext.BackupPlans
+                .Include(i => i.Items)
+                .Include(i => i.DatabaseTarget)
+                .Include(i => i.StorageTarget);
 
             if (isActive.HasValue)
                 query = query.Where(bp => bp.IsActive == isActive.Value);
