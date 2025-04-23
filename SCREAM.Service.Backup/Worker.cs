@@ -114,7 +114,7 @@ public class Worker : BackgroundService
                 if (plan.ScheduleType == ScheduleType.Triggered)
                     continue;
 
-                // 2) Load existing jobs for this plan
+                  // 2) Load existing jobs for this plan
                 var existingJobs = await _httpClient
                     .GetFromJsonAsync<List<BackupJob>>($"jobs/backup?planId={plan.Id}", stoppingToken)
                     ?? new List<BackupJob>();
@@ -280,16 +280,7 @@ public class Worker : BackgroundService
                         continue;
                     }
 
-                    var storageTarget = await GetStorageTarget(backupPlan.StorageTargetId, stoppingToken);
-                    if (storageTarget == null)
-                    {
-                        _logger.LogError("Storage target not found for job {JobId}", job.Id);
-                        await FailJob(job, new Exception("Storage target not found"), stoppingToken);
-                        continue;
-                    }
-
-                    var backupItems = await GetBackupItems(job.BackupPlanId, stoppingToken);
-                    var selectedItems = backupItems?.Where(i => i.IsSelected).ToList();
+                    var selectedItems = backupPlan.Items?.Where(i => i.IsSelected).ToList();
                     if (selectedItems == null || !selectedItems.Any())
                     {
                         _logger.LogWarning("No selected items for job {JobId}", job.Id);
@@ -297,7 +288,7 @@ public class Worker : BackgroundService
                         continue;
                     }
 
-                    bool allItemsSucceeded = await ProcessBackupItems(job, selectedItems, storageTarget, stoppingToken);
+                    bool allItemsSucceeded = await ProcessBackupItems(job, selectedItems, backupPlan.StorageTarget, stoppingToken);
                     if (allItemsSucceeded)
                     {
                         await CompleteJob(job, stoppingToken);
@@ -337,23 +328,6 @@ public class Worker : BackgroundService
         {
             _logger.LogWarning(ex, "Failed to get backup plan {PlanId}",
                 planId);
-        }
-
-        return null;
-    }
-
-    private async Task<StorageTarget> GetStorageTarget(long targetId, CancellationToken token)
-    {
-        try
-        {
-            var target = await _httpClient.GetFromJsonAsync<StorageTarget>($"targets/storage/{targetId}", token);
-            return target;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to get storage target {TargetId}",
-                targetId);
-
         }
 
         return null;
@@ -1216,8 +1190,7 @@ public class Worker : BackgroundService
                 Key = fileKey,
                 UploadId = uploadId,
                 PartNumber = partNumber,
-                InputStream = stream,
-                CalculateContentMD5Header = true
+                InputStream = stream
             };
 
             var response = await _b2Client.UploadPartAsync(request, ct);
@@ -1286,8 +1259,7 @@ public class Worker : BackgroundService
             {
                 BucketName = bucketName,
                 Key = fileKey,
-                InputStream = stream,
-                CalculateContentMD5Header = true
+                InputStream = stream
             };
 
             var response = await _b2Client.PutObjectAsync(request, ct);
